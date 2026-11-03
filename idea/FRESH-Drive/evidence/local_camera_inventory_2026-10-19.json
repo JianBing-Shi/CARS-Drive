@@ -1,0 +1,614 @@
+{
+  "mode": "read-only; directory presence is not a full per-frame completeness check",
+  "shards": [
+    {
+      "shard": "nuplan-v1.1_mini_camera_0",
+      "base": "H:\\nuplan\\dataset\\nuplan-v1.1\\splits\\nuplan-v1.1_mini_camera_0\\nuplan-v1.1_mini_camera_0",
+      "log_count": 7,
+      "logs": [
+        {
+          "log": "2021.05.12.22.00.38_veh-35_01008_01518",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.05.12.22.28.35_veh-35_00620_01164",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.05.12.23.36.44_veh-35_00152_00504",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.05.12.23.36.44_veh-35_01133_01535",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.05.12.23.36.44_veh-35_02035_02387",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.05.25.14.16.10_veh-35_01690_02183",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.03.12.02.06_veh-35_00233_00609",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        }
+      ]
+    },
+    {
+      "shard": "nuplan-v1.1_mini_camera_2",
+      "base": "H:\\nuplan\\dataset\\nuplan-v1.1\\splits\\nuplan-v1.1_mini_camera_2\\nuplan-v1.1_mini_camera_2",
+      "log_count": 7,
+      "logs": [
+        {
+          "log": "2021.06.09.12.39.51_veh-26_01943_02303",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.12.39.51_veh-26_05620_06003",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.14.03.17_veh-12_02584_02970",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.14.58.55_veh-35_01095_01484",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.14.58.55_veh-35_01894_02311",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.17.23.18_veh-38_00773_01140",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.09.17.23.18_veh-38_02526_03027",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        }
+      ]
+    },
+    {
+      "shard": "nuplan-v1.1_mini_camera_4",
+      "base": "H:\\nuplan\\dataset\\nuplan-v1.1\\splits\\nuplan-v1.1_mini_camera_4\\nuplan-v1.1_mini_camera_4",
+      "log_count": 7,
+      "logs": [
+        {
+          "log": "2021.06.14.19.22.11_veh-38_01480_01860",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.23.15.56.12_veh-16_00839_01285",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.23.16.54.19_veh-35_00808_01256",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.23.17.31.36_veh-16_00016_00377",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.23.20.43.31_veh-16_03607_04007",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.28.15.02.02_veh-38_02398_02848",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        },
+        {
+          "log": "2021.06.28.16.29.11_veh-38_01415_01821",
+          "channels": [
+            "CAM_B0",
+            "CAM_F0",
+            "CAM_L0",
+            "CAM_L1",
+            "CAM_L2",
+            "CAM_R0",
+            "CAM_R1",
+            "CAM_R2"
+          ],
+          "has_8_channel_dirs": true,
+          "db_splits": [
+            "mini"
+          ],
+          "location": "las_vegas",
+          "sample_image_exists": {
+            "CAM_B0": true,
+            "CAM_F0": true,
+            "CAM_L0": true,
+            "CAM_L1": true,
+            "CAM_L2": true,
+            "CAM_R0": true,
+            "CAM_R1": true,
+            "CAM_R2": true
+          }
+        }
+      ]
+    }
+  ]
+}

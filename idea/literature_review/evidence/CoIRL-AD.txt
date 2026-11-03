@@ -1,0 +1,1228 @@
+=== PDF PAGE 1 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in
+               Latent World Models for Autonomous Driving
+
+
+
+     Xiaoji Zheng * 1 Ziyuan Yang * † 2 Yanhao Chen † 3 Yuhang Peng † 4 Yuanrong Tang 1 Gengyuan Liu 1
+                                   Bokui Chen 1 Jiangtao Gong 5
+
+
+                 Abstract                    E2E models allow gradients to propagate across perception,
+                                                               prediction, and planning, enabling all components to be    End-to-end autonomous driving models trained
+                                                         optimized toward the final driving objective.    with imitation learning (IL) often generalize
+     poorly, particularly in long-tail scenarios where       Most existing E2E approaches rely on imitation learning
+     expert demonstrations are sparse.  Reinforce-          (IL), where models are trained to mimic expert demonstra-
+    ment learning (RL) can provide complemen-          tions.  In practice, IL is often formulated as supervised
+     tary task-level supervision, but applying RL to         learning (SL), with model outputs directly supervised by ex-
+     real-world autonomous driving is challenging          pert trajectories. However, supervised imitation is optimized
+     in offline settings without interactive simulators,       on a fixed data distribution, while embodied driving agents
+    where datasets are dominated by expert actions        induce their own state distributions at deployment. Small
+    and provide limited behavioral diversity. We pro-         prediction errors can shift the agent into unseen states and
+     pose CoIRL-AD, a competitive dual-policy frame-        accumulate over time, causing IL-based agents to generalize
+    work that integrates IL and RL under a unified         poorly and struggle in long-tail scenarios.
+     offline training regime. CoIRL-AD decouples
+                                                       Reinforcement learning (RL) provides a natural way to ad-     imitation and reward optimization into separate
+                                                             dress these limitations, as it can learn from reward signals     actors to alleviate objective conflicts, uses imag-
+                                                       even in scenarios where human demonstrations are unavail-     ined future rollouts for long-horizon reward es-
+                                                                 able.  This motivates integrating RL into IL-based E2E     timation, and introduces a competition mecha-
+                                                               driving systems to improve generalization and long-tail per-    nism that selectively transfers beneficial behaviors
+                                                         formance. Since E2E driving models are commonly trained     while keeping RL anchored to expert-like driving.
+                                                    and evaluated on offline real-world datasets (Caesar et al.,    Experiments on the nuScenes benchmark show
+                                                      2020; Dauner et al., 2024), we restrict RL to the offline     that CoIRL-AD consistently improves robustness
+                                                                    setting as well. Unlike prior RL-based driving methods that     over strong IL-based baselines, with especially
+                                                                rely on simulators (Dosovitskiy et al., 2017), we do not     large gains in cross-city generalization and long-
+                                                        use an external simulator, as introducing one would con-      tail scenarios.  Code is available at: https:
+                                                                 vert the problem from offline RL to online RL. Under this   //github.com/SEU-zxj/CoIRL-AD.
+                                                                    setting, we study the following research question: In of-
+                                                                      fline real-world autonomous driving without an external
+1. Introduction                                        simulator, how can reinforcement learning be used to
+                                                  improve performance?
+End-to-end (E2E) learning has become the mainstream
+                                      We first design an RL framework tailored to offline E2Eparadigm in autonomous driving (Hu et al., 2023; Jiang
+                                                                driving.  Unlike traditional offline RL benchmarks thatet al., 2023; Weng et al., 2024). Unlike modular pipelines,
+                                                           contain diverse suboptimal trajectories, real-world driving
+  *Equal contribution †Work done during internships at In-    datasets are dominated by near-optimal expert demonstra-
+stitute  for AI  Industry Research  (AIR), Tsinghua  Univer-     tions. Such expert-dominated data provide limited coverage
+sity 1Tsinghua University 2University of Washington 3Beijing                                                            of non-expert behaviors, making it difficult to learn value
+Jiaotong University 4The Hong Kong Polytechnic University
+5Shanghai Jiao Tong University.  Correspondence to: Bokui     differences among alternative actions. To address this issue,
+Chen <chenbk@tsinghua.edu.cn>, Jiangtao Gong <gongjiang-   we introduce a group sampling strategy inspired by GRPO
+tao@sjtu.edu.cn>.                                       (Shao et al., 2024), which increases behavioral diversity
+                      rd                                by sampling multiple action candidates. For each sampled
+Proceedings of the 43   International Conference on Machine                                                                    trajectory, we compute rule-based rewards using human-
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026
+                                                            annotated maps and bounding boxes available in the dataset.by the author(s).
+
+
+                                                1
+
+=== PDF PAGE 2 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+                                   Experience
+                Actor (IL)       Knowledge               Actor (IL)      𝜏𝑎
+          competitive learning                          𝜏𝑎𝑒                                   Input @ 𝑡+ 𝑇𝑓𝑢𝑡
+                                                             Expert Demonstration    𝑠′
+               Actor (RL)  Exploration                                                                                                                                                                                                                                                                                                                                                            Perception
+  Knowledge
+                                                                                              ෡𝑠′                              Student Supervisor
+              Input @ t               s
+
+                                                       Latent
+                                                                                                          Critic
+                                             World                                                  Model     𝑠′(𝑔)෣                                                                                                                              Perception
+
+                                                            s   𝑟
+
+                          Imitation
+                       Learning                          𝜏𝑎(𝑔)
+
+                       Reinforcement
+                       Learning                             env                     Both                                                                                   Exploration
+                                                                       Reward                        Supervision                          Actor (RL)
+                                                                                   Function
+                      Imagine                                                                                             𝑔                                                                                                             𝐴(𝑔) = 𝑟+ 𝛾⋅𝑉෣𝑠′    −𝑉(𝑠)
+
+
+Figure 1. Overview of CoIRL-AD. CoIRL-AD adopts a dual-policy architecture that integrates imitation learning (IL) and reinforcement
+learning (RL) through a shared latent world model. In each iteration, the IL actor and RL actor are trained in parallel. The latent world
+model is learned during the IL phase and then used in the RL phase, where only the RL actor and critic are updated. For exploration,
+the RL actor samples multiple action sequences, predicts future states via the latent world model, and evaluates them with rule-based
+reward functions. The critic assigns advantages to each sequence based on the imagined trajectories and rewards. To promote interaction,
+a competitive learning mechanism exchanges knowledge between the IL and RL actors.
+
+
+To optimize long-horizon cumulative rewards rather than     benefits in challenging scenarios with limited or missing
+immediate rewards, we introduce a latent world model that    demonstrations, while its impact is smaller in well-covered
+provides imagined future rollouts conditioned on sampled    scenarios. Our method achieves significant improvements
+trajectories.                                                     in cross-city generalization and long-tail scenarios, demon-
+                                                                   strating the effectiveness of competitive IL/RL integration
+We then investigate how to effectively integrate IL and RL
+                                                                 for offline E2E autonomous driving.
+under this offline setting. Since the latent world model is
+trained on expert data, its predictions can be biased for out-   The remainder of the paper is organized as follows. We first
+of-distribution actions. During RL optimization, such biases    describe actor modeling and the stochastic policy param-
+may lead to over-optimistic value estimates and reinforce     eterization used for reinforcement learning (Section 3.1),
+suboptimal behaviors, resulting in unstable training and per-    followed by the backward planning design that improves
+formance degradation. This makes RL-only learning and   RL optimization (Section 3.2). We then present the re-
+conventional two-stage approaches that fine-tune IL policies    inforcement learning objective in detail (Section 3.3) and
+with RL vulnerable to instability in our setting. While prior    introduce the competitive dual-policy mechanism that selec-
+one-stage methods jointly optimize IL and RL objectives,     tively transfers beneficial behaviors between the IL and RL
+they suffer from gradient conflicts due to the mismatch be-    actors (Section 3.4).
+tween behavior cloning and reward maximization objectives
+(Gao et al., 2025). To address the gradient conflict issue,                                                        2. Related Work
+we decouple IL and RL into two separate actors, isolating
+imitation learning from RL exploration noise. On top of this,    2.1. End-to-end Autonomous Driving
+to enable interaction between the two actors, we propose a
+                                                         End-to-end autonomous driving methods replace traditional
+competitive learning mechanism that selectively transfers
+                                                    modular pipelines with unified models optimized directly
+beneficial behaviors while anchoring RL learning to IL per-
+                                                                for driving objectives. UniAD (Hu et al., 2023) demon-
+formance, allowing the RL policy to recover from degraded
+                                                                     strates the potential of this paradigm by integrating percep-
+updates.
+                                                                tion and planning within a single framework. VAD (Jiang
+Finally, experimental results show that RL provides larger     et al., 2023) vectorizes scene representations to improve
+
+
+                                                2
+
+=== PDF PAGE 3 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+inference efficiency, while PARA-Drive (Weng et al., 2024)   jHF (Li et al., 2025a) combines IL fine-tuning with RLHF
+decomposes the traditional pipeline and searches for effec-    using large-scale preference data.  Similar two-stage or
+tive end-to-end architectures. Recent work also incorporates    reward-based training strategies have also been explored
+world models into driving systems. LAW (Li et al., 2025b)    in recent LLM and LMM studies, where supervised fine-
+and World4Drive (Zheng et al., 2025) predict future visual    tuning and RL exhibit different generalization behaviors
+latents to improve temporal understanding. SSR (Li & Cui,   (Wu et al., 2026; Zhang et al., 2026; Peng et al., 2025). The
+2025) uses sparse tokens to represent dense BEV features    second paradigm follows a one-stage strategy that jointly
+and similarly predicts future features for scene comprehen-    optimizes IL and RL objectives. ReCogDrive (Li et al.,
+sion. WoTE (Li et al., 2025c) leverages a world model to    2026) incorporates imitation and RL losses in a simulator to
+predict future states, enabling online trajectory evaluation    encourage safer trajectory exploration, while BC-SAC (Lu
+and selection. In contrast, our approach uses a latent world     et al., 2023) optimizes a weighted combination of behavior
+model as a reactive simulator for policy learning: the RL    cloning and RL objectives. However, optimizing imitation
+actor interacts with the world model to imagine future scene    and reward maximization within a single policy can intro-
+transitions and optimize reward-driven behavior.            duce objective conflicts (Gao et al., 2025). Our approach
+                                                              also performs IL and RL within a unified training process,
+2.2. RL in Autonomous Driving                            but differs from prior one-stage methods by introducing a
+                                                            dual-policy competitive framework. By assigning IL and
+Reinforcement learning has been widely studied in au-                                       RL to separate actors, CoIRL-AD alleviates objective con-
+tonomous driving. Roach (Zhang et al., 2021) trains an                                                                                flicts while allowing the two policies to exchange beneficial
+RL expert that maps BEV inputs to driving actions and                                                           behaviors through competition.
+subsequently uses it as a teacher for a student policy. VLM-
+RL (Huang et al., 2024) leverages a vision-language model
+(VLM) to generate reward signals for RL. Think2Drive (Li    3. Method
+et al., 2024) integrates DreamerV3 (Hafner et al., 2023) to                                                                    3.1. Actor Modeling
+train an expert agent and achieves strong performance in
+CARLA. AdaWM (Wang et al., 2025) analyzes performance    Given current observation o (usually images captured by
+degradation in driving agents and proposes to selectively    cameras), the perception module encodes  it into latent
+update the actor or world model. Imagine2Drive (Garg &     state s ∈RB×Nt×D, where B  is the batch size, Nt
+Krishna, 2024) combines a video world model (Gao et al.,     is the number of tokens for each latent state, and D is
+2024) with a diffusion-based policy, achieving impressive    the feature dimension.  For planning, a waypoint query
+performance in CARLA. Urban Driver (Scheel et al., 2022)   Qw ∈RB×n×D is employed to extract the waypoint fea-
+constructs a differentiable simulator from perception out-    tures sw =  {sw,1, sw,2, ..., sw,n} ∈RB×n×D through
+puts and high-definition maps to support efficient policy     cross-attention, where n denotes the number of waypoints in
+learning. Inspired by these approaches, we also perform RL    a trajectory. The planning head then decodes the waypoint
+with a learned world model. However, instead of relying on    features sw into an action sequence τa = {a1, a2, ..., an},
+an external simulator such as CARLA, we train the world    where ai ∈R2 and represents the value of x and y of the
+model directly from offline real-world driving data, avoiding     agent’s action. Using the provided expert action demonstra-
+simulator-specific assumptions and reducing the sim-to-real     tions τ ae as labels, imitation learning applies an L1 loss Limi
+gap. Moreover, we integrate model-based RL with imitation     to supervise output.
+learning to improve training stability and data efficiency in
+                                                       sw = CrossAttn(q = Qw, k = s, v = s),      (1)offline E2E autonomous driving.
+
+                                                                          τa = PlanningHead(sw),              (2)
+2.3. Combining Imitation Learning and Reinforcement
+    Learning                                                        Limi = ||τa −τ a||.e                    (3)
+                                                To endow the model with predictive capability, we use aIntegrating imitation learning and reinforcement learning
+                                                     world model to predict future states. Unlike pixel-levelhas attracted growing attention in autonomous driving and
+                                                               generative world models, our model operates in latent space
+related domains. Existing approaches can be broadly cat-
+                                                                to reduce task complexity. Specifically, given the currentegorized into two paradigms. The first paradigm adopts a
+                                                                       state s and action sequence τa, the world model predicts thetwo-stage strategy, where models are first pretrained with IL
+                                                                future state ˆs′:and then refined using RL. For example, AutoVLA (Zhou
+et al., 2026) performs supervised fine-tuning before applying                               ˆs′ = LatentWorldModel(s, τa).           (4)
+GRPO (Shao et al., 2024) for further improvement. RAD
+(Gao et al., 2026) constructs a large-scale 3D environment    Meanwhile, the perception module encodes the next obser-
+and leverages RL fine-tuning after IL pretraining, while Tra-    vation o′ into the ground-truth state s′. The latent world
+
+                                                3
+
+=== PDF PAGE 4 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+model is trained in a self-supervised manner using mean     3.3. Reinforcement Learning
+squared error (MSE)1. The overall imitation learning loss
+                                       RL requires rewards to evaluate the quality of explored
+LIL combines Lwm and Limi, where α is a hyperparameter
+                                                                     trajectories. Given a predicted action sequence τa, the cor-set to 0.2 following LAW (Li et al., 2025b):
+                                                        responding position sequence is obtained via cumulative
+                                                     summation: τpos = {a1, a1 + a2, ..., Pi ai}. We use two          Lwm = MSELoss(s′, ˆs′),              (5)                                                    components to define the reward: an imitation reward rimi
+                                                     and a collision reward rcol:
+
+
+
+                                                                                                                                   i                                                                                                                       ||2,             LIL = Limi + α · Lwm.               (6)              r(i)imi = e−||ai−ae
+                                                                                                                           (8)
+3.2. Backward Planning                                                      r(i)col = 1 −CollisionDetection(τpos,(i)  env).
+
+In practice, the planning head predicts τa in a single for-    Here, env denotes static map information and the trajectories
+ward pass. This design overlooks dependencies among the    of dynamic agents, implemented as non-reactive simulation
+steps in τa. A natural extension is to adopt a self-attention     for simplicity. The final reward for step i is defined as:
+layer with a causal mask to introduce temporal causality.
+                                                                                                                           (9)The policy for ai is formulated as πi(ai|sw,1, ..., sw,i) =                            ri = r(i)col · r(i)imi.
+π(ai|sw,j≤i).
+                                         On other offline datasets such as Navsim (Dauner et al.,
+While this forward-causal design appears intuitive, human    2024), richer reward signals can be constructed to evaluate
+driving behavior suggests an alternative perspective. Drivers     trajectory quality, including comfort-related metrics and
+typically decide where to go before committing to low-level     time-to-collision, among others.
+actions. Moreover, in real-world deployment, only the first
+                                                The deterministic action sequence produced by the model
+action is executed before replanning, making earlier actions
+                                                        cannot be directly optimized with standard RL objectives,
+matter more.
+                                                   which typically require probabilistic policies. To address
+                                                                         this, we model uncertainty in the action sequence. In ad-
+                               𝑠𝑤,1𝑠𝑤,2𝑠𝑤,3                             𝑠𝑤,1𝑠𝑤,2𝑠𝑤,3
+                  𝑎3                                           𝑎3                           𝑠𝑤,1                                                                      𝑠𝑤,1               dition to the planning head, which outputs the mean value
+            𝑎2                                                𝑎2                                                                      𝑠𝑤,2             µi for each action, we use a stochastic head to output the                           𝑠𝑤,2
+      𝑎1                           𝑠𝑤,3                           𝑎1    𝑠𝑤,3              uncertainty of each action:
+  𝑎1 ∼𝜋(𝑎1|𝑠𝑤,1)                                         𝑎3 ∼𝜋(𝑎3| 𝑠𝑤,3)
+        𝑎2 ∼𝜋(𝑎2|𝑠𝑤,1, 𝑠𝑤,2)           (a) Forward Planning       𝑎2 ∼𝜋(𝑎2|𝑠𝑤,2, 𝑠𝑤,3)        (b) Backward Planning
+              𝑎3 ∼𝜋(𝑎3|𝑠𝑤,1, 𝑠𝑤,2, 𝑠𝑤,3)                                 𝑎1 ∼𝜋(𝑎1|𝑠𝑤,1, 𝑠𝑤,2, 𝑠𝑤,3)
+                                  unmasked     masked                            τσ = {σ1, σ2, ..., σn} = StochasticHead(sw),    (10)
+
+Figure 2. Comparison between forward planning with a causal                                                   where σi is the standard deviation for ai. We model each
+mask and backward planning with an inverse causal mask.
+                                                             action with a Gaussian distribution and use a diagonal co-
+                                                             variance matrix. The policy for action ai is then formulated
+Motivated by these insights, as shown in Fig. 2, we explore     as:
+a counterintuitive alternative backward planning (inverse                  πi(ai|sw,j≥i) = N(µi, σ2i I),          (11)
+causality), where the i-th action is conditioned on the current
+and future waypoint features:                           where I denotes the identity matrix.   Given the of-
+                                                                      fline imitation dataset {(s, τa,e τre , s′), ...}, a Gaussian log-
+                                                                likelihood loss can be used to clone expert behavior: Lbc =           πi(ai|sw,i, ..., sw,n) = πi(ai|sw,j≥i)        (7)
+                              −Pni=1 log πi(aei|sw,j≥i). However, we want the RL actor
+                                                                 to explore and learn from both successful and unsuccessful
+This formulation provides early actions with richer contex-    candidate behaviors. Inspired by GRPO (Shao et al., 2024),
+tual information while leaving later actions less constrained.   we introduce exploration by sampling G trajectories from
+Inverse causality changes only the conditioning order and    the policy and computing their corresponding reward se-
+does not directly affect the smoothness of the final trajec-   quences with the rule-based reward function. Each action
+tory. Prior evidence from embodied AI (Liu et al., 2025)    sequence in the group, together with its reward sequence, is
+further supports this goal-to-action reasoning paradigm, and    formulated as:
+our experiments in Tab. 3 show that this goal-oriented de-                        (g)                                                                        τ a = {a(g)1  , a(g)2  , ..., a(g)n  },sign benefits the RL actor, whose objective is to maximize                                                                                                                 (12)
+cumulative rewards.                                                     τ r(g) = {r(g)1   , r(g)2   , ..., r(g)n  },
+    1In implementation, we follow LAW’s setting, where the next
+observation corresponds to the observation 1.5 seconds in the    where a(g)i  ∼πi(a(g)i  |sw,j≥i) is the i-th action of g-th tra-
+future.                                                         jectory in the group. For each trajectory, we compute its
+
+                                                4
+
+=== PDF PAGE 5 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+total reward and normalize it within the group using Z-score    visualizations are provided in Appendix A. To further sta-
+normalization to obtain the advantage. The naive policy gra-    bilize critic learning, we employ the two-critic trick, where
+dient loss with group sampling (naive PGGS) is computed    a reference critic maintains an exponential moving average
+by:                                          (EMA) of the learning critic.
+
+           G        n          !
+ Lactor = −1    X A(g) X log πi(a(g)i  |sw,j≥i)   ,          3.4. Dual-policy Learning Framework       G
+              g=1       i=1                                                     (13)    During training, to avoid gradient conflicts from jointly
+        Στ r(g) −mean(Στ r(1) , ..., Στr(G) )                 optimizing IL and RL losses in a single policy, we decou-
+   A(g) =                                                 .                             (1)       (G)                         ple the planning module into an IL actor and an RL actor,
+               std(Στ r   , ..., Στr   )
+                                                        optimized by LIL and LRL, respectively. To encourage
+To extend the advantage estimation to long-term rewards,    interaction between the two actors and selectively transfer
+we train a critic model V to output the value of both current     beneficial behaviors, we allow the actors to compete and
+state s and the next state s′. Since the offline dataset does    share information.
+not provide next states for sampled trajectories, we leverage                                                To balance the contributions of the imitation learning (IL)
+the latent world model to generate future states:                                                              actor and the reinforcement learning (RL) actor, we pe-
+          ˆ                                 (g)                  riodically compare their performance every k iterations.             s′(g) = LatentWorldModel(s, τa  ).       (14)                                                The comparison is based on the difference between the
+The long-term advantage A(g)long is computed by:              accumulative reward scores achieved by the IL actor and
+                                                             the RL actor (∆racc), together with two thresholds (λmin,
+        A(g)long = X r(g) + γV (s′(g))ˆ  −V (s),    (15)   λmax) that measure the size of the score gap and a hyperpa-                                                           rameter p that controls the degree of parameter interpolation.
+in which γ is a discount factor. We further apply Z-score    Based on the score difference ∆racc, we adaptively update
+normalization to A(g)long within each group and denote the    the loser actor’s parameters: 1) If the two actors perform
+normalized advantage as the critic advantage A(g)cri. During     similarly, we keep both unchanged; 2) If the performance
+                                                      gap is moderate, we apply soft merging to gradually transfertraining, the actor and critic are then jointly optimized, and
+                                                     knowledge from the winner to the loser (i.e. loser.weight :=this is the method of actor + dreaming critic with group
+                                                               loser.weight · p + winner.weight · (1 −p)); 3) If the gap issampling (ADCGS):
+                                                                   large, we directly replace the loser’s parameters with the
+          G        n          !            winner’s.
+ Lact = −1    X A(g)cri X log πi(a(g)i  |sw,j≥i)   ,      G            g=1       i=1                              This adaptive mechanism enables stable cooperation be-
+                                                     (16)    tween the IL and RL actors, preventing premature dom-         G
+        1                                                         inance while allowing faster convergence once one actor  Lcri =   X h V (s) − X τ r(g) + γV (s′(g))ˆ    i2 .
+     G           g=1                                      becomes consistently superior. Hyperparameter details are
+                                                         provided in Appendix D. The ablation results in Tab. 4 and
+Since pure RL with our reward is difficult to optimize reli-    the analysis in Fig. 5 further show that competition between
+ably (see Tab. 4), we incorporate a small behavior cloning    the IL and RL actors leads to better results.
+term Lbc with coefficient β as a regularizer, inspired by
+the role of KL regularization in policy optimization. This
+                                                        4. Experimentsauxiliary loss provides weak expert guidance during the
+competitive phase, where the RL actor would otherwise op-    4.1. Benchmarks
+erate without direct expert supervision. In our experiments,
+omitting this term still yields reasonable performance, but   We conduct experiments on the offline autonomous driving
+adding it with a small β further improves the results (see     dataset nuScenes (Caesar et al., 2020). Detailed benchmark
+Tab. 6).                                                      descriptions and implementation details are provided in
+         LRL = Lact + Lcri + β · Lbc.          (17)   Appendix B and Appendix C.
+
+In practice, since actions in a sampled sequence are drawn
+                                                                    4.2. Main Results
+independently from different Gaussian policies, the result-
+ing position trajectory τpos may lack smoothness. To ad-   The results on nuScenes are summarized in Tab. 1. We fol-
+dress this, we adopt a step-aware mechanism: within each    low the evaluation protocol of (Jiang et al., 2023), reporting
+sampled sequence, only one action is stochastic, while the     the average L2 displacement error and collision rate over 1s,
+remaining actions are set to the mode of their respective poli-    2s, and 3s prediction horizons. We evaluate our method on
+cies, ensuring a smoother τpos. The detailed algorithm and
+
+                                                5
+
+=== PDF PAGE 6 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+the LAW (Li et al., 2025b) framework.                        driving scenarios, and that stable integration with imitation
+                                                             learning is crucial for realizing these gains in offline, real-
+On nuScenes, CoIRL-AD consistently outperforms the base-
+                                                      world settings.
+line LAW across both L2 error and collision rate. Notably,
+even without temporal augmentation (which is commonly
+                                                                    4.3. Ablation Studyadopted by prior methods, provide not only current observa-
+tion, but also 2-3 past observation to the model), CoIRL-AD    Effect of Causality.   To examine the role of inverse
+already achieves the lowest collision rate. After enabling     causality, we conduct three ablation experiments on CoIRL-
+temporal augmentation, the L2 error is further reduced sub-  AD without temporal augmentation. We vary the auto-
+stantially.  Overall, our method achieves the best perfor-    regression (AR) attention mask used for sw in the self-
+mance on the combined L2 · Col metric, demonstrating its     attention layer as follows: (1) no causal mask; (2) standard
+effectiveness in both accuracy and safety. Moreover, CoIRL-    causal mask (AR)2; and (3) inverse causal mask (inv. AR)3.
+AD shares the same inference architecture as the baseline    Results are reported in Tab. 3.
+and introduces no additional inference latency. Detailed
+                                                 The results suggest three observations. First, inverse causaltraining cost and inference latency analyses are provided in
+                                                   masking primarily benefits RL exploration: applying inv.Appendix E.1 and E.2.
+                                         AR to the pure IL baseline degrades performance, while
+Despite these improvements, we note that RL is expected to    using it within CoIRL-AD improves both L2 error and col-
+provide greater benefits in scenarios where expert demon-    lision rate. Second, aligned representations are important
+strations are sparse or insufficient. Since nuScenes contains     for competitive learning. When the IL and RL actors use
+a large proportion of well-covered, relatively easy driving    mismatched masks, the shared modules learn inconsistent
+scenarios, improvements on challenging cases can be diluted     representations, weakening knowledge transfer and reduc-
+in average metrics. To validate this intuition, we further eval-    ing performance toward the baseline. Third, RL exploration
+uate our method on more challenging settings, including    must be stabilized. Removing the competitive mechanism
+cross-city generalization and long-tail scenarios.              causes the RL actor to explore aggressively and suffer from
+                                                           value overestimation, leading to degraded performance.Generalization Ability.  We evaluate cross-city general-
+ization by training on nuScenes-Singapore and testing on   The best L2 · Col score in Row 6 indicates a strong synergy
+nuScenes-Boston (Tab. 2 and Fig. 12). The baseline LAW    between inverse causal masking and competitive learning.
+exhibits significant performance degradation when evalu-   The inverse causal mask helps the RL actor discover better
+ated in an unseen city. In contrast, CoIRL-AD demonstrates     trajectories, while the competitive mechanism anchors this
+markedly improved robustness, which we attribute to the    exploration through aligned IL/RL representations.
+exploration capability introduced by the RL actor.
+                                                          Effect of the Latent World Model in RL.  As shown
+Performance under Long-Tail Scenarios.   To assess per-    in Tab. 1, CoIRL-AD consistently outperforms its variant
+formance on rare and challenging cases, we construct two    without a latent world model (w/o wm), with particularly
+evaluation subsets based on the baseline’s performance: one     significant reductions in collision rate at the 3-second hori-
+consisting of scenarios with high L2 error, and another with    zon. This demonstrates that incorporating a learned world
+high collision rate. Results in Fig. 3 show that incorporating    model as a reactive simulator for reinforcement learning is
+reinforcement learning leads to substantial improvements    both effective and critical.
+over the baseline in both subsets. Details on subset con-
+                                                         Integration of IL and RL.  We compare multiple strate-struction and complete quantitative results are provided in
+                                                              gies for integrating imitation learning and reinforcementAppendix E.3.
+                                                               learning: (i) loss merging, jointly optimizing LIL + LRL;
+                                                                Collision             L2 Error on longtail_l21.600                                                           Rate on longtail_col18.82%            (ii) IL–RL interval, alternating optimization between LIL
+                                                        1.527                                               LAW    1.50     LAW                                                        17.5              CoIRL­AD                                    CoIRL­AD                     15.19%     and LRL; (iii) two-stage, pre-training with LIL followed by
+    1.25                                             (%) 15.0                              fine-tuning with LRL; and (iv) decoupled actors, where IL
+                               1.005                          12.5
+  Error 1.00                            0.924                        Rate 10.0                         and RL actors are optimized separately, optionally with com-
+ L2 0.75                                                                      petitive interaction (“comp”). Temporal augmentation is not              0.516                                            7.5
+                                                                                   5.04%                                                                                         4.23%             used in these experiments. Results are shown in Tab. 4.    0.50          0.453                                                                                                  Collision 5.0   3.63%
+    0.25                                                    2.5        2.42%
+                                         Among all variants, only the decoupled actors with com-
+    0.00      1            2            3            0.0      1            2            3
+                Time horizons (s)                         Time horizons (s)             petition strategy improves both L2 error and collision rate
+        Figure 3. Performance under long-tail scenarios                2Causal mask: torch.triu(torch.ones(n,n), diagonal=1).bool()
+                                                                       3Inverse causal mask: torch.tril(torch.ones(n,n), diagonal=-
+Overall, these results indicate that reinforcement learning is     1).bool()
+particularly beneficial in challenging and under-represented
+
+
+                                                6
+
+=== PDF PAGE 7 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+Table 1. Comparison of state-of-the-art methods on the nuScenes dataset. Perception-based Methods are those models who add
+detection, mapping, tacking heads, and use labeled data to supervise the output results while perception-free methods are not. †Methods
+that use temporal augmentation. ‘w/o wm’ means we do not use the latent world model in RL process. The best results are shown in bold,
+and the second-best results are underlined.
+
+                                L2 (m) ↓                Col (%) ↓        L2 · Col ↓
+          Method
+                                   1s     2s     3s   Avg.    1s     2s     3s   Avg.     Avg.
+             Perception-based Methods
+           ST-P3†                1.33   2.11   2.90   2.11   0.23   0.62   1.27   0.71      1.50
+          UniAD†               0.48   0.96   1.65   1.03   0.05   0.17   0.71   0.31      0.32
+         VAD†                 0.41   0.70   1.05   0.72   0.07   0.17   0.41   0.22      0.16
+           PARA-Drive†          0.25   0.46   0.74   0.48   0.14   0.23   0.39   0.25      0.12
+         GenAD†               0.28   0.49   0.78   0.52   0.08   0.14   0.34   0.19      0.10
+        LAW†                 0.24   0.46   0.76   0.49   0.08   0.10   0.39   0.19      0.09
+              Perception-free Methods
+           BEV-Planner†          0.30   0.52   0.83   0.55   0.10   0.37   1.30   0.59      0.32
+          SSR†                  0.18   0.35   0.62   0.38   0.48   0.45   0.51   0.48      0.18
+       LAW                  0.32   0.62   1.03   0.66   0.08   0.13   0.46   0.22      0.15
+         CoIRL-AD (w/o wm)   0.31   0.61   1.01   0.65    0    0.10   0.51   0.20      0.13
+         CoIRL-AD            0.29   0.59   1.00   0.63   0.06   0.10   0.37   0.18      0.11
+          CoIRL-AD†            0.23   0.42   0.70   0.45   0.10   0.12   0.30   0.17      0.08
+
+
+
+                                Table 2. Cross-city generalization ability on nuScenes dataset.
+
+                            L2 (m) ↓                Col (%) ↓         L2 · Col ↓
+               Method
+                              1s     2s     3s   Avg.    1s     2s     3s   Avg.      Avg.
+           LAW      0.45   0.89   1.46   0.93   0.13   0.43   1.50   0.69       0.64
+            CoIRL-AD   0.33   0.65   1.13   0.70   0.04   0.15   0.46   0.22   0.15 (↓77%)
+
+
+
+                                         Table 3. Effect of causality on performance
+
+                                     L2 (m) ↓              Collision Rate (%) ↓    L2 · Col ↓
+     Method
+                                         1s     2s     3s   Avg.    1s     2s     3s   Avg.     Avg.
+    LAW                             0.32   0.63   1.03   0.66   0.09   0.12   0.46   0.22      0.15
+    LAW (inv. AR)                    0.37   0.70   1.13   0.73   0.11   0.13   0.50   0.25      0.18
+     CoIRL-AD (no mask)              0.30   0.60   1.01   0.64   0.06   0.14   0.53   0.24      0.15
+     CoIRL-AD (AR)                   0.36   0.69   1.12   0.72   0.04   0.15   0.55   0.25      0.18
+     CoIRL-AD (IL AR + RL inv. AR)   0.32   0.62   1.04   0.66   0.08   0.12   0.48   0.23      0.15
+     CoIRL-AD (inv. AR)               0.29   0.59   1.00   0.63   0.06   0.10   0.37   0.18      0.11
+     CoIRL-AD (inv. AR, w/o comp)    0.36   0.68   1.11   0.72   0.11   0.17   0.60   0.29      0.21
+
+
+
+                                Table 4. Comparison of different IL–RL integration strategies.
+
+                                L2 (m) ↓              Collision Rate (%) ↓    L2 · Col ↓
+                Description
+                                   1s     2s     3s   Avg.    1s     2s     3s   Avg.     Avg.
+         LAW (pure IL)     0.32   0.63   1.03   0.66   0.09   0.12   0.46   0.22      0.15
+                  pure RL        3.92   6.55   9.18   6.55   2.75   4.87   7.72   4.93     32.29
+                  loss merging      0.38   0.73   1.17   0.76   0.03   0.12   0.54   0.23      0.17
+             IL-RL interval     0.31   0.63   1.07   0.68   0.12   0.17   0.54   0.28      0.19
+                  two-stage        2.43   4.21   6.03   4.22   2.29   4.13   6.53   4.32     18.23
+             decouple, w/o comp   0.36   0.68   1.11   0.72   0.11   0.17   0.60   0.29      0.21
+              decouple, w/ comp   0.29   0.59   1.00   0.63   0.06   0.10   0.37   0.18      0.11
+
+
+
+                                                7
+
+=== PDF PAGE 8 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+over the baseline. This result is noteworthy, as two-stage     ration. Afterward, as the latent world model starts to encode
+IL–RL transfer has proven effective in other domains (e.g.,    the underlying driving dynamics, the RL actor progressively
+DeepSeek-R1 (Guo et al., 2025)). We attribute the lim-    learns fundamental driving behaviors through exploration.
+ited effectiveness of other strategies to the offline training     Its group-sampling-based exploration then becomes more
+setting. Since the latent world model is trained on expert     effective than simply imitating expert trajectories. Conse-
+data, its predictions can be biased for out-of-distribution     quently, the RL actor achieves higher scores and dominates
+actions. During RL optimization, such bias may lead to     in later training. This progression resembles the two-stage
+over-optimistic value estimates, reinforcing suboptimal be-    paradigm, but with a key difference: IL and RL are trained
+haviors and causing unstable training, even when initialized     jointly. Even though IL loses more frequently in later stages,
+from expert demonstrations. In contrast, the competitive      its gradients continue to benefit shared components such as
+decoupled design mitigates these issues by using the IL ac-    the perception module.
+tor as a stabilizing anchor. When the RL actor degrades
+                                                To further analyze why the competitive mechanism im-
+due to over-optimistic value estimates or exploitation of
+                                                         proves learning, we log the evolution of the critic’s value
+world-model errors, the competition mechanism transfers
+                                                               estimates (see Fig. 5) and the policy divergence between the
+information from the stronger actor, improving stability and
+                                                      IL and RL actors (see Fig. 6), measured by the L2 distance
+yielding measurable performance gains.
+                                                     between their modal trajectories.
+
+5. Analysis                                                                                                            Critic Predicted Future Value Mean
+                                                                                             8                                                                                                                              Value
+5.1. Competition Analysis
+                                                                                             6                                                                                                                                                       FutureThe last two rows of Tab. 4 show that the competitive learn-
+                                                                                             4
+ing mechanism helps the IL and RL actors interact and
+ultimately learn a stronger model. We next analyze how this                                                                                             2                                           With competition                                                                                                                                                                                                                                  Predicted
+mechanism affects training.                                                                                                 Without competition
+                                                                                                                                                       Critic0  0        20000      40000      60000      80000
+              Cumulative Wins Comparison                                                      Iteration Number
+    560          IL Actor Cumulative Wins
+
+                    IL is leading the learning process                                    the world model.  Wins480400       RL Actor Cumulative Wins                                    Figure 5. Mean critic value estimates for future states predicted by
+    320
+    240                                                Without the competitive mechanism, the value estimate for
+    160                                                      the imagined future state V (st+1)ˆ   exhibits severe overesti-    Cumulative 80                                                mation and grows rapidly. With the mechanism active, the
+      0                                                   value estimate plateaus. This suggests that unconstrained
+              Score Difference Over Iterations               offline RL can exploit world-model inaccuracies to produce
+                                                                         artificially high expected returns, while competition helps                                          Score Difference
+                                                           suppress this behavior.      2
+
+                                                                        L2 Distance between IL Actor and RL Actor's Policy      Difference 0
+                                                                                                                                  With competition
+                                                                                                                                     Without competition   Score 2                                                                                                    1.5
+                                                                                                                 1.0                                                                                                                                                                                                           Distance         0      20000    40000    60000    80000
+                           Iteration Number                    L20.5
+
+Figure 4. Accumulated wins (top) and score difference (bottom)                 0.0
+                                                                          0       20000     40000     60000     80000
+across training iterations.                                                                                          Iteration Number
+
+By tracking accumulated wins and score differences (IL    Figure 6. L2 distance between the modal trajectories of the IL
+score – RL score) over iterations, we observe the following     actor and RL actor.
+pattern (see Fig. 4). In the early stage (<20k iterations), the
+IL actor achieves more wins and higher scores, indicating    Driven by the overestimated values above, the unconstrained
+that IL initially leads the learning process. At this point, the   RL actor tends to select dangerous or highly unconventional
+latent world model provides limited useful signal, leaving     actions to pursue hallucinated rewards. This shifts its policy
+the RL actor unable to extract reliable guidance from explo-   away from the expert distribution, resulting in a substantially
+
+
+                                                8
+
+=== PDF PAGE 9 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+
+
+
+Figure 7. The baseline model collides with a fast-approaching vehicle in the adjacent lane, whereas our model successfully avoids the
+collision.
+
+
+
+
+
+   Figure 8. When pedestrians are crossing ahead, our model stops and yields, while the baseline model continues moving forward.
+
+
+larger L2 distance. When the competitive mechanism is    IL and RL at the same stage instead of the normal two stage
+introduced, it suppresses value overestimation and pulls the   way as the RL in offline expert datasets are unstable, and
+RL actor back toward the expert policy, enabling exploration   we also decoupling IL and RL into separate actors to avoid
+within a safer trust region.                                     gradient conflict when jointly optimize both IL and RL loss.
+                                   A competition-based mechanism enables stable interaction
+5.2. Qualitative Analysis                               and effective knowledge sharing between the two policies,
+                                                          while a latent world model supports long-horizon reasoning
+We further visualize the planned trajectories on nuScenes to                                                   beyond immediate rewards. Experiments on the nuScenes
+qualitatively compare our method with the baseline LAW.                                                               dataset demonstrate consistent improvements over strong
+The results show that, with reinforcement learning and self-                                                               baselines, with particularly significant gains in cross-city
+exploration, our model is better at recognizing hazardous                                                             generalization and long-tail scenarios. These results sug-
+situations and proactively avoiding potential collisions with                                                              gest that reinforcement learning, when properly structured
+surrounding vehicles and pedestrians. In contrast, the base-                                                     and integrated, can substantially enhance offline end-to-end
+line LAW often fails to react appropriately, likely due to its                                                               driving systems. We believe this work offers a promising di-
+reliance on imitating expert trajectories without understand-                                                                rection for combining imitation and reinforcement learning
+ing the underlying intent (see Fig. 7 and Fig. 8). Additional                                                                in autonomous driving and broader embodied AI applica-
+qualitative examples are provided in Appendix G.                                                                     tions.
+
+6. Conclusion                                         Impact Statement
+We present CoIRL-AD, a competitive dual-policy frame-                                                        This work aims to advance the field of end-to-end au-
+work that integrates imitation learning and reinforcement                                                    tonomous driving by proposing a framework that integrates
+learning for end-to-end autonomous driving. To address the                                                              imitation learning and reinforcement learning into offline
+limited generalization and long-tail performance of pure imi-                                                                training without relying on external simulators. The tech-
+tation learning in offline settings, we leverage reinforcement                                                          niques proposed are general-purpose and may find applica-
+learning as a complementary signal. We choose to conduct                                                                 tion in broader embodied AI settings.
+
+
+                                                9
+
+=== PDF PAGE 10 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+References                                                                    J., Qiao, Y., and Li, H. Planning-oriented autonomous
+                                                                    driving. In Proceedings of the IEEE/CVF Conference on
+Caesar, H., Bankiti, V., Lang, A. H., Vora, S., Liong, V. E.,
+                                                     Computer Vision and Pattern Recognition, 2023.
+  Xu, Q., Krishnan, A., Pan, Y., Baldan, G., and Beijbom, O.
+  nuscenes: A multimodal dataset for autonomous driving.   Huang, Z., Sheng, Z., Qu, Y., You, J., and Chen, S. Vlm-
+  In Proceedings of the IEEE/CVF conference on computer         rl: A unified vision language models and reinforcement
+   vision and pattern recognition, pp. 11621–11631, 2020.       learning framework for safe autonomous driving, 2024.
+                                       URL https://arxiv.org/abs/2412.15544.
+Dauner, D., Hallgarten, M., Li, T., Weng, X., Huang, Z.,
+  Yang, Z., Li, H., Gilitschenski, I., Ivanovic, B., Pavone,                                                               Jiang, B., Chen, S., Xu, Q., Liao, B., Chen, J., Zhou, H.,
+  M., Geiger, A., and Chitta, K. NAVSIM: Data-driven non-      Zhang, Q., Liu, W., Huang, C., and Wang, X.  Vad:
+   reactive autonomous vehicle simulation and benchmark-                                                              Vectorized scene representation for efficient autonomous
+   ing. In The Thirty-eight Conference on Neural Informa-                                                                  driving. In Proceedings of the IEEE/CVF International
+   tion Processing Systems Datasets and Benchmarks Track,      Conference on Computer Vision, pp. 8340–8350, 2023.
+  2024. URL https://openreview.net/forum?
+  id=FXTeJvHE0k.                                          Li, D., Li, C., Wang, Y., Ren, J., Wen, X., Li, P., Xu, L.,
+                                                          Zhan, K., Jia, P., Lang, X., Xu, N., and Zhao, H. Learning
+Dosovitskiy, A., Ros, G., Codevilla, F., Lopez, A., and                                                             personalized driving styles via reinforcement learning
+  Koltun, V. Carla: An open urban driving simulator. In                                                      from human feedback, 2025a. URL https://arxiv.
+  Conference on robot learning, pp. 1–16. PMLR, 2017.                                             org/abs/2503.10434.
+
+Gao, D., Wang, H., Zhou, H., Ammar, N., Mishra, S.,                                                                    Li, P. and Cui, D. Navigation-guided sparse scene represen-
+  Moradipari, A., Soltani, I., and Zhang, J.  In-ril: Inter-                                                                    tation for end-to-end autonomous driving. In The Thir-
+  leaved reinforcement and imitation learning for policy                                                               teenth International Conference on Learning Represen-
+   fine-tuning. arXiv preprint arXiv:2505.10442, 2025.                                                                     tations, 2025. URL https://openreview.net/
+                                             forum?id=Vv76fCYffN.Gao, H., Chen, S., Jiang, B., Liao, B., Shi, Y., Guo, X., Pu,
+   Y., haoran yin, Li, X., xinbang zhang, ying zhang, Liu, W.,
+                                                                 Li, Q., Jia, X., Wang, S., and Yan, J. Think2drive: Effi-
+  Zhang, Q., and Wang, X. RAD: Training an end-to-end
+                                                                     cient reinforcement learning by thinking with latent world
+  driving policy via large-scale 3DGS-based reinforcement
+                                                      model for autonomous driving (in carla-v2). In European
+   learning. In The Thirty-ninth Annual Conference on Neu-
+                                                         Conference on Computer Vision, pp. 142–158. Springer,
+   ral Information Processing Systems, 2026. URL https:
+                                                          2024.
+  //openreview.net/forum?id=9V3crVSPH7.
+                                                                 Li, Y., Fan, L., He, J., Wang, Y., Chen, Y., Zhang, Z., and
+Gao, S., Yang, J., Chen, L., Chitta, K., Qiu, Y., Geiger,
+                                                              Tan, T. Enhancing end-to-end autonomous driving with la-
+  A., Zhang, J., and Li, H. Vista: A generalizable driving
+                                                                        tent world model. In The Thirteenth International Confer-
+  world model with high fidelity and versatile controlla-
+                                                          ence on Learning Representations, 2025b. URL https:
+   bility.  In Advances in Neural Information Processing
+                                            //openreview.net/forum?id=fd2u60ryG0.
+  Systems (NeurIPS), 2024.
+                                                                 Li, Y., Wang, Y., Liu, Y., He, J., Fan, L., and Zhang, Z.
+Garg, A. and Krishna, K. M. Imagine-2-drive: Leverag-
+                                                          End-to-end driving with online trajectory evaluation via
+  ing high-fidelity world models via multi-modal diffusion
+                                                       bev world model. In Proceedings of the IEEE/CVF In-
+   policies. 2025 IEEE/RSJ International Conference on
+                                                                ternational Conference on Computer Vision (ICCV), pp.
+   Intelligent Robots and Systems (IROS), pp. 4188–4195,
+                                                       27137–27146, October 2025c.
+  2024.  URL https://api.semanticscholar.
+  org/CorpusID:276903042.                            Li, Y., Xiong, K., Guo, X., Li, F., Yan, S., Xu, G., Zhou,
+                                                                       L., Chen, L., Sun, H., WANG, B., Ma, K., Chen, G., Ye,Guo, D., Yang, D., Zhang, H., Song, J., Wang, P., Zhu,
+                                                               H., Liu, W., and Wang, X. Recogdrive: A reinforced  Q., Xu, R., Zhang, R., Ma, S., Bi, X., et al. Deepseek-
+                                                                 cognitive framework for end-to-end autonomous driving.  r1 incentivizes reasoning in llms through reinforcement
+                                                                In The Fourteenth International Conference on Learning   learning. Nature, 645(8081):633–638, 2025.
+                                                                Representations, 2026. URL https://openreview.
+Hafner, D., Pasukonis, J., Ba, J., and Lillicrap, T. Mastering     net/forum?id=JoXwhGbuMi.
+  diverse domains through world models. arXiv preprint
+                                                               Liu, D., Niu, H., Wang, Z., Zheng, J., Zheng, Y., zhonghong  arXiv:2301.04104, 2023.
+                                                     Ou, Hu, J., Li, J., and Zhan, X. Efficient robotic policy
+Hu, Y., Yang, J., Chen, L., Li, K., Sima, C., Zhu, X., Chai,       learning via latent space backward planning. In Interna-
+   S., Du, S., Lin, T., Wang, W., Lu, L., Jia, X., Liu, Q., Dai,       tional Conference on Machine Learning, 2025.
+
+                                                10
+
+=== PDF PAGE 11 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+Lu, Y., Fu, J., Tucker, G., Pan, X., Bronstein, E., Roelofs,       learning coach. In Proceedings of the IEEE/CVF Interna-
+   R., Sapp, B., White, B., Faust, A., Whiteson, S., et al.       tional Conference on Computer Vision (ICCV), 2021.
+   Imitation is not enough: Robustifying imitation with rein-
+                                                     Zheng, Y., Yang, P., Xing, Z., Zhang, Q., Zheng, Y., Gao,  forcement learning for challenging driving scenarios. In
+                                                                       Y., Li, P., Zhang, T., Xia, Z., Jia, P., Lang, X., and Zhao,  2023 IEEE/RSJ International Conference on Intelligent
+                                                     D.  World4drive: End-to-end autonomous driving via  Robots and Systems (IROS), pp. 7553–7560. IEEE, 2023.
+                                                                intention-aware physical latent world model. In Proceed-
+Peng, Y., Zhang, G., Zhang, M., You, Z., Liu, J., Zhu,      ings of the IEEE/CVF International Conference on Com-
+  Q., Yang, K., Xu, X., Geng, X., and Yang, X. Lmm-      puter Vision (ICCV), pp. 28632–28642, October 2025.
+   r1: Empowering 3b lmms with strong reasoning abilities
+                                                     Zhou, Z., Cai, T., Zhao, S. Z., Zhang, Y., Huang, Z., Zhou,  through two-stage rule-based rl, 2025. URL https:
+                                                                  B., and Ma, J.  AutoVLA: A vision-language-action  //arxiv.org/abs/2503.07536.
+                                                    model for end-to-end autonomous driving with adaptive
+Scheel, O., Bergamini, L., Wolczyk, M., Osi´nski, B., and      reasoning and reinforcement fine-tuning. In The Thirty-
+  Ondruska, P. Urban driver: Learning to drive from real-      ninth Annual Conference on Neural Information Pro-
+  world demonstrations using policy gradients. In Confer-      cessing Systems, 2026. URL https://openreview.
+  ence on Robot Learning, pp. 718–728. PMLR, 2022.       net/forum?id=28qUA2bSe5.
+
+Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and
+  Klimov, O.  Proximal policy optimization algorithms.
+  arXiv preprint arXiv:1707.06347, 2017.
+
+Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Zhang, M.,
+   Li, Y., Wu, Y., and Guo, D. Deepseekmath: Pushing the
+   limits of mathematical reasoning in open language mod-
+   els, 2024. URL https://arxiv.org/abs/2402.
+  03300.
+
+Wang, H., Ye, X., Tao, F., Pan, C., Mallik, A., Yaman, B.,
+  Ren, L., and Zhang, J. AdaWM: Adaptive world model
+  based planning for autonomous driving. In The Thirteenth
+  International Conference on Learning Representations,
+  2025. URL https://openreview.net/forum?
+  id=NEu8wgPctU.
+
+Weng, X., Ivanovic, B., Wang, Y., Wang, Y., and Pavone,
+  M.  Para-drive: Parallelized architecture for real-time
+  autonomous driving. In Proceedings of the IEEE/CVF
+  Conference on Computer Vision and Pattern Recognition,
+  pp. 15449–15458, 2024.
+
+Wu, Y., Zhou, Y., Ziheng, Z., Peng, Y., Ye, X., Hu, X.,
+  Zhu, W., Qi, L., Yang, M.-H., and Yang, X. On the
+  generalization of SFT: A reinforcement learning per-
+  spective with reward rectification.  In The Fourteenth
+  International Conference on Learning Representations,
+  2026. URL https://openreview.net/forum?
+  id=Lv7PjbcaMi.
+
+Zhang, M., Liu, Y., Lin, S., Yang, X., Dai, Q., Luo, C.,
+  Jiang, W., Hou, P., Zeng, A., Geng, X., and Guo, B.
+  Towards on-policy sft: Distribution discriminant theory
+  and its applications in llm training, 2026. URL https:
+  //arxiv.org/abs/2602.12222.
+
+Zhang, Z., Liniger, A., Dai, D., Yu, F., and Van Gool, L.
+  End-to-end urban driving by imitating a reinforcement
+
+                                                11
+
+=== PDF PAGE 12 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+A. Step-aware Reinforcement Learning
+
+When the RL actor explores, it samples an action sequence from n policies (see Eq. 12). Since each action is modeled
+separately, naively sampling a full sequence draws actions independently from different Gaussian distributions. When the
+sampled sequence τ a(g) is accumulated into the position sequence τ pos,(g)  the resulting trajectory can become unstable or
+unsmooth, and may violate basic kinematic regularities. We visualize the comparison between naive group sampling and
+our step-aware method in Fig. 9 (straight driving), Fig. 10 (left turn), and Fig. 11 (right turn). The goal is to let the RL
+actor explore reasonable driving trajectories; directly exploring many unrealistic trajectories is inefficient, so we adopt a
+step-aware sampling mechanism.
+
+More specifically, group sampling produces G samples for each action in the action sequence. We decouple exploration by
+step: instead of sampling all n actions simultaneously, each exploration samples only one action while setting the remaining
+n −1 actions to the mode of their corresponding policies, i.e., the Gaussian expectation E[πi]. The process is visualized
+below and formalized in Algorithm 1.
+
+
+
+
+Algorithm 1 Step Aware RL with Group Sampling
+
+Input: {π1, π2, ..., πn}, s, sw, Vψ (Critic Model), (i, g, Lactor, Lcritic ←0)
+  1: repeat
+  2:    i ←i + 1
+  3:   repeat
+  4:     g ←g + 1
+            (g)
+  5:      τ a  ←{E[π1], ..., a(g)i  ∼πi(a(g)i  |sw,j≥i), ..., E[πn]}
+                                   (g)
+  6:      Calculating reward τ r  based on Eq.8, 9
+                        ˆ  7:      Predict future state s′(g) based on Eq. 14
+  8:     Computing “long-term” advantage A(g)long based on Eq. 15
+  9:    until g = G
+10:   Computing critic advantage for step i, Acritic = Z-Score-Norm({A(1)long, ..., A(G)long})
+                                                                     g [j]|sw,k≥j)                                                              a11:    Lactor ←Lactor −1G PGg=1 A(g)critic · Pnj=1 logπj(τ
+                            1       h                 (g)          ˆ    i212:    Lcritic ←Lcritic + G PGg=1 Vψ(s) − P τ r + γ · Vψ(s′(g))
+13: until i = n
+14: Lactor ←1n · Lactor
+15: Lcritic ←1n · Lcritic
+Output: Loss of actor Lactor and dreaming critic Lcritic
+
+
+
+
+
+B. Benchmarks
+
+nuScenes (Caesar et al., 2020) is a large-scale autonomous driving benchmark featuring 1,000 20-second urban driving
+scenes with 1.4M annotated 3D boxes across 23 object classes. It provides 360° imagery from six cameras and 2Hz keyframe
+annotations. Following prior works (Hu et al., 2023; Jiang et al., 2023), we evaluate planning using L2 placement error and
+Collision Rate.
+
+C. Implementation Details
+
+For experiments on nuScenes, our method builds upon the LAW framework (Li et al., 2025b). We train the models using
+8 NVIDIA A800-SXM4-80GB GPUs and perform evaluation on the same hardware. Training uses a batch size of 1, the
+AdamW optimizer, and a learning rate of 5 × 10−5 with cosine annealing and linear warmup. All other training settings
+follow the original LAW and SSR configurations. The training process takes approximately 20 hours to complete.
+
+                                                12
+
+=== PDF PAGE 13 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+     Naive Group Sampling Approach                                           Step 1 Sampling                              Step 2 Sampling                              Step 3 Sampling
+                                                                                                           Ground                                                                                                                                          Truth                 Ground                             Truth
+                                                                                                         Sampled                                                                                                                            Step                                                                                                                                                                                       17.5                                                                17.5                      Policy Mode                             (Mean)                                                                               17.5               17.5                                                                                                 Mode (Mean)                                                                                                                                    Value
+
+               15.0                                                                                                15.0                                                                15.0                                                                15.0
+
+               12.5                                                                                                12.5                                                                12.5                                                                12.5
+
+                                                                                                                   10.0                                                                10.0                                                                10.0
+               10.0                                                                                                                                                                                                                                         Position                       Position                         Y  7.5                                                                     7.5                                                                     7.5
+   Y  7.5
+
+                                                                                                                          5.0                                                                     5.0                                                                     5.0
+                 5.0
+
+                                                                                                                          2.5                                                                     2.5                                                                     2.5
+                 2.5
+
+                                                                                                                          0.0                                                                     0.0                                                                     0.0
+                 0.0
+
+                                                                                                          2    0     2                                                2    0     2                                                2    0     2
+                                                                                X Position                                     X Position                                     X Position
+Gaussian Distributions with Sampled Points
+                 Ground Truth                                                         Step 4 Sampling                              Step 5 Sampling                              Step 6 Sampling
+               17.5Policy Mode (Mean)
+                                                                                                                   17.5                                                                17.5                                                                17.5
+
+               15.0
+                                                                                                                   15.0                                                                15.0                                                                15.0
+
+               12.5                                                                                                12.5                                                                12.5                                                                12.5
+
+               10.0
+                       Position
+
+   Y                 7.5                                                                                                                                                                                                 PositionY 10.07.5                                                                10.07.5                                                                10.07.5
+
+                 5.0                                                                                                      5.0                                                                     5.0                                                                     5.0
+
+                 2.5                                                                                                      2.5                                                                     2.5                                                                     2.5
+
+
+                 0.0                                                                                                      0.0                                                                     0.0                                                                     0.0
+
+
+                   2    0     2                                                                           2    0     2                                                2    0     2                                                2    0     2
+                X Position                                                          X Position                                     X Position                                     X Position
+
+     (a) Naive sampling                                                        (b) Step-aware group sampling
+
+  Figure 9. Comparison between naive group sampling and step-aware group sampling in straight-driving scenarios during training.
+
+
+
+
+     Naive Group Sampling Approach                                                    Step 1 Sampling                                 Step 2 Sampling                                 Step 3 Sampling
+                          Ground Truth
+                                  Policy Mode (Mean)
+
+      20                                                                                                  20                                                              20                                                              20
+
+
+
+      15                                                                                                  15                                                              15                                                              15
+                                                                                                                                                                                                                                                     Position     Position                               Y 10                                                              10                                                              10 Y 10
+
+
+       5                                                                                                   5                                                               5                                                               5
+
+
+                                                                                                                       Ground Truth
+                                                                                                                                                                           0                                                               0                                                                                                           0       Sampled                                                                                                                                         Step
+       0                                                                                                           Mode (Mean)                                                                                                                                                  Value
+
+                                                                                                                            12.5  10.0   7.5    5.0    2.5   0.0                                      12.5  10.0   7.5    5.0    2.5   0.0                                      12.5  10.0   7.5    5.0    2.5   0.0
+Gaussian Distributions with Sampled Points                                                   X Position                                        X Position                                        X Position
+                          Ground Truth                                                           Step 4 Sampling                                 Step 5 Sampling                                 Step 6 Sampling
+                                  Policy Mode (Mean)
+
+      20
+                                                                                                          20                                                              20                                                              20
+
+
+
+      15
+                                                                                                          15                                                              15                                                              15
+     Position Y 10                                                                                                                                                                                                                                   PositionY 10                                                              10                                                              10
+
+
+       5                                                                                                   5                                                               5                                                               5
+
+
+
+       0                                                                                                   0                                                               0                                                               0
+
+
+         12.5   10.0   7.5    5.0    2.5   0.0                                                                              12.5  10.0   7.5    5.0    2.5   0.0                                      12.5  10.0   7.5    5.0    2.5   0.0                                      12.5  10.0   7.5    5.0    2.5   0.0
+               X Position                                                                   X Position                                        X Position                                        X Position
+
+   (a) Naive sampling                                                        (b) Step-aware group sampling
+
+     Figure 10. Comparison between naive group sampling and step-aware group sampling in left-turn scenarios during training.
+
+
+
+                                               13
+
+=== PDF PAGE 14 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+                                                                                        Step 1 Sampling                                Step 2 Sampling                                Step 3 Sampling
+      Naive Group Sampling Approach                                                                          17.5         Ground Truth                                             17.5                                                                   17.5
+           17.5          Ground Truth                                                                                            Sampled Step
+                               Policy Mode (Mean)                                                                                Mode (Mean) Value
+                                                                                                                              15.0                                                                   15.0                                                                   15.0
+           15.0
+
+                                                                                                                              12.5                                                                   12.5                                                                   12.5
+           12.5
+
+                                                                                                                              10.0                                                                   10.0                                                                   10.0
+           10.0
+                                                                                                                                                                                                                                                                 Position                                Y  7.5                                                                        7.5                                                                        7.5               Position             7.5
+  Y
+                                                                                                                                      5.0                                                                        5.0                                                                        5.0
+             5.0
+
+                                                                                                                                      2.5                                                                        2.5                                                                        2.5
+             2.5
+                                                                                                                                      0.0                                                                        0.0                                                                        0.0
+             0.0
+                                                                                                                      0     2     4     6                                           0     2     4     6                                           0     2     4     6
+                                                                                           X Position                                       X Position                                       X Position
+ Gaussian Distributions with Sampled Points                                                 Step 4 Sampling                                Step 5 Sampling                                Step 6 Sampling
+           17.5          Ground                                     Truth
+                               Policy Mode                                    (Mean)                                                                                   17.5                                                                   17.5                                                                   17.5
+
+           15.0                                                                                                               15.0                                                                   15.0                                                                   15.0
+
+           12.5                                                                                                               12.5                                                                   12.5                                                                   12.5
+
+           10.0                                                                                                               10.0                                                                   10.0                                                                   10.0
+               Position  Y  7.5                                                                                                                                                                                                                                 PositionY  7.5                                                                        7.5                                                                        7.5
+
+             5.0                                                                                                                      5.0                                                                        5.0                                                                        5.0
+
+
+             2.5                                                                                                                      2.5                                                                        2.5                                                                        2.5
+
+
+             0.0                                                                                                                      0.0                                                                        0.0                                                                        0.0
+
+
+                 0     2     4     6                                                                                  0     2     4     6                                           0     2     4     6                                           0     2     4     6
+                 X Position                                                                    X Position                                       X Position                                       X Position
+
+    (a) Naive sampling                                                          (b) Step-aware group sampling
+
+     Figure 11. Comparison between naive group sampling and step-aware group sampling in right-turn scenarios during training.
+
+
+D. Hyperparameters
+
+We summarize all hyperparameters used in our experiments in Tab. 5. Since the world model is trained purely on an offline
+dataset, its predictions may become inaccurate when the RL actor explores states that deviate from the expert distribution.
+To mitigate the error caused by imagination of the world model, we adopt a smaller discount factor than commonly used in
+online RL methods (e.g., PPO (Schulman et al., 2017) with γ = 0.99). This choice places more emphasis on short-horizon
+rewards and stabilizes value learning under imperfect world model predictions.
+
+                             Table 5. CoIRL-AD hyperparameters used in the nuScenes benchmark.
+
+                                          Hyperparameter             Value
+                                       Interval between two competition (k)     100
+                                  Weight of world model loss (α)         0.2
+                                          Discount factor (γ)               0.5
+                                 Weight of behavior cloning loss (β)     0.005
+                                Competition minimum threshold (λmin)     1
+                                Competition maximum threshold (λmax)    10
+                                    Soft linear interpolation parameter (p)      0.5
+
+
+Among all hyperparameters, β plays a particularly important role, as it controls the contribution of the behavior cloning
+term Lbc in the RL loss. Although the proposed competitive mechanism enables the RL actor to selectively learn from the
+IL actor (expert policy), the RL actor receives no direct expert guidance between two competition steps. This can lead to
+inefficient exploration, especially in the early stages of training.
+
+To address this issue, we introduce a lightweight behavior cloning regularization that softly guides the RL actor toward
+expert-like behaviors while still preserving its ability to explore and optimize long-term returns. Importantly, this term is not
+intended to dominate the RL objective; instead, it serves as a stabilizing prior. Therefore, we restrict β to small values.
+
+The ablation study on β is reported in Tab. 6. We observe that a moderate value (β = 0.005) achieves the best trade-off
+between trajectory accuracy and safety, while excessively large values (e.g., LAW, β = ∞) reduce the method to pure
+
+                                                14
+
+=== PDF PAGE 15 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+imitation learning and degrade overall performance.
+
+                                   Table 6. Ablation study on the behavior cloning weight β.
+
+                             β       L2 (avg) ↓  Col (%) ↓  L2 · Col ↓
+                                0            0.65        0.20        0.13
+                                0.00001         0.65        0.23        0.15
+                                 0.0001         0.70        0.20        0.14
+                                 0.0005         0.71        0.22        0.16
+                                  0.001          0.67        0.23        0.15
+                                  0.005          0.63        0.18        0.11
+                                1            0.66        0.23        0.15
+                  LAW (β = ∞)      0.66        0.22        0.15
+
+
+Overall, these results indicate that a small amount of imitation regularization can significantly improve training stability
+without sacrificing the benefits of reinforcement learning.
+
+E. More Experiment Results
+
+E.1. Training Time
+
+Our method introduces additional training cost due to the use of reinforcement learning, the RL actor’s exploration, and
+the proposed competitive mechanism. The training time comparison is provided in Table 7. Although the training time
+roughly doubles, we consider this overhead acceptable. Most RL-based methods require long training schedules to converge,
+and in our case, the additional cost leads to a substantial improvement in generalization while leaving inference latency
+unchanged—a crucial property for embodied tasks such as autonomous driving.
+
+                                      Table 7. Training time on the nuScenes training set.
+
+                       Method     Training Epochs  GPU Usage   Time
+
+                  LAW             24        8×A800-80G   10 h
+                       CoIRL-AD        24        8×A800-80G   20 h
+
+
+
+E.2. Inference Time
+
+At inference time, our method introduces no additional latency. The knowledge learned by the RL actor has been transferred
+to the IL actor through competition, so only the standard forward pass is required during deployment. We test the inference
+speed of LAW and CoIRL-AD on a single A100 GPU, and the results are shown in Tab. 8.
+
+                                             Table 8. Inference speed and latency.
+
+                               Method       fps    latency (ms)
+
+                        LAW        26.99       37.1
+                              CoIRL-AD   27.1       37.0
+
+
+
+E.3. Generalization and Performance on Long-tail Scenarios
+
+Details on Long-tail Subset Construction  To avoid potential selection bias when only consider the performance of
+baseline model, we reconstructed the evaluation subsets using a strictly symmetric protocol. We identified hard scenarios
+from both CoIRL-AD and the LAW baseline using identical criteria, and then evaluated both methods on the union of
+these scenarios. This prevents the subset definition from favoring either method. The L2 Long-Tail Dataset is built by
+first selecting scenes with fut valid flag=TRUE, and then filtering for scenes with L2 distance greater than 0.3 at 1s,
+greater than 0.6 at 2s, and simultaneously greater than 1.0 at 3s of both baseline and our model, then union the two subset.
+This results in a total of 2247 scenes for testing. The Collision Rate Long-Tail Dataset is obtained by selecting scenes with
+
+
+                                                15
+
+=== PDF PAGE 16 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+fut valid flag=TRUE and excluding all scenes with a zero collision rate at the 3s horizon of both baseline and our
+model, then union both subset, yielding 124 test scenes.
+
+Detailed Results  We visualize the metrics of the baseline and CoIRL-AD in Fig. 12 and Fig. 3. Detailed results on the
+two long-tail subsets are shown in Tab. 9 and Tab. 10.
+
+
+                                                        L2 Error                                       Collision Rate
+                                                                                                                                                           1.46                                                                      1.50%
+                                                           1.4     LAW                                       1.4     LAW
+                                                         CoIRL­AD                                    CoIRL­AD
+                                                           1.2                                                                  1.13        1.2
+                                                                                                         (%)
+                                                     (m) 1.0                                0.89                             1.0
+                                                           0.8                                                             Rate 0.8                                                                                        error                                              0.65
+                                   L2 0.6      0.45                                             0.6                          0.43%                        0.46%                                                           0.4               0.33                                                                                                       Collision 0.4
+
+                                                           0.2                                                    0.2     0.13%                        0.15%
+                                                                                                                                                                           0.04%
+                                                           0.0      1            2            3           0.0      1            2            3
+                                                     Time horizons (s)                         Time horizons (s)
+
+                                   Figure 12. Cross-city Generalization Ability Visualization
+
+
+                                       Table 9. Long-tail dataset (L2) comparison results
+
+                             L2 (m) ↓                Col (%) ↓        L2 · Col ↓
+                Method
+                               1s     2s     3s   Avg.    1s     2s     3s   Avg.     Avg.
+            LAW      0.52   1.01   1.60   1.04   0.11   0.18   0.74   0.34      0.36
+             CoIRL-AD   0.45   0.92   1.53   0.97   0.07   0.14   0.53   0.25      0.24
+
+
+                                    Table 10. Long-tail dataset (Collision) comparison results
+
+                            L2 (m) ↓                 Col (%) ↓        L2 · Col ↓
+               Method
+                              1s     2s     3s   Avg.    1s     2s     3s    Avg.     Avg.
+           LAW      0.40   0.94   1.67   1.01   3.63   5.04   18.82   9.16      9.22
+             CoIRL-AD   0.37   0.84   1.51   0.91   2.42   4.23   15.19   7.28      6.60
+
+
+F. Comparison with Other RL Methods
+
+To validate our choice of a model-based RL optimization strategy, we compared our approach against traditional offline RL
+and alternative on-policy optimizers. The configurations are:
+
+   • LAW (No RL): The baseline pure imitation learning model.
+
+   • CoIRL (Proposed): Our model-based RL framework utilizing the world model.
+
+   • CQL (Pure Offline RL): A standard conservative offline RL baseline. It only uses data from the offline dataset and
+    does not utilize future states predicted by the world model.
+
+   • PPO-lite (Model-Based “Online RL”): Uses the offline dataset but employs the world model as a fast simulator. We
+    implement PPO as an ”on-policy” RL algorithm operating within this learned simulator (without a replay buffer).
+
+The results in Tab. 11 reveal a severe performance gap between pure offline RL and our world-model-based approach.
+CQL fails in this setting, with L2@avg rising to 4.67. We attribute this to a data-regime mismatch: offline driving datasets
+are imitation-oriented and dominated by positive expert trajectories, lacking the negative or counterfactual state coverage
+required for stable value estimation in pure offline RL.
+
+In contrast, using the world model as a simulator, as in CoIRL and PPO-lite, enables on-policy exploration of both positive
+and negative trajectories, yielding more stable and effective value learning. CoIRL and PPO-lite achieve similarly strong
+overall results with slight trade-offs: CoIRL tracks the expert better in terms of L2 error, while PPO-lite slightly reduces
+collisions. These results indicate that the framework is robust to the specific choice of optimizer and support our core claim
+that world-model-enabled exploration is critical in this offline setting.
+
+                                                16
+
+=== PDF PAGE 17 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+                               Table 11. Performance on nuScenes using different RL methods.
+
+                                 L2 (m) ↓              Collision Rate (%) ↓    L2 · Col ↓
+                Description
+                                     1s     2s     3s   Avg.    1s     2s     3s   Avg.     Avg.
+         LAW (No RL)       0.32   0.63   1.03   0.66   0.09   0.12   0.46   0.22      0.15
+           CoIRL (Proposed)      0.29   0.59   1.00   0.63   0.06   0.10   0.37   0.18      0.11
+         CQL (Pure Offline)     2.80   4.67   6.55   4.67   1.76   3.56   4.88   3.40     15.87
+           PPO-lite (Model-Based)   0.32   0.62   1.03   0.66   0.02   0.08   0.37   0.16      0.10
+
+
+G. More Qualitative Results
+
+In this section, we provide additional qualitative results to further demonstrate the effectiveness of our approach.
+
+
+G.1. Good Cases
+
+The qualitative results show that, after incorporating reinforcement learning, our model avoids several collisions that the
+baseline fails to handle. This further supports the effectiveness of integrating IL and RL.
+
+
+
+
+
+Figure 13. Good Case: In a queuing scenario while waiting for the green light, our model proceeds after the car ahead turns off its
+indicator and starts moving, whereas the baseline model remains stopped, which may lead to a rear-end collision.
+
+
+
+
+
+Figure 14. Good Case: When the high-level command is incorrect, our model adapts its planned trajectory based on the driving scenario,
+whereas the baseline model fails to adjust.
+
+
+G.2. Bad Cases
+
+However, there are also some scenarios where both the baseline model and our model perform unsatisfactorily.
+
+H. Usage of LLMs
+
+During our research, we used LLMs in the following ways:
+
+                                                17
+
+=== PDF PAGE 18 ===
+ CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+
+
+
+Figure 15. Good Case: When exiting the parking lot, our model waits for the toll barrier to rise, whereas the baseline model proceeds
+forward and collides with it.
+
+
+
+
+
+Figure 16. Good Case: When the leading vehicle has its indicator on, our model slows down to avoid a rear-end collision, whereas the
+baseline model maintains speed and causes a collision.
+
+
+
+
+
+Figure 17. Bad Case: When turning right at an intersection, both the baseline model and our model plan trajectories that collide with a
+vehicle waiting for the green light.
+
+
+
+
+
+Figure 18. Bad Case: When pedestrians are crossing, our model continues to move forward at a low speed instead of stopping completely.
+
+
+                                                18
+
+=== PDF PAGE 19 ===
+CoIRL-AD: Collaborative-Competitive Imitation-Reinforcement Learning in Latent World Models for Autonomous Driving
+
+
+
+
+
+    Figure 19. Bad Case: Both the baseline model and our model fail to plan reasonable trajectories in lane-changing scenarios.
+
+
+  • Text polishing. We employed LLMs to refine the writing style of our drafts and to shorten sections when the main
+    text exceeded the page limit (9 pages). We did not use LLMs to generate new content; all polished text was manually
+   reviewed before inclusion in the submission.
+
+  • Idea exploration. We used LLMs as a tool for brainstorming and literature search assistance. By discussing our ideas
+   with LLMs, we were directed toward relevant research areas and key related works, which we then examined ourselves.
+
+  • Code assistance. LLMs were used to help debug programs by analyzing error logs, to review our code for potential
+    issues, and to generate auxiliary visualization scripts. Except for visualization, we did not rely on LLMs to produce
+   experimental code. For visualization, we first drafted data-loading code ourselves, then refined the visualization with
+   LLM-generated snippets, carefully verifying correctness before use.
+
+
+
+
+
+                                               19

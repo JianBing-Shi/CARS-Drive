@@ -1,0 +1,60 @@
+# Paths are relative to the E2EAD project directory.
+univeral_config: &univeral_config
+  mode: "refresh"
+  history_features: 20
+  future_action: 10
+
+datamodule:
+  <<: *univeral_config
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  train_batch_size: 2
+  val_batch_size: 2
+  shuffle: true
+  num_workers: 10
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  ratio: 0.1
+
+model:
+  <<: *univeral_config
+  feature_dim: 256
+  hidden_dim: 256
+  spatial_grid: [9, 9]
+  macro_grid: [3, 3]
+  heads: 8
+  layers: 4
+  dropout: 0.1
+  plan_horizon: 5
+  refresh_steps: 10
+  refresh_offset: -5
+  refresh_budget: 1.0
+  max_refresh: 1
+  cost_weight: 0.0
+  utility_weight: 1.0
+  action_loss: smooth_l1
+  yaw_weight: 1.0
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  warmup_epochs: 4
+  T_max: 20
+  anchor_dropout: 0.2
+
+trainer:
+  ckpt_path: null
+  strategy: auto
+  accelerator: gpu
+  devices: 1
+  max_epochs: 20
+  gradient_clip_val: 1.0
+  ckpt:
+    monitor: val/loss
+    save_top_k: 3
+    mode: min
+    save_last: true
+  lr_monitor:
+    logging_interval: epoch
+  csv_logger:
+    save_dir: lightning_logs
+    name: refresh

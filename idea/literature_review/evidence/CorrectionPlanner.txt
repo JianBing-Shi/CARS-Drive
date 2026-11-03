@@ -1,0 +1,1176 @@
+=== PDF PAGE 1 ===
+                CorrectionPlanner: Self-Correction Planner
+            with Reinforcement Learning in Autonomous Driving
+
+
+
+                 Yihong Guo 1 Dongqiangzi Ye 2  Sijia Chen 2 Anqi Liu 1 Xianming Liu 2
+
+
+                 Abstract
+
+    Autonomous driving requires safe planning, but
+    most learning-based planners lack explicit self-
+     correction ability: once an unsafe action is pro-
+     posed, there is no mechanism to correct it. Thus,
+   we propose CorrectionPlanner, an autoregressive
+     planner with self-correction that contains a pro-
+     pose, evaluate, and correct loop in the motion-
+     token generation process. At each planning step,
+     the policy proposes an action, namely a motion to-
+     ken, and a learned collision critic predicts whether         Figure 1. (a) Vanilla autoregressive models, no correction mech-
+                                                               anism.  It does not have the revisit and correction step before       it will induce a collision within a short horizon.
+                                                              deployment, leading to more unsafe behavior. (b) Autoregressive
+      If the critic predicts a collision, we retain the se-                                                          models that generate tokens sequentially, with reasoning through
+    quence of historical unsafe motion tokens as a          language. Though effective, such reasoning can be inefficient and
+     self-correction trace, generate the next motion to-         does not have explicit self-correction before deployment. (c) Au-
+    ken conditioned on it, and repeat this process until           toregressive models that generate subsequent tokens sequentially
+                                                                with self-correction through motion tokens. Our method explicitly     the safe motion token is proposed or the safety
+                                                                         corrects unsafe behavior before deployment with a correction trace,
+     criterion is met. This self-correction trace, con-                                                                  thereby reducing unsafe behavior.
+      sisting of all the unsafe motion tokens, represents
+     the planner’s correction process in motion-token
+                                                    and predict the next ego action or the trajectory (Wu et al.,     space. We train the planner with imitation learn-
+                                                       2024; Zheng et al., 2025) as shown in Figure 1 (a). Also,     ing followed by model-based reinforcement learn-
+                                                             recent work in LLMs (Havrilla et al., 2024) shows that ex-     ing using rollouts from a pretrained world model
+                                                                          plicit reasoning and self-reflection (Ferrag et al., 2025) can     that realistically models agents’ reactive behav-
+                                                     improve the model’s reliability and avoid unsafe and haz-      iors. Closed-loop evaluations show that Correc-
+                                                         ardous output. Such methods have been widely adopted in     tionPlanner reduces the collision rate by over 20%
+                                                     autonomous driving, where reasoning is typically performed    on Waymax and obtains state-of-the-art planning
+                                                                in language space, as illustrated in Figure 1(b). While ef-     scores on nuPlan.
+                                                                    fective, these models often lack an internal mechanism to
+                                                              evaluate and correct unsafe actions before execution.
+
+1. Introduction                                           Inspired by these, we propose an autonomous driving plan-
+                                                                   ner, CorrectionPlanner, with an explicit correction mech-
+Autonomous driving (Inamdar et al., 2024) is a long-horizon                                                    anism before execution that autoregressively corrects un-
+decision-making problem that requires both efficiency and                                                              safe actions until the safety criterion is met.  Instead of
+safety. Most learning-based planners learn rich scene con-                                                          reasoning in natural language, our method performs self-
+text, including agents, maps, and navigation information,                                                                correction at the motion token level, discretized from trajec-
+  Work  done  during  an  internship  at XPENG  Motors.     tories. Specifically, at each planning step, the policy (plan-
+1Department of Computer Science, Johns Hopkins University, Bal-    ner) first autoregressively generates an ego motion token
+timore, USA 2XPENG Motors. Correspondence to: Yihong Guo    given the agents’/ego’s history, map/navigation information,
+<yguo80@jhu.edu>.                                                    and predicted agent motions, and then a learned collision
+                      rd                                              critic evaluates whether it will cause a collision within aProceedings of the 43   International Conference on Machine
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026    short horizon (e.g., 2.5s). If it is unsafe, the token will not
+by the author(s).                                        be executed. The policy retains the sequence of all unsafe
+
+                                                1
+
+=== PDF PAGE 2 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+                                                                 ing state-of-the-art planning scores on nuPlan datasets.
+                                               And qualitative results show that our method exhibits
+                                                                   diverse self-correction behaviors.
+
+                                                        2. Related Work
+
+                                                Motion prediction and planning. Learning-based trajec-
+                                                               tory planning methods have been widely studied, including
+Figure 2. Blue box is ego; red cross is collision; orange trajectory is    continuous motion distribution prediction (Bansal et al.,
+the expert trajectory. Left: autoregressive without self-correction.    2018; Renz et al., 2022; Nayakanti et al., 2022; Huang et al.,
+Right: autoregressive with self-correction. Collision is avoided    2023; Cheng et al., 2023; 2024b; Cusumano-Towner et al.,
+with self-correction before the collision by slowing down to yield                                                       2025; Xiao et al., 2025), diffusion-based models (Scheel
+to the right-turn vehicle and then re-accelerating.
+                                                                       et al., 2022; Hu et al., 2024; Wang et al., 2024; Zheng et al.,
+                                                          2025), and autoregressive models (Zhou et al., 2024; Wu
+motion tokens and repeatedly generates new tokens based     et al., 2024). Though many of these works develop useful
+on this sequence. Such a sequence of historically proposed    techniques for learning representations and achieving strong
+unsafe actions, which we call the correction trace, includes    performance in simulation, they lack the ability to reflect
+all tokens generated during the correction process and serves    on the actions before execution, which can lead to unsafe
+as the planner’s internal correction trace in motion-token     trajectories. In contrast, our method trained with RL has the
+space, analogous to the reasoning trace in language mod-     ability to self-correct and refine the proposed motion token
+els. We illustrate this mechanism in Figure 1(c). As shown     in an autoregressive manner, avoiding unsafe trajectories.
+in Figure 2, such a self-correction process can avoid the
+                                                       Safe motion planning. Safe motion planning with formalcollision without relying on post-hoc filtering, rule-based
+                                                          guarantee in robot manipulation tasks (Nakamura et al.,candidate selection, or language reasoning.
+                                                       2025; Ak et al., 2023; Ke et al., 2024) and autonomous
+To enable the planner to learn not only how to imitate expert    driving (Leung et al., 2023; Ma et al., 2026) is another line
+behavior but also how to recover and self-correct from un-    of work that is related to our method. However, they are
+safe behaviors, we use a two-stage training pipeline includ-    mostly designed for more abstract or simplified environ-
+ing imitation learning and reinforcement learning. Imitation    ments to achieve a safety guarantee, while we study a more
+learning via next-token prediction trains only on expert tra-     realistic, complex, and data-driven problem that evaluates
+jectories, and no self-correction is applied. As a result, it    general planning ability beyond safety. For example, reach-
+does not teach the planner how to revise unsafe actions. We     ability (Shao et al., 2021; Nakamura et al., 2025) and safety-
+therefore adopt a two-stage training scheme: (1) imitation     filtering methods (Pek & Althoff, 2020) assume known or
+learning with next-token prediction on expert trajectories,    structured system dynamics, explicit safety geometry, or
+and (2) model-based reinforcement learning using a pre-    reachable/invariant set computation under strong assump-
+trained frozen world model (Wu et al., 2024) to simulate     tions on the dynamics. Besides, these methods are primarily
+reactive multi-agent rollouts. During RL, the policy gener-    designed around safety-oriented formulations for planning
+ates both motion tokens and correction trace tokens through    and are particularly useful when the objective is to guaran-
+the self-correction loop, and we optimize the ego policy     tee constraint satisfaction under well-specified assumptions.
+with a safety-aware reward using a REINFORCE objective    However, the assumption or formulation makes it challeng-
+with KL regularization.                                      ing to directly scale to realistic, large-scale, multi-agent driv-
+                                                          ing settings, where the planner must remain both safe andIn summary, our contributions are:
+                                                              behaviorally effective, such as efficiently following the nav-
+  1. We propose CorrectionPlanner, an autoregressive     igation and progressing. Our work takes a complementary
+     motion-token generation planner with a propose, eval-    approach: rather than framing planning as a safety-centric
+     uate, and correct loop that uses the correction trace to    problem or relying on a separate safety filter/verification
+      iteratively refine unsafe actions before execution.        module, we incorporate a self-correction mechanism into
+  2. We introduce a two-stage training scheme: imitation    the autoregressive planning framework to reduce collisions
+     learning and model-based RL with a reactive multi-    while preserving the planner’s general driving capability.
+     agent world model, enabling realistic rollouts that in-
+                                                   Reinforcement learning for autonomous driving. Rein-     clude both executed ego tokens, correction traces, and
+                                                         forcement learning has been widely applied in autonomous     agents’ reactive behavior.
+                                                                driving, either followed by imitation learning (Lu et al.,  3. Our approach reduces collision rates through self-
+                                                       2023; Huang et al., 2025) or pure RL (Scheel et al., 2022;     correction, outperforming learning-based planners by
+                                                        Li et al., 2024; Zhang et al., 2025a). In these works, the     over 20% in collision rate on the WOMD and achiev-
+
+                                                2
+
+=== PDF PAGE 3 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+RL mostly serves as a post-training or fine-tuning step to    P, and the policy πθ.
+improve the model’s performance beyond the expert data. In
+                                                 Model-Based Reinforcement Learning with World
+contrast, our method uses RL to endow the model with self-
+                                                    Model. A key challenge for RL training in autonomous driv-
+correction ability, using rollout trajectories with correction
+                                                           ing is how to realistically simulate agents’ behaviors given
+tokens and rule-based rewards through two-stage training.
+                                                              the ego vehicle’s actions. Naive solutions include 1) replay
+Further, traditional RL methods like REINFORCE (Zhang
+                                                             log trajectories for the agents and 2) predict the future trajec-
+et al., 2021), SAC (Haarnoja et al., 2018), and GRPO (Shao
+                                                                    tories for all the timesteps first, and then plan the ego, like
+et al., 2024) are widely used in the literature, and we select
+                                                              diffusion planner (Zheng et al., 2025). However, both are
+REINFORCE with KL divergence to fine-tune the imitation
+                                                            nonreactive simulations and ignore the ego’s interventions
+learning model.
+                                                                  in the agents, which can be unrealistic, especially when the
+Reasoning and self-reflection. Reasoning (Zhang et al.,    ego performs self-correction, as the correction might further
+2024; Ferrag et al., 2025), self-reflection (Ji et al., 2023;    change the agents’ actual behavior. We address this issue by
+Kamoi et al., 2024), latent reasoning (Zhu et al., 2025), and    using a model-based reinforcement learning method, where
+visual planning (Xu et al., 2025) are effective in LLMs for   we learn the transition kernel ˆP(st+1|st, segot  ), also called
+solving math/coding problems, and safety alignment (Zhang     the world model, which can reactively model the agent’s be-
+et al., 2025b), etc. Such methods mostly perform reasoning     havior. This enables us to collect more realistic trajectories
+and self-reflection in the language space, i.e., using human     for the RL training.
+language to represent the reasoning trace. However, using
+human language as a medium might not be optimal, as it     3.2. Learned World Model for Multi-Agent Dynamics
+may not accurately reflect the physical world or lead to
+                                      We build our world model on top of SMART (Wu et al.,redundant reasoning. Inspired by this, our proposed method
+                                                            2024), a vectorized autoregressive multi-agent world modelperforms self-correction using motion tokens and generates
+                                                                    that generates reactive agents’ behaviors.actions via correction traces to reduce collision rates.
+                                                        Tokenization. We discretize continuous trajectories into
+3. Preliminaries                                     motion tokens by segmenting them into 0.5-second intervals
+                                                    and clustering motion segments using a K-disk algorithm
+3.1. Self-Correction Autonomous Driving as               based on their average corner distance. This yields a discrete
+    Model-Based Reinforcement Learning               1024-token vocabulary, where each token encodes a one-
+                                                               step change in position and heading. The agent’s trajectoryWe model autonomous  driving planning  as a  finite-
+                                                                              is represented as a token sequence over the horizon, allowinghorizon  Markov   decision   process  (MDP)   with:
+                                                          us to model the planning as a next-token generation problem.M  =   (S, A, P, r, γ, H). S   is  the  state  space:
+st =  (sego<t, sagents≤t   , m), where segot   includes the ego’s    Architecture. The world model is a transformer decoder
+information like position, speed and m is the map and    with spatio-temporal attention as shown in Figure 3 (a). Mo-
+navigation information. A is the ego action space and     tion tokens are first fused with vehicle information, includ-
+action is the next motion token or position segot   , P is the    ing speed, size, and other factors, and then processed by six
+transition kernel: P(st+1|st, segot  ) that modeling agent’s     attention blocks. Each block consists of three components:
+behaviors given the planning command of the ego, r     (1) Temporal self-attention, modeling motion continuity and
+is the reward function, γ ∈(0, 1] is a discount factor,    capturing each agent’s long-range dependencies across the
+and H  is the horizon. We parameterize the policy as    time horizon; (2) Agent-map cross-attention, which incor-
+πθ(segot      |  sego<t, sagents<t   , ˆsagentst      , m), where we output the    porates spatial constraints by attending to road elements,
+next motion tokens segot ∈A (e.g., a motion token or    ensuring adherence to the road network, and reducing off-
+low-level control command), using the state information    road behavior; (3) Agent-agent cross-attention, which mod-
+st as well as the predicted next state of the agents using     els interactions with surrounding agents to simultaneously
+the learned world model  ˆP.  More generally,  in the    predict the future behavior of agents. To maintain rotation
+self-correction scenario, we further express the policy as:    and translation invariance, relative spatio-temporal position
+πθ(segot    | sego<t, sagents<t   , ˆsagentst      , m, segot,<c), where segot,<c is the    embeddings and the distances between agents, the ego, and
+proposed unsafe motion token sequence (correction trace).   map tokens are applied to all attention modules. Both ego
+Then, the environment evolves according to P, and the ego    and non-ego agents share the same encoder structure, and
+receives a scalar reward r(st, segot  ).                            the token vocabulary is shared between them.
+The goal is to learn a policy that maximizes expected reward:    Loss. The model is trained with a next-token prediction
+J(πθ) = Eh PHt=1 γt r(st, segot  )i , where the expectation is    objective with cross-entropy loss for all agents:
+over the initial state distribution, the environment dynamics           Lworld(ϕ) = −PHt=1 PNn=0 log pϕ snt  | s0:N<t  , m  ,
+
+
+                                                3
+
+=== PDF PAGE 4 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+where H is the horizon, N is the number of agents, snt     policy then generates the next proposal distribution using
+is the n-th agent’s state at t, s0:N<t  is all the agents’ token    the correction trace, which is encoded by a self-attention
+before t and m is the map information. Once pretrained,     layer, and the final accepted token is executed.
+the world model is frozen during later RL training and used                                                           Self-correction in imitation learning. Although RL fur-
+as a ”simulator” within our RL loop to reactively sample     ther strengthens self-correction, we train the imitation stage
+trajectories for policy optimization and self-correction. We     to explicitly expose the policy to collision scenarios, en-
+summarize the training of the world model in Algorithm 1.    abling it to learn to revise unsafe predictions during IL. At
+                                                         planning timestep t, if the policy proposal ˆsegot   collides at
+                                                                      t (shown as the orange token in Figure 3 (a)), we generate
+4. Method                                                corrected tokens through self-correction until no collision
+                                                           happens. Specifically, we retain all previously proposed (un-
+In this section, we present our method for detecting unsafe     safe) tokens as a sequence, encode them with self-attention
+motions and refining them through an iterative correction     to obtain a fused representation, and generate the next cor-
+process with the correction trace. During planning, each    rected motion token ˆsegot,c+1, conditioning the policy on all
+proposed motion token is evaluated by a collision critic that    the previously proposed unsafe actions. The objective of
+                                                             the correction in IL is to minimize the cross-entropy losspredicts whether it will cause a collision within a short hori-
+                                                    between each proposed action in the correction trace and
+zon. If a proposed motion token is flagged as unsafe, the                                                              the expert trajectories:
+policy will not execute it, but it does not resample from the
+original token distribution. Instead, it appends the rejected                                                                             Lcorr.(θ) = −PTt=1 PCc=1 log πθ(segot   | sego,agents<t       , ˆsagentst     , m, ˆsegot,<c),
+token to a correction trace, the sequence of all previously
+rejected unsafe motion tokens, and generates a revised mo-
+                                                   where C is the maximum correction length, ˆsegot,<c is thetion token conditioned on the scene history and this trace,
+                                                           ego’s self-correction trace sampled before the correctionrepeating until the critic predicts no collision or the max-
+                                                                step c. So, we force the policy to generate expert trajectories
+imum correction length is reached. We first describe the                                                          conditioned on the correction trace, thereby endowing it
+policy network for generating ego motions, then show how    with preliminary self-correction capability. The overall loss
+we conduct self-correction, and finally introduce our two-    of the IL phase is:
+stage training scheme: imitation learning using expert data
+followed by RL to strengthen corrective behavior. The ar-                  Lpretrain = Limitation(θ) + Lcorr.(θ) + Lworld(ϕ).
+chitecture is shown in Figure 3. We summarize imitation
+learning, RL training, and inference in Algorithms 2 to 4.     Here, we train the world model and the policy together. Note
+                                                                  that in the IL stage, we do not enable the policy to correct
+4.1. Policy Network                                          the future collision, but only to correct the current collision.
+                                                         This is because the training uses expert data for next-token
+We design the policy network using a similar architecture to
+                                                               prediction; it is neither realistic nor ideal to correct the ex-
+the world model, but only to model the ego’s behavior, and
+                                                                pert trajectories, and we cannot obtain the future collision or
+include navigation information for planning. As shown in
+                                                         observe counterfactual futures under the expert trajectories
+Figure 3 (a), the policy consists of a stack of cross-attention
+                                                         without rollout in the imitation learning stage. That’s why
+modules: (i) a route/navigation cross-attention layer, (ii) a
+                                            we require the world model to generate realistic trajectories
+temporal self-attention layer over the ego trajectory, (iii) an
+                                                     and RL to empower the policy with self-correction ability.
+ego-map cross-attention layer that incorporates map context,
+and (iv) an ego-agent interaction layer that models the ego’s
+                                                                    4.2. Self-Correction with Reinforcement Learninginteractions with other agents. Then the policy outputs a
+motion token distribution via an MLP prediction head and    In this section, we describe the self-correction and rein-
+samples a motion from it. The policy is trained with the    forcement learning framework shown in Figure 3 (b). In
+next-token prediction objective on expert trajectories:         the IL phase, we only perform next-token prediction and
+Limitation(θ) = −PTt=1 log πθ(segot    | sego<t, sagents<t   , ˆsagentst      , m),    next-token correction. However, in real-world driving, the
+                                                              correction is not feasible when a collision will occur in the
+where the token of the ego is predicted, conditioned on the    next planning step: for example, it is too late to brake if
+ego/agent’s historical behavior, maps, as well as the agent’s    the next control action results in a collision, as they might
+predicted one-step future behavior.                            already be close enough. The correction procedure needs to
+                                                       be done earlier. Thus, we propose using reinforcement learn-
+Correction tokens. No separate token type is used for
+                                                             ing to further train the policy and learn a collision critic that
+the self-correction, and correction tokens are motion to-
+                                                       can correct unsafe motions in advance via self-correction.
+kens generated during the self-correction process. Unsafe
+intermediate proposed motions are not executed; they are    Rule-based Reward. We define the trajectories’ reward as
+retained in the input sequence as a correction trace. The    r = Progression Rate·I(Collision = 0)−I(Collision = 1).
+
+                                                4
+
+=== PDF PAGE 5 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+
+
+
+
+                              (a) Policy                                             (b) Self-correction
+
+Figure 3. (a) Policy architecture. A frozen reactive world model predicts future motions for the ego and other agents. Conditioned
+on scene history and map/navigation context, the planner is an autoregressive policy that generates the next ego motion token. When
+self-correction is triggered, previously rejected proposals are retained as a correction trace and integrated via a self-attention encoder
+to condition subsequent proposals, providing an explicit correction signal during both imitation learning and RL. (b) Self-correction.
+At each planning timestep, the policy proposes an ego motion token, and a learned collision critic evaluates whether it will cause a
+collision within a short horizon. If unsafe, the policy iteratively generates revised motion tokens conditioned on the correction trace until a
+safe token is found (or a maximum number of correction steps is reached). The resulting rollout contains both executed ego tokens and
+intermediate correction tokens, and the policy is further optimized with REINFORCE using a rule-based reward and KL regularization.
+
+Progression Rate is the progress relative to the expert trajec-    rection length (the length of the correction trace) at t, and
+tory, with a maximum of 1.0. We only use the collision and     segot,<Ct is the correction trace consisting of all previously
+progression because 1) too many reward signals complicate     rejected ego motion tokens. λ controls the scale of the KL
+the RL training, and 2) progression is one of the metrics     regularization, which penalizes deviation from the IL policy.
+that is most in conflict with collision, i.e., the planner might   We apply the policy-gradient update only to the executed
+sacrifice the progression by moving very slowly to avoid    token segot,Ct, since the trajectory-level reward is attributed
+collision, which is not ideal in the planning.                    to the executed action but not the intermediate token in the
+                                                                correction trace. This objective learns to optimize the policy
+Rollouts with World Model. To enable reinforcement
+                                                                 to generate a safe token given the entire correction trace.
+learning to improve self-correction beyond expert demon-
+strations, we generate rollouts using the pre-trained frozen
+                                                                    4.3. Training the Collision Criticworld model. At each planning step, the ego policy first
+proposes a motion token, and the collision critic evaluates   To effectively detect future collisions for both RL training
+its collision risk within the horizon k.  If the proposal is    and inference, we train a critic (a binary classifier) to pre-
+                                                                  dict whether a collision will occur using rollout trajectorypredicted to be unsafe, we reject it, append it to a correction
+                                                            data from the policy and world model. The critic has two
+trace, and autoregressively generate a revised motion token                                                                 attention blocks and an MLP prediction head to predict the
+conditioned on the scene history and the entire correction     collision; each block contains: (i) a temporal self-attention
+trace, repeating until it becomes safe or the maximum cor-    layer over the ego and agents’ trajectories, (ii) an ego-agent
+rection length is reached. The final token is then executed     interaction layer that models the ego’s interactions with
+                                                               other agents. The training objective is to minimize the cross-in the world model, which generates the agents’ behaviors.
+                                                          entropy loss:
+The model rollouts include executed ego tokens and the
+intermediate correction tokens in the correction trace.                                                                                  Lcritic(θ) = − XT         = 1) log pθ collision | s≤t                                                                                       t=1I(collisiont:t+k
+Policy Optimization. We maximize the trajectory reward
+                                              + I(collisiont:t+k = 0) log pθ safe | s≤t  ,through REINFORCE and a KL divergence penalty:
+                                                   where I(collisiont:t+k = 1) and I(collisiont:t+k = 0) are
+  LRL(θ) = PTt=1 r(τ) log πθ  segot,Ct | sego<t, sagent≤t  , segot,<Ct, m                                                                  collision or safe in k future planning steps, respectively.
+                       −λKL(πimitation||πθ),
+                                                 Comparison with Rejection Sampling. Although our self-
+ where r(τ) is the trajectory reward, Ct denotes the cor-    correction iteratively generates motion tokens, it is not equiv-
+
+                                                5
+
+=== PDF PAGE 6 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+alent to rejection sampling under the safety constraints. In    gesting a favorable safety-efficiency trade-off.
+rejection sampling, unsafe tokens are rejected, and the next
+                                              NuPlan Simulation.  In Table 2, we compare with the
+proposal is drawn from the same token distribution. In con-
+                                                           learning-based planners on nuPlan. Overall, our method
+trast, our planner generates a new token distribution using
+                                                    shows consistently better performance across all settings ex-
+information from the entire correction trace, enabling the
+                                                             cept in the Test-Hard NR setting, where SMART performs
+policy to explicitly leverage it to update the distribution.
+                                                               the best. Further, our method outperforms the baselines and
+Thus, the correction process changes the conditional distri-
+                                                        improves them more in the reactive mode, as observed in the
+bution of future tokens based on past failures, analogous to
+                                          Waymax experiments in Table 1, suggesting that reactive
+multi-step “reasoning” in LLM but performed in motion-
+                                                     modeling of agents is more favorable in real-world inter-
+token space. We also compare against a rejection sampling
+                                                                active traffic. Further, we compare against the second-best
+baseline in Section 5.3 to demonstrate the difference.
+                                                               baseline, SMART, on key metrics, including progress and
+                                                                    collisions, shown in Table 3. Our method achieves a lower
+5. Experiments                                             collision rate than SMART while maintaining similar per-
+                                                     formance on other metrics, demonstrating its effectiveness
+In this section, we evaluate our method on the WOMD
+                                                     and a slight trade-off in those metrics, even though we only
+(Ettinger  et  al.,  2021)  with  the Waymax  simulator
+                                                          optimize the progression and safety reward in RL training.
+(Gulino  et  al., 2023) powered by LatentDrive (Xiao
+et  al.,  2025) and  the  nuPlan  dataset(Caesar  et  al.,  Why might progression decrease?  In many scenarios
+2021).  We also conduct various ablation studies to     (e.g., left turns or crossing intersections), the self-correction
+further validate our method.  Our code is available at    planner often slows down or yields to other agents, and then
+https://github.com/guoyihonggyh/CorrectionPlanner-Self-    re-accelerates afterward. This behavior effectively reduces
+Correction-Planner-with-Reinforcement-Learning-in-         collisions but can slightly harm the progression metric due
+Autonomous-Driving.                                          to a temporary loss of speed. We believe this behavior is
+                                                       normal even for an expert driver and view it as an acceptable
+5.1. Experimental Setup                                      trade-off in autonomous driving, where safety should take
+                                                         precedence over marginal efficiency gains. Also, our model
+We evaluate our method in reactive and non-reactive modes:                                                                 exhibits more complex and diverse self-correction behavior
+reactive agents follow an IDM policy (Treiber et al., 2000),                                                     beyond slowing down/braking and yielding, as described in
+while non-reactive agents use log-replay trajectories. For                                                              the qualitative results and the visualization in Section C.
+WOMD, we use the Waymax simulator (Xiao et al., 2025)
+powered by the LatentDrive (Xiao et al., 2025) to evaluate    Qualitative Results. Figure 4 visualizes three examples
+the closed-loop simulation. For nuPlan, evaluation is per-    of our self-correction. The red cross means the collision.
+formed on the standard Val14, Test14-random, and Test14-    For (a) and (b), we see that the ego makes a slightly wider
+hard splits (Dauner et al., 2023). More details can be found     left turn in advance through self-correction to avoid the not-
+in Section B.1.                                                     at-fault collision. Also, in (c) and (d), the ego is changing
+                                                                 lanes, which might lead to a collision. So in (d), the self-
+Metrics. For WOMD, we follow the simulator in Latent-                                                             correction corrects the aggressive lane-changing action to
+Drive (Xiao et al., 2025) and report Off-Road, Collision, and                                                         avoid a collision.  In (e), the slow left turn leads to the
+Progression. For nuPlan, we report the planning score and                                                                     collision; through self-correction, the ego avoids the braking
+Collision and Progression to validate that self-correction                                                     and maintains a slightly higher speed to avoid a collision.
+can reduce the collision rate.
+
+                                                                    5.3. Ablation studies
+5.2. Main Results
+                                      We now present ablation studies and more baseline com-
+Waymax Simulation. In Table 1, we see that under both                                                              parisons. In Section 5.3.1, we first show that the correc-
+modes, our method achieves the lowest collision rate, re-                                                                tion trace is beneficial for correcting the unsafe behavior
+ducing collisions by over 20% compared with the best base-                                                  compared to the variant without the correction trace. In
+line, demonstrating that self-correction is effective in re-                                                          Section 5.3.2, we also compare our method with different
+ducing collisions. Meanwhile, our off-road performance                                                               baselines, including the IL, RL without correction, etc.,
+remains consistently competitive, matching SMART base-                                                     and we conduct an experiment on rejection sampling to fur-
+lines within a small margin, demonstrating that the spatio-                                                                  ther demonstrate that the self-correction cannot be achieved
+attention mechanism is effective at modeling map-ego re-                                                         without our self-correction mechanism and the correction
+lationships and drivable areas. While LatentDrive has the                                                                    trace. In Section 5.3.3, we show the critic’s precision and
+highest progression rate, our method maintains a similar                                                                    recall across different classification thresholds, along with
+progression rate while significantly improving safety, sug-                                                             the corresponding planning results, to study its correction
+
+
+                                                6
+
+=== PDF PAGE 7 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+Table 1. Comparison with baselines on the Waymax simulator. Our method reduces the collision rate by over 20%. ∗means we
+re-implement the method. We use bold and underline to denote the best and second best.
+
+                                                       Reactive                           Non-Reactive
+
+  Method                                   Collision ↓   Offroad ↓   Progression ↑   Collision ↓   Offroad ↓   Progression ↑
+  EasyChauffeur-PPO∗(Xiao et al., 2024)      4.71         3.81         97.93          4.53         2.14         96.42
+  PlanT∗(Renz et al., 2022)                    2.94         1.65         95.85          3.02         1.43         95.48
+  LatentDrive∗(Xiao et al., 2025)              3.27         2.33         98.70          3.11         1.94         99.21
+  SMART∗(Wu et al., 2024)                  2.36         0.87         91.33          4.30         0.86         90.87
+  Ours                                       1.68         0.94         94.23          2.43         0.92         95.75
+
+Table 2. Comparison with baselines on nuPlan under non-reactive (NR) and reactive (R) settings. Our method outperforms baselines. ∗
+means we re-implement the method. We use bold and underline to denote the best and second best.
+
+                                                    Val14        Test-Hard     Test-Random
+
+              Learning-Based Method          NR    R   NR    R   NR    R
+
+           PDM-Open (Dauner et al., 2023)       53.53   54.24   33.51   35.83   52.81   57.23
+              UrbanDriver (Scheel et al., 2022)      68.57   64.11   50.40   49.95   51.83   67.15
+             PlanTF (Cheng et al., 2024b)          84.72   76.95   69.70   61.61   85.62   79.58
+          PLUTO (Cheng et al., 2024a)          88.89   78.11   70.03   59.74   89.90   78.62
+               DiffusionPlanner (Zheng et al., 2025)   89.87   82.80   75.99   69.22   89.19   82.93
+          SMART∗(Wu et al., 2024)            90.03   84.31   76.39   76.94   88.48   88.74
+             Ours                                91.22   85.19   75.37   77.29   91.14   90.41
+
+
+behavior under varying thresholds and correction lengths. In    ing without RL training but with self-correction, 3) RL (w/o
+Section 5.3.4, we show the latency of our proposed method.    corr.): model trained with IL as well as pure RL, but without
+                                                                   self-correction, and 4) CorrectionPlanner (w/o corr.): our
+We further conduct additional experiments in the Appendix
+                                                                self-correction planner, but without self-correction during
+on 1) RL with the log-replay versus the learned world
+                                                               inference. As shown in Table 5, our method consistently
+model in Section B.2.1, 2) zero-shot generalization in Sec-
+                                                         outperforms the baselines in collision and achieves compa-
+tion B.2.2, and 3) latency in Section 5.3.4.
+                                                                 rable progression. Comparing our method with IL (w/ corr.)
+                                                     and (w/o corr.), we show that IL itself is unable to perform
+5.3.1. EFFECTIVENESS OF THE CORRECTION TRACE
+                                                                   effective self-correction. Also, comparing our method with
+We compare our approach against an alternative  self-   RL (w/o corr.) and CorrectionPlanner (w/o corr.), we see
+correction method without the correction trace to show that     that the policy improves with the RL training. However,
+the correction trace is important in correcting the behavior    the collision reduction is not solely from a stronger pol-
+and reducing collisions. In CorrectionPlanner, we use a     icy: CorrectionPlanner (w/o corr.) matches the pure RL
+self-attention encoder to aggregate the full correction trace,    baseline in both collision and progression, indicating that
+and the policy generates a new token conditioned on this ag-    self-correction is able to avoid collision.
+gregated trace. We consider a simpler variant that does not
+                                               Comparison with different sampling frameworks. To
+use the trace and conditions only on the most recently pro-
+                                                                 further show that our model’s self-correction is superior to
+posed unsafe token, updating the proposal distribution for
+                                                             other sampling frameworks and the self-correction cannot
+the next token. We show the results in Table 4. Our method
+                                                      be achieved just through resampling, we compare with two
+achieves lower collisions with comparable progress, indicat-
+                                                             standard sampling-based methods: (1) Rejection Sampling.
+ing that conditioning on the entire correction trace provides
+                                          When a proposed token is predicted unsafe, we reject it
+additional useful information beyond the most recent unsafe
+                                                    and resample from the policy’s original token distribution
+token, leading to more effective self-correction.
+                                                                                   (i.e., without utilizing the correction trace), (2) Candidate
+                                                             Selection. We sample 10 candidate ego trajectories from
+5.3.2. COMPARISON WITH DIFFERENT BASELINES
+                                                             the policy, filter out colliding trajectories, and select the
+Comparison with different training frameworks. We    remaining trajectory with the highest progression rate. If
+compare our method with different training frameworks,     all trajectories collide, we select the one with the greatest
+with/without RL, and with/without self-correction. Specifi-    progression. Results are reported in Table 6.
+cally, we compare with 1) IL: imitation learning (IL) with-                                             As shown in Table 6, CorrectionPlanner outperforms both
+out RL and self-correction, 2) IL (w/ corr.): imitation learn-
+
+
+                                                7
+
+=== PDF PAGE 8 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+                                    Table 3. Planning performance comparison on Val14 NR.
+
+            Type      Planner Score ↑   Collisions ↓  TTC ↑   Drivable ↑   Comfort ↑   Progress ↑   Speed ↑
+
+         SMART        90.03           2.70       91.79      99.02       99.34       91.68      97.38
+            Ours           91.22           2.04       92.25      98.76       99.31       91.49      97.49
+
+
+
+
+
+           (a)                   (b)                       (c)                   (d)                       (e)                       (f)
+
+Figure 4. Visualization on self-correction. (a),(c) and (e): our method w/o self-correction in inference. (b), (d) and (f): our method w/
+self-correction. The orange trajectory is the log trajectory. Our method avoids the collision in these scenarios.
+
+Table 4. Comparison with alternate self-correction baseline on    Table 6. Comparison with rejection resampling and candidate
+WOMD.                                                              selection method.
+
+                                                                    Waymo           nuPlan
+ Method                            Collision ↓   Progression ↑
+                                                                             Setting        Method  Collision↓  Prog.↑  Collision↓  Prog.↑
+ Alternation (w/o correction trace)      2.01        0.9501
+                                                                                 IL         2.31     95.76      2.57     92.11
+ Ours (w/ correction trace)             1.68        0.9423          Rej. Sampling
+                                                            RL        2.09     94.18      2.39     91.98
+
+                                                                                 IL         2.29     94.99      2.51     91.48
+       Table 5. Comparison across training frameworks.              Candidate Sel.  RL        2.14     94.21      2.37     91.33
+  Method                        Collision ↓   Progression ↑          Self-Correction  Ours       1.68    94.23       2.04    91.49
+
+  Waymo
+                                                                  Table 7. Waymo collision critic statistics under different thresholds.
+  IL                              2.34         95.77
+                                            CL denotes correction length. AvgTok. is the average number of
+  IL (w/ corr.)                     2.31         95.41
+                                                                     correction tokens we generate per trajectory when self-correction
+  RL (w/o corr.)                   2.21         94.98
+                                                                     occurs.
+  CorrectionPlanner (w/o corr.)      2.20         95.02
+  CorrectionPlanner                1.68         94.23                /Threshold                 0.7                  0.75                   0.8
+                                                                                              Precision                 0.21                 0.68                 0.87
+  nuPlan                                                                               Recall                    0.93                 0.74                 0.31
+  IL                              2.63         92.31             Time to Collision           7.4                    4.2                    1.9
+  IL (w/ corr.)                     2.58         92.18                            AvgTok  Coll.  Prog. AvgTok  Coll.  Prog. AvgTok  Coll.  Prog.
+  RL (w/o corr.)                   2.39         91.98           CL = 1             9.7    1.66  83.77    2.4    2.02  94.81    1.5    2.11  94.91
+  CorrectionPlanner (w/o corr.)      2.45         92.13           CL = 2           11.4    1.49  80.32    4.2    1.85  94.48    2.9    2.06  94.75
+  CorrectionPlanner                2.04         91.49           CL = 5           15.7    1.47  77.50    7.1    1.68  94.23    3.2    2.00  94.68
+
+
+strategies. Rej. Sampling only avoids very limited colli-    correction tokens in the correction trace per planning step;
+sions because repeated actions drawn from the same token    denoted as correction length) affect safety and progression.
+distribution tend to remain in a similar region, i.e., close to
+                                                          Precision/Recall of the Collision Critic.  Table 7 sum-
+the original unsafe token; so collisions still exist. In con-
+                                                        marizes the statistics of the collision critic under different
+trast, our self-correction generates new token conditions on
+                                                                thresholds. Increasing the threshold introduces a precision-
+the correction trace, which can shift the conditional distri-
+                                                                   recall trade-off that directly affects when the correction
+bution of subsequent proposals and escape such collision
+                                                  module is triggered. At threshold 0.8, precision increases
+regions. Candidate selection can reduce collisions by select-
+                                                            but recall drops to 0.31, meaning that about 70% of poten-
+ing the best rollouts, but still underperforms our approach
+                                                                              tial collisions are missed, and the critic flags risk only 1.9
+and achieves performance comparable to the pure RL base-
+                                                           (time to collision) planning steps (∼1s) before collision,
+line, probably because they share a similar spirit: “search
+                                                            leaving little time for correction. And we see that a longer
+and select”.
+                                                             correction length does not improve the collision. On the
+                                                            other hand, at a threshold of 0.7, it has a high recall and
+5.3.3. RESULTS ON CLASSIFICATION THRESHOLD AND
+                                                      can detect over 90% of future collisions, but it has a much
+     CORRECTION LENGTH
+                                                        lower precision, where around 80% of predicted collisions
+We study how the collision classification threshold and the    are safe, and the first time it detects the collision is very
+maximum correction length (i.e., the maximum number of     early, triggering the self-correction more frequently and
+
+                                                8
+
+=== PDF PAGE 9 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+       WOMD: Collision (left) & Progression (right) vs Threshold                                                                100          8 or 10, but it does not improve performance further due to
+            2.4
+                                                                90            1) the unavoidable not-at-fault collision and 2) the planner            2.2                                                                                                                            better)               better)                                                      80 is         being stuck in the local unsafe region.
+    is 2.0                                                    70
+            1.8                                                    60 (higher             (lower                                                      Overall, these results demonstrate that the model exhibits            1.6                                          correction length=1  50             self-correction, with improved self-correction performance
+                                                          correction length=2
+            1.4                                          correction length=5  40              at larger self-correction budgets and more frequent trigger-                   Collision 1.2                                              Collision            30             ing.  Also, we show that self-correction is not achieved                                                       Progression                                          Progression
+            1.0                                                    20          by simply running multiple forward passes of the policy,               0                0.7              0.75              0.8
+                            Collision classification threshold                     but rather by selectively applying self-correction via the
+          nuplan: Collision (left) & Progression (right) vs Threshold                                                                100            correction trace on unsafe actions.
+            2.4
+                                                                90            2.2                                                                                                                            better)               better)                                                      80 is         5.3.4. LATENCY
+    is 2.0                                                    70
+            1.8                                                    60 (higher             (lower                                   We report the inference latency on WOMD for different col-            1.6                                          correction length=1  50              lision classification thresholds and the maximum reasoning
+                                                          correction length=2
+                   Collision 1.41.2                                          correctionCollision  length=5  4030            length0.329s atpereachtrajectory,planningwhilestepourin baseTablepolicy8. SMARTwithout runscorrec-at                                                       Progression                                          Progression
+            1.0                                                    20             tion incurs a comparable latency of 0.357s, indicating that
+               0                0.7              0.75              0.8
+                            Collision classification threshold                    our planner introduces negligible computational overhead.
+                                                The best-performing hyperparameter set, with 0.75 as the
+Figure 5. Effect of collision classification threshold and correction
+                                                            threshold and 5 as the correction length, achieves 0.434slength on safety and progression.
+                                                             latency and doesn’t significantly increase inference time,
+                                                          demonstrating that our method improves closed-loop safetymuch earlier, thus performing more self-correction steps.
+                                                     and robustness without significantly increasing latency.Though it reduces collisions, we see a significant loss of
+progress. On the other hand, at a threshold of 0.75, we
+                                                               Table 8. Waymo latency (seconds) under different collision clas-
+see a more balanced trade-off between precision and re-                                                                             sification thresholds per trajectory. The best-performing hyperpa-
+call, as well as earlier detection of the collision. This leads     rameters, with 0.75 as the threshold and 5 as the correction length,
+to more reasonable self-correction traces, triggered timing,     don’t significantly increase inference time. Experiment conducted
+and the correction tokens we generate. Thus, we obtain a    on one H800.
+more balanced trade-off in collision and progression. We
+                                                  Method / Threshold     0.00    0.70    0.75    0.80further conduct hyperparameter analysis of k for the critic
+in Section B.2.3.                            SMART              0.329    –      –      –
+                                             SFT                  0.357    –      –      –In Figure 5, we further visualize the progression and colli-
+sion with different classification thresholds and correction      CorrectionPlanner
+lengths on two datasets. Similarly, we observe a clear trend      Correction length = 1   0.917   0.497   0.392   0.387
+that a longer correction length reduces collisions. This      Correction length = 2   0.994   0.525   0.413   0.407
+shows that our proposed method has self-correction ability      Correction length = 5   1.162   1.036   0.434   0.431
+with a larger correction budget.
+
+Regarding the different thresholds, when we set the classi-
+                                                        6. Conclusionfication threshold to 0 (i.e., self-correction at every step),
+we observe a drastic decrease in progression, indicating that                                                            In this paper, we propose a self-correction planner that ex-
+correction at every planning step is not feasible in terms of                                                                         plicitly corrects unsafe actions via a correction trace at each
+both performance and inference speed. And this also shows                                                         planning step. We train it using imitation learning, fol-
+that our method doesn’t reduce collisions by using a more                                                     lowed by RL, to achieve this self-correction capability. The
+complicated model that performs multiple forward passes                                                           empirical results show that our self-correction module ef-
+with a higher-capacity model, but instead selectively per-                                                                 fectively avoids collisions and exhibits diverse correction
+forms self-correction on potentially unsafe actions. When                                                              behaviors. We view this motion-token-level self-correction
+we are more prone to self-correction with a lower threshold,                                                              as a promising direction for bridging the gap between LLMs
+we experience a lower collision rate but also a slightly lower                                                                  that perform reasoning through language. Future work in-
+progression rate. In both datasets, we observe that when                                                          cludes considering a more calibrated collision critic and
+the threshold = 0.75 and the correction length = 5, the                                                          extending self-correction to other metrics beyond collision.
+progression-collision trade-off is optimal. We also tested
+0.75 as the threshold with a higher correction length, such as
+
+
+                                                9
+
+=== PDF PAGE 10 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+Impact Statement                                           of the IEEE/CVF international conference on computer
+                                                                      vision, pp. 9710–9719, 2021.
+This paper proposes a self-corrective trajectory planner for
+the autonomous driving problem. Our approach could have    Ferrag, M. A., Tihanyi, N., and Debbah, M. From llm
+positive impacts by reducing collision rates and improving      reasoning to autonomous ai agents: A comprehensive
+the robustness of learned planners in complex multi-agent       review. arXiv preprint arXiv:2504.19678, 2025.
+interactions through self-correction with a correction trace,
+                                                         Gulino, C., Fu, J., Luo, W., Tucker, G., Bronstein, E., Lu,
+potentially translating into safer driving behavior. And the
+                                                                         Y., Harb, J., Pan, X., Wang, Y., Chen, X., et al. Waymax:
+zero-shot generalization ability makes it more scalable. The
+                                           An accelerated, data-driven simulator for large-scale au-
+method is also general and could be applied to other robotics
+                                                      tonomous driving research. Advances in Neural Informa-
+settings where safety is important.
+                                                                    tion Processing Systems, 36:7730–7742, 2023.
+
+                                                         Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S.  SoftReferences
+                                                                           actor-critic: Off-policy maximum entropy deep reinforce-
+Ak, A. C., Aksoy, E. E., and Sariel, S. Learning failure pre-     ment learning with a stochastic actor. In International
+  vention skills for safe robot manipulation. IEEE Robotics      conference on machine learning, pp. 1861–1870. Pmlr,
+  and Automation Letters, 8(12):7994–8001, 2023.             2018.
+
+Bansal, M., Krizhevsky, A., and Ogale, A. Chauffeurnet:    Havrilla, A., Raparthy, S., Nalmpantis, C., Dwivedi-Yu,
+  Learning to drive by imitating the best and synthesizing         J., Zhuravinskyi, M., Hambro, E., and Raileanu, R.
+   the worst. arXiv preprint arXiv:1812.03079, 2018.           Glore: When, where, and how to improve llm reason-
+                                                             ing via global and local refinements.  arXiv preprint
+Caesar, H., Kabzan, J., Tan, K. S., Fong, W. K., Wolff,      arXiv:2402.10963, 2024.
+   E., Lang, A., Fletcher, L., Beijbom, O., and Omari, S.
+                                                     Hu, Y., Chai, S., Yang, Z., Qian, J., Li, K., Shao, W., Zhang,  nuplan: A closed-loop ml-based planning benchmark for
+                                                               H., Xu, W., and Liu, Q. Solving motion planning tasks  autonomous vehicles. arXiv preprint arXiv:2106.11810,
+                                                          with a scalable generative model. In European Confer-  2021.
+                                                         ence on Computer Vision, pp. 386–404. Springer, 2024.
+Cheng,  J., Mei, X., and Liu, M.  Forecast-mae:  Self-
+                                                     Huang, Z., Liu, H., and Lv, C. Gameformer: Game-theoretic
+  supervised pre-training for motion forecasting with
+                                                       modeling and learning of transformer-based interactive
+  masked autoencoders. In Proceedings of the IEEE/CVF
+                                                                 prediction and planning for autonomous driving. In Pro-
+   International Conference on Computer Vision, pp. 8679–
+                                                           ceedings of the IEEE/CVF International Conference on
+  8689, 2023.
+                                                     Computer Vision, pp. 3903–3913, 2023.
+Cheng, J., Chen, Y., and Chen, Q.  Pluto: Pushing the                                                   Huang, Z., Weng, X., Igl, M., Chen, Y., Cao, Y., Ivanovic,
+   limit of imitation learning-based planning for autonomous                                                                  B., Pavone, M., and Lv, C. Gen-drive: Enhancing dif-
+   driving. arXiv preprint arXiv:2404.14327, 2024a.                                                               fusion generative driving policies with reward modeling
+                                                      and reinforcement learning fine-tuning. In 2025 IEEECheng, J., Chen, Y., Mei, X., Yang, B., Li, B., and Liu, M.
+                                                                International Conference on Robotics and Automation
+  Rethinking imitation-based planners for autonomous driv-
+                                                           (ICRA), pp. 3445–3451. IEEE, 2025.   ing. In 2024 IEEE International Conference on Robotics
+  and Automation (ICRA), pp. 14123–14130. IEEE, 2024b.    Inamdar, R., Sundarr, S. K., Khandelwal, D., Sahu, V. D.,
+                                                       and Katal, N. A comprehensive review on safe reinforce-
+Cusumano-Towner, M., Hafner, D., Hertzberg, A., Huval,                                                      ment learning for autonomous vehicle control in dynamic
+   B., Petrenko, A., Vinitsky, E., Wijmans, E., Killian, T.,                                                             environments. e-Prime-Advances in Electrical Engineer-
+  Bowers, S., Sener, O., et al. Robust autonomy emerges                                                                     ing, Electronics and Energy, 10:100810, 2024.
+  from self-play. arXiv preprint arXiv:2502.03349, 2025.
+                                                                                     Ji, Z., Yu, T., Xu, Y., Lee, N., Ishii, E., and Fung, P. Towards
+Dauner, D., Hallgarten, M., Geiger, A., and Chitta, K. Part-      mitigating llm hallucination via self reflection. In Find-
+  ing with misconceptions about learning-based vehicle       ings of the Association for Computational Linguistics:
+  motion planning. In Conference on Robot Learning, pp.    EMNLP 2023, pp. 1827–1843, 2023.
+  1268–1281. PMLR, 2023.
+                                                  Kamoi, R., Zhang, Y., Zhang, N., Han, J., and Zhang, R.
+Ettinger, S., Cheng, S., Caine, B., Liu, C., Zhao, H., Prad-    When can llms actually correct their own mistakes? a
+  han, S., Chai, Y., Sapp, B., Qi, C. R., Zhou, Y., et al. Large        critical survey of self-correction of llms. Transactions of
+   scale interactive motion forecasting for autonomous driv-       the Association for Computational Linguistics, 12:1417–
+   ing: The waymo open motion dataset. In Proceedings      1440, 2024.
+
+                                                10
+
+=== PDF PAGE 11 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+Ke, L., Zhang, Y., Deshpande, A., Srinivasa, S., and Gupta,    Shao, Y. S., Chen, C., Kousik, S., and Vasudevan, R.
+  A.  Ccil: Continuity-based data augmentation for cor-      Reachability-based trajectory safeguard (rts): A safe and
+   rective imitation learning. In International Conference        fast reinforcement learning safety layer for continuous
+  on Learning Representations, volume 2024, pp. 35813–       control. IEEE Robotics and Automation Letters, 6(2):
+  35831, 2024.                                          3663–3670, 2021.
+
+Leung, K., Veer, S., Schmerling, E., and Pavone, M. Learn-    Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang,
+  ing autonomous vehicle safety concepts from demonstra-       H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push-
+   tions. In 2023 American Control Conference (ACC), pp.      ing the limits of mathematical reasoning in open language
+  3193–3200. IEEE, 2023.                                  models. arXiv preprint arXiv:2402.03300, 2024.
+
+Li, Q., Jia, X., Wang, S., and Yan, J. Think2drive: Effi-    Treiber, M., Hennecke, A., and Helbing, D. Congested
+   cient reinforcement learning by thinking with latent world        traffic states in empirical observations and microscopic
+  model for autonomous driving (in carla-v2). In European       simulations. Physical review E, 62(2):1805, 2000.
+  Conference on Computer Vision, pp. 142–158. Springer,
+                                                Wang, X., Zhu, Z., Huang, G., Chen, X., Zhu, J., and Lu,
+  2024.
+                                                                                 J. Drivedreamer: Towards real-world-drive world mod-
+Loshchilov, I. and Hutter, F. Decoupled weight decay regu-       els for autonomous driving. In European conference on
+   larization. arXiv preprint arXiv:1711.05101, 2017.          computer vision, pp. 55–72. Springer, 2024.
+
+                                             Wu, W., Feng, X., Gao, Z., and Kan, Y. Smart: ScalableLu, Y., Fu, J., Tucker, G., Pan, X., Bronstein, E., Roelofs,
+                                                             multi-agent real-time motion generation via next-token   R., Sapp, B., White, B., Faust, A., Whiteson, S., et al.
+                                                                  prediction. Advances in Neural Information Processing   Imitation is not enough: Robustifying imitation with rein-
+                                                              Systems, 37:114048–114071, 2024.  forcement learning for challenging driving scenarios. In
+  2023 IEEE/RSJ International Conference on Intelligent                                                         Xiao, L., Liu, J.-J., Ye, X., Yang, W., and Wang, J. Easy-
+  Robots and Systems (IROS), pp. 7553–7560. IEEE, 2023.                                                                  chauffeur: A baseline advancing simplicity and efficiency
+                                                     on waymax. arXiv preprint arXiv:2408.16375, 2024.Ma, E., Zhou, L., Tang, T., Zhang, J., Jiang, J., Zhang, Z.,
+  Han, D., Zhan, K., Zhang, X., Lang, X., et al. Correctad:                                                         Xiao, L., Liu, J.-J., Yang, S., Li, X., Ye, X., Yang, W., and
+ A self-correcting agentic system to improve end-to-end                                                   Wang, J. Learning multiple probabilistic decisions from
+  planning in autonomous driving. In Proceedings of the                                                                        latent world model in autonomous driving. In 2025 IEEE
+  AAAI Conference on Artificial Intelligence, volume 40,                                                               International Conference on Robotics and Automation
+  pp. 7755–7763, 2026.                                                           (ICRA), pp. 1279–1285. IEEE, 2025.
+
+Nakamura, K., Peters, L., and Bajcsy, A. Generalizing safety                                                   Xu, Y., Li, C., Zhou, H., Wan, X., Zhang, C., Korhonen,
+  beyond collision-avoidance via latent-space reachability                                                               A., and Vuli´c, I. Visual planning: Let’s think only with
+   analysis. arXiv preprint arXiv:2502.00935, 2025.                                                            images. arXiv preprint arXiv:2505.11409, 2025.
+
+Nayakanti, N., Al-Rfou, R., Zhou, A., Goel, K., Refaat,    Zhang, D., Liang, J., Guo, K., Lu, S., Wang, Q., Xiong,
+  K. S., and Sapp, B. Wayformer: Motion forecasting via       R., Miao, Z., and Wang, Y. Carplanner: Consistent auto-
+  simple & efficient attention networks.  arXiv preprint       regressive trajectory planning for large-scale reinforce-
+  arXiv:2207.05844, 2022.                              ment learning in autonomous driving. In Proceedings of
+                                                                  the Computer Vision and Pattern Recognition Conference,
+Pek, C. and Althoff, M.  Fail-safe motion planning for
+                                                               pp. 17239–17248, 2025a.
+  online verification of autonomous vehicles using convex
+   optimization. IEEE Transactions on Robotics, 37(3):798–    Zhang, J., Kim, J., O’Donoghue, B., and Boyd, S. Sample
+  814, 2020.                                                         efficient reinforcement learning with reinforce. In Pro-
+                                                             ceedings of the AAAI conference on artificial intelligence,
+Renz, K., Chitta, K., Mercea, O.-B., Koepke, A., Akata,                                                     volume 35, pp. 10887–10895, 2021.
+   Z., and Geiger, A.  Plant: Explainable planning trans-
+  formers via object-level representations. arXiv preprint    Zhang, X., Du, C., Pang, T., Liu, Q., Gao, W., and Lin, M.
+  arXiv:2210.14222, 2022.                               Chain of preference optimization: Improving chain-of-
+                                                            thought reasoning in llms. Advances in Neural Informa-
+Scheel, O., Bergamini, L., Wolczyk, M., Osi´nski, B., and                                                                    tion Processing Systems, 37:333–356, 2024.
+  Ondruska, P. Urban driver: Learning to drive from real-
+  world demonstrations using policy gradients. In Confer-   Zhang, Y., Li, M., Han, W., Yao, Y., Cen, Z., and Zhao,
+  ence on Robot Learning, pp. 718–728. PMLR, 2022.         D. Safety is not only about refusal: Reasoning-enhanced
+
+                                                11
+
+=== PDF PAGE 12 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+  fine-tuning for interpretable llm safety. arXiv preprint
+  arXiv:2503.05021, 2025b.
+
+Zheng, Y., Liang, R., Zheng, K., Zheng, J., Mao, L., Li, J.,
+  Gu, W., Ai, R., Li, S. E., Zhan, X., et al. Diffusion-based
+  planning for autonomous driving with flexible guidance.
+  arXiv preprint arXiv:2501.15564, 2025.
+
+Zhou, Z., Haibo, H., Chen, X., Wang, J., Guan, N., Wu,
+  K., Li, Y.-H., Huang, Y.-K., and Xue, C. J. Behaviorgpt:
+  Smart agent simulation for autonomous driving with next-
+  patch prediction. Advances in Neural Information Pro-
+  cessing Systems, 37:79597–79617, 2024.
+
+Zhu, R.-J., Peng, T., Cheng, T., Qu, X., Huang, J., Zhu, D.,
+  Wang, H., Xue, K., Zhang, X., Shan, Y., et al. A survey
+  on latent reasoning. arXiv preprint arXiv:2507.06203,
+  2025.
+
+
+
+
+
+                                                12
+
+=== PDF PAGE 13 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+A. Algorithm
+
+We summarize world model training, imitation learning, RL training, and inference in Algorithms 1 to 4.
+
+
+
+
+Algorithm 1 World Model Training
+Input: Dataset D, world model pϕ, motion tokenizer T , horizon T
+Output: Trained world model pϕ
+for each trajectory in the dataset do
+    Let the trajectory be τ ∈D
+   Tokenize all agent trajectories.
+   Encode map and scene context m
+   Compute next-token prediction loss:
+
+
+                                                 T  N
+                                    Lworld(ϕ) = − X X log pϕ snt  | s1:N<t  , m
+                                                    t=1 n=1
+
+   Update ϕ by minimizing Lworld(ϕ)
+Freeze the trained world model pϕ for later RL rollouts
+
+
+
+
+
+Algorithm 2 Imitation Learning
+Input: Expert dataset D, policy πθ, maximum correction length C, horizon T
+Initialize Limit ←0 and Lcorr ←0
+for each expert trajectory in the dataset do
+    Let the trajectory be τ ∈D
+   Tokenize ego and agent trajectories.
+    for t = 1, . . . , T do
+     Add next-token imitation loss:
+
+                                    Limit ←Limit −log πθ segot    | sego<t , sagents<t     , ˆsagentst       , m
+
+         Initialize correction trace Ct ←∅
+       for c = 1, . . . , C do
+         Sample proposed ego token:
+                                                         ˆsegot,c ∼πθ  · | sego<t , sagents<t     , ˆsagentst       , m, Ct
+
+               if Collision happens then
+            Append unsafe proposal to correction trace:
+
+                                                          Ct ←Ct ∪{ˆsegot,c }
+
+           Add correction imitation loss:
+
+                                       Lcorr ←Lcorr −log πθ segot    | sego<t , sagents<t     , ˆsagentst       , m, Ct
+
+
+Update θ by minimizing:
+                                                  Lpretrain = Limit + Lcorr
+
+
+
+                                                13
+
+=== PDF PAGE 14 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+Algorithm 3 Reinforcement Learning with Self-Correction
+Input: Pretrained policy πθ, frozen imitation policy πIL, frozen world model ˆPϕ, collision critic fψ, dataset D, maximum
+        correction length C, threshold η, horizon T, KL weight λ
+Output: RL fine-tuned policy πθ
+for each training iteration do
+   Sample an initial scene from D  Initialize rollout trajectory τ ←∅
+    for t = 1, . . . , T do
+         Initialize correction trace Ct ←∅
+       for c = 1, . . . , C do
+         Sample ego motion token:
+                                                              ˆsegot,c ∼πθ  · | sego<t , sagents≤t     , m, Ct
+
+           Estimate future collision probability:
+                                                             pcol ←fψ s≤t, ˆsegot,c
+
+               if pcol < η then
+             Accept token segot  ←ˆsegot,c  break
+            else
+            Append rejected token to correction trace:
+
+                                                          Ct ←Ct ∪{ˆsegot,c }
+
+
+          if no token is accepted then
+          Execute final proposed token segot  ←ˆsegot,C
+       Roll out next state with frozen world model:
+
+                                                st+1 ∼ˆPϕ  · | st, segot
+
+       Store executed token and correction trace in τ
+   Compute trajectory reward:
+
+                          r(τ) = Progression(τ) · 1[Collision(τ) = 0] −1[Collision(τ) = 1]
+
+   Compute policy-gradient objective with KL regularization:
+
+
+                                   T
+                     LRL(θ) = − X r(τ) log πθ segot    | sego<t , sagents≤t     , m, Ct + λKL πIL ∥πθ
+                                     t=1
+
+   Update θ by minimizing LRL(θ)
+
+
+
+
+
+                                                14
+
+=== PDF PAGE 15 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+Algorithm 4 Inference
+Input: Policy πθ, collision critic fψ, maximum correction length C, threshold η, horizon T
+Output: Executed ego motion tokens sego1:T
+Initialize scene history, map context m, and ego history sego<1
+for t = 1, . . . , T do
+    Initialize correction trace Ct ←∅
+    for c = 1, . . . , C do
+      Sample or select ego motion token:
+                                                            ˆsegot,c ∼πθ  · | sego<t , sagents≤t     , m, Ct
+
+       Estimate collision probability:
+                                                           pcol ←fψ s≤t, ˆsegot,c
+
+          if pcol < η then
+          Accept token segot  ←ˆsegot,c  break
+        else
+         Append rejected token to correction trace:
+
+                                                         Ct ←Ct ∪{ˆsegot,c }
+
+
+     if no token is accepted then
+       Execute final proposed token segot  ←ˆsegot,C
+   Execute segot  and update scene history
+
+
+
+B. Additional Experiments
+
+B.1. Dataset Details
+
+We evaluate our method in reactive and non-reactive modes: reactive agents follow an IDM policy (Treiber et al., 2000),
+while non-reactive agents use log-replay trajectories. WOMD: Each scenario has a sequence length of 8 seconds and 1
+seconds history, recorded at 10 Hz. Agents are controlled at 10 Hz, with a maximum of 128 per scenario. The training set
+has 487,002 scenarios, while the validation set has 44,096 scenarios. The simulation will not terminate until it reaches a
+maximum length of 8 seconds. We use the Waymax simulator (Xiao et al., 2025) to evaluate the closed-loop simulation.
+nuPlan: The nuPlan datasets contain over 1,300 hours of expert driving logs collected across four cities, covering diverse
+and challenging urban driving scenarios. Following the DiffusionPlanner (Zheng et al., 2025), we sample 1M training
+examples for training. Evaluation is performed on the standard Val14, Test14-random, and Test14-hard splits (Dauner et al.,
+2023).
+
+
+B.2. Additional Ablation studies
+
+B.2.1. LOG-REPLAY VERSUS LEARNED WORLD MODEL IN RL TRAINING
+
+We further conduct an ablation in which RL fine-tuning is performed using log-replay only, i.e., without the frozen reactive
+world model, to show that using reactive modeling of the surrounding agents is beneficial to the RL training. The results are
+in Appendix B.2.1.
+
+This ablation shows a clear pattern. Under the non-reactive evaluation setting, the log-replay-only variant achieves slightly
+lower collision than the world model variant. We believe this is expected, since both training and evaluation in this case use
+non-reactive agent behavior, so log replay is better matched to that evaluation protocol.
+
+In contrast, under the reactive evaluation setting, the version trained with the reactive world model achieves better collision
+performance (1.68 vs. 1.83). This potentially suggests that reactive rollouts during RL provide a more suitable training
+signal when the test-time environment also contains interactive agent responses.
+
+We emphasize that our motivation for using a reactive world model is not merely to improve performance under one
+benchmark setting, but to better capture the interactive nature of real-world driving, where surrounding agents respond to
+
+                                                15
+
+=== PDF PAGE 16 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+the ego vehicle’s behavior. From this perspective, we view the reactive evaluation setting as more realistic, and the above
+ablation supports our design choice of using a reactive world model in the main method.
+
+At the same time, the log-replay-only variant still substantially outperforms SMART in both settings, indicating that the
+benefit of our method does not come solely from the world model itself; rather, the world model mainly helps when training
+in interactive, reactive environments.
+
+Table 9. Comparison of our method with world model and log-replay training on WOMD under reactive and non-reactive evaluation
+settings.
+
+       Method                                        Reactive                          Non-Reactive
+
+                                             Collision ↓  Offroad ↓  Progression ↑  Collision ↓  Offroad ↓  Progression ↑
+
+      SMART (Wu et al., 2024)            2.36        0.87        91.33         4.30        0.86        90.87
+        Ours (Log-replay for RL training)     1.83        0.88        95.32         2.39        0.92        96.01
+        Ours                                1.68        0.94        94.23         2.43        0.92        95.75
+
+
+
+B.2.2. ZERO-SHOT GENERALIZATION ABILITY
+
+In Table 10, we show the zero-shot generalization ability of our method. We train the policy on the nuPlan dataset and
+evaluate it on the Waymax simulator. Specifically, we see that the performance of the Zero Shot (w/ corr.) improves the
+collision of Zero Shot (w/o corr.), demonstrating the effectiveness in zero-shot self-correction generalization. Also, compared
+with other baseline methods, Zero Shot (w/o corr.) shows low collision rates, demonstrating its zero-shot generalization
+ability. This zero-shot generalization might be due to the spatio-temporal attention of the agents, ego, and map, which is
+invariant to translation and rotation, thereby enabling good generalization.
+
+Table 10. Zero-shot generalization ability of our method. Policy trained on the nuPlan dataset, evaluated on the Waymax simulator.
+The zero-shot (w/ corr.)  is our method, and it achieves the second-lowest collision rate, alongside our method trained on WOMD,
+demonstrating zero-shot generalization and self-correction.
+
+                    Method                                  Collision ↓   Offroad ↓   Progression ↑
+
+                      EasyChauffeur-PPO (Xiao et al., 2024)      4.71         3.81         97.93
+                      PlanT (Renz et al., 2022)                   2.94         1.65         95.85
+                        LatentDrive (Xiao et al., 2025)              3.27         2.33         98.70
+               SMART (Wu et al., 2024)                  2.36         0.87         91.33
+                      Zero Shot (w/o corr.)                       2.93         1.40         93.64
+                      Zero Shot (w/ corr.)                        2.62         1.26         92.83
+                     Ours                                     1.68         0.94         94.23
+
+
+
+B.2.3. HYPERPARAMETER OF THE COLLISION CRITIC
+
+                     Table 11. Experiment results on different k when training the collision critic on WOMD.
+
+                                    k   Collision ↓   Progression ↑
+
+                                    1      2.19         96.53
+                                    3      1.97         94.99
+                                    5      1.68         94.23
+                                    7      1.63         91.42
+
+
+In this section, we present how the hyperparameter of training the collision critic affects the self-correction ability. As
+shown, the objective of training the collision critic is:
+
+                    T
+          Lcritic(θ) = − XI(collisiont:t+k = 1) log pθ collision | s≤t + I(collisiont:t+k = 0) log pθ safe | s≤t  ,
+                     t=1
+
+where I(collisiont:t+k = 1) and I(collisiont:t+k = 0) are collision or safe in k future planning steps, respectively.
+
+                                                16
+
+=== PDF PAGE 17 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+We conduct experiments with different values of k, which control when we trigger self-correction (i.e., how many steps
+ahead the collision predictor flags risk). We set k ∈1, 3, 5, 7. When k = 1, collisions are detected only when they happen.
+This leaves little time for the planner to correct, and we observe the highest collision rate for this hyperparameter. As
+k increases, collisions decrease consistently, indicating that earlier warnings provide more time for effective correction.
+However, when k = 7, progression drops substantially while collision improves only marginally, suggesting that k = 7
+might trigger self-correction too early and too often. As discussed in Appendix 5.3, overly frequent triggering can lead to
+conservative behavior, sacrificing progression without a commensurate gain in safety.
+
+
+B.3. Implementation Details
+
+B.3.1. ARCHITECTURE
+
+We use a discrete motion token vocabulary of size 1024 for the agent categories, including vehicle, pedestrian, and cyclist,
+where each token is a 0.5-second movement segment. The ego shares the same token as other vehicles.
+
+World model. The world model is a 6-layer Transformer decoder, each consisting of 3 attention blocks with a hidden
+dimension of 128, and the attention head is 8. We use a two-layer MLP as the prediction head to map the hidden embedding
+to the token distribution.
+
+Policy. Similarly, the policy model is a 2-layer Transformer decoder, each consisting of 4 attention blocks with a hidden
+dimension of 128, and the attention head is 8. We use a two-layer MLP as the prediction head to map the hidden embedding
+to the token distribution.
+
+Road Encoder. The map and navigation information are both processed into road tokens, which contain three types of
+information: the position of each road token point, the road token direction at each point, and the type of each road token.
+An encoder transformer with 3 attention layers and 128 token embedding is applied to encode map tokens, and the attention
+head is also set to be 8.
+
+Critic Model. The critic model is a 2-layer Transformer decoder, each consisting of 2 attention blocks with a hidden
+dimension of 128, and the attention head is 8. We use a two-layer MLP as the prediction head to map the hidden embedding
+to the binary output.
+
+B.3.2. TRAINING
+
+For data preprocessing, we set the maximum number of neighboring vehicles to 32 and the maximum number of lanes to 70.
+For navigation, we use 25 lanes for the nuPlan dataset and up to 5 lanes for the WOMD.
+
+The world model and the imitation learning model are trained together for all three agent types using the AdamW optimizer
+(Loshchilov & Hutter, 2017). Both the dropout rate and the weight decay rate are set to 0.1. The learning rate is decayed
+from 0.0003 to 0 using a cosine annealing scheduler. We set the agent-agent cross-attention to a radius of 60, the map-agent
+to 30, and the map-map to 10. The training is set to be 16 epochs.
+
+For RL training, the dropout and weight decay rates are set to 0.1. The learning rate is decayed from 0.0003 to 0 using a
+cosine annealing scheduler. The KL divergence weight is set to 0.1. The RL training is set to be 3 epochs. For the correction
+length per planning step, we randomly draw from [0, 6], as 1) we want the model to have the ability to perform correction
+with a limited budget, and 2) some scenarios do not require too many self-correction budgets, and a larger budget might lead
+to an overfitting issue. We also apply batch normalization to the trajectory reward to stabilize training. For the collision
+critic, we set k to 5 during the training. We further select approximately 100, 000 hard examples that may have collisions for
+RL training to improve training efficiency, where the hard example is the trajectories that may have collisions rollout from
+the policy and world model.
+
+For the critic training, we use trajectory data generated by the policy and the world model during RL training. Specifically,
+we discard the correction trace in the data when training the critic, and only use the executed tokens. As the collision sample
+size is significantly smaller than the safe sample, we downsample the safe sample to a 1 : 1 ratio to balance the training.
+
+All experiments are conducted on 8 NVIDIA H800 GPUs.
+
+
+
+
+
+                                                17
+
+=== PDF PAGE 18 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+B.3.3. DETAILS OF TRAJECTORIES SAMPLING
+
+Rule-based correction samples. For the RL training, positive reward samples are important to guide the policy towards
+a better performance, while negative reward samples will always make the sampled token probability become smaller,
+resulting in a more uniform distribution. In the self-correction training, one challenge we have is that the portion of the
+corrected trajectories is very small, thus most of the trajectories sampled are negative reward, making the training unstable
+and collapse as the imitation learning phase hasn’t seen these samples and doesn’t have enough ability to correct the unsafe
+action. One common solution is to use rule-based samples, i.e., to rollout trajectories by replaying the ground-truth for both
+agents and the ego.
+
+
+
+
+
+                                                18
+
+=== PDF PAGE 19 ===
+             CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+C. Visualization
+
+In this section, we provide additional visualizations of the collision and self-correction trajectories.
+
+
+
+
+
+                                   Figure 6. Slow down and yield to the right-turning vehicle.
+
+
+
+
+
+                        Figure 7. Slow down and yield to the right-turning vehicle, re-accelerate afterward.
+
+
+
+
+
+                                  Figure 8. Adjust the speed in the left turn to avoid a collision.
+
+
+
+
+
+                                                19
+
+=== PDF PAGE 20 ===
+CorrectionPlanner: Self-Correction Planner with Reinforcement Learning in Autonomous Driving
+
+
+
+
+
+                 Figure 9. Adjust the left turn to avoid a collision in the intersection.
+
+
+
+
+
+                 Figure 10. Adjust the speed and yield to multiple left-turn vehicles.
+
+
+
+
+
+                          Figure 11. Brake in advance to avoid collision.
+
+
+
+
+
+                                     20

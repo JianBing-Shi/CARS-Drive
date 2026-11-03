@@ -1,0 +1,56 @@
+{
+  "protocol": "Plan-R1 processed mini data; frozen recorded-agent replay proxy",
+  "not_closed_loop": true,
+  "not_visual": true,
+  "num_files": 5,
+  "num_valid": 5,
+  "mismatch_rate": 0.0,
+  "mean_pairwise_inversion_rate": 0.15151515151515152,
+  "files": [
+    {
+      "path": "research_ideas\\synthetic_nuplan\\nuplan-v1.1\\splits\\mini-processed-plan-val-PlanR1\\synthetic_0.pt",
+      "scenario": "synthetic_0",
+      "num_candidates": 9,
+      "imitation_best": "expert",
+      "oracle_best": "expert",
+      "best_mismatch": 0,
+      "pairwise_inversion_rate": 0.15151515151515152
+    },
+    {
+      "path": "research_ideas\\synthetic_nuplan\\nuplan-v1.1\\splits\\mini-processed-plan-val-PlanR1\\synthetic_1.pt",
+      "scenario": "synthetic_1",
+      "num_candidates": 9,
+      "imitation_best": "expert",
+      "oracle_best": "expert",
+      "best_mismatch": 0,
+      "pairwise_inversion_rate": 0.15151515151515152
+    },
+    {
+      "path": "research_ideas\\synthetic_nuplan\\nuplan-v1.1\\splits\\mini-processed-plan-val-PlanR1\\synthetic_2.pt",
+      "scenario": "synthetic_2",
+      "num_candidates": 9,
+      "imitation_best": "expert",
+      "oracle_best": "expert",
+      "best_mismatch": 0,
+      "pairwise_inversion_rate": 0.15151515151515152
+    },
+    {
+      "path": "research_ideas\\synthetic_nuplan\\nuplan-v1.1\\splits\\mini-processed-plan-val-PlanR1\\synthetic_3.pt",
+      "scenario": "synthetic_3",
+      "num_candidates": 9,
+      "imitation_best": "expert",
+      "oracle_best": "expert",
+      "best_mismatch": 0,
+      "pairwise_inversion_rate": 0.15151515151515152
+    },
+    {
+      "path": "research_ideas\\synthetic_nuplan\\nuplan-v1.1\\splits\\mini-processed-plan-val-PlanR1\\synthetic_4.pt",
+      "scenario": "synthetic_4",
+      "num_candidates": 9,
+      "imitation_best": "expert",
+      "oracle_best": "expert",
+      "best_mismatch": 0,
+      "pairwise_inversion_rate": 0.15151515151515152
+    }
+  ]
+}

@@ -1,0 +1,1037 @@
+=== PDF PAGE 1 ===
+       DriveWorld-VLA: Unified Latent-Space World Modeling with
+             Vision–Language–Action for Autonomous Driving
+
+
+
+    Feiyang Jia * 1 2 Lin Liu * 1 2 Ziying Song 1 Caiyan Jia † 1 Hangjun Ye 2 Xiaoshuai Hao † 2 Long Chen ‡ 2
+                                                                            PDMS
+                                     VLA &                       VLA &                                                                                                                                   in NAVSIM         91.3        VLA Model                                         World Model                      World Model
+
+        Action                                                               Shared
+                 Refine                                                       Feature Space
+                                           Shared
+                                           Feature Space
+                                                                                     Observe    Action
+         World Model
+                                                                                                                       Avg. Col. Rate
+                                                                                     Control                                    in nuScenes
+
+             Reward                        Observe          Action                                                                                  Refine
+
+          Limited                Absenceof                   Unified                               0.16
+        Knowledge                 Prospective             FeatureSharing&
+          Transfer                     Rollout               CausalReasoning
+ (a) Disentangled Interaction            (b) Feature-Sharing              (c) Our DriveWorld-VLA             (d) Performance
+
+Figure 1. Comparison of VLA & World Model Coupling Strategies. (a) Disentangled Interaction: The world model acts as an external
+simulator, but its structural isolation from the VLA prevents effective latent knowledge transfer. (b) Feature Sharing: Despite sharing
+representations, these models lack action-conditioned causal reasoning, which limits their counterfactual imagination and long-horizon
+planning. (c) Our DriveWorld-VLA: By optimizing world model latents as decision variables, we enable unified causal “what-if” reasoning
+through controllable imagination in a shared latent space. (d) Performance: DriveWorld-VLA achieves SOTA results—91.3 PDMS on
+NAVSIMv1, 86.8 EPDMS on NAVSIMv2, and 0.16 CR on nuScenes—significantly outperforming specialized baselines like LAW (Li
+et al., 2024a), Epona (Zhang et al., 2025), and HERMES-p (Zhou et al., 2025b).
+
+                 Abstract                                   unifies world modeling and planning within a la-
+                                                                        tent space by tightly integrating VLA and world
+    End-to-end (E2E) autonomous driving has re-
+                                                         models at the representation level, which enables
+     cently attracted increasing interest in unifying Vi-
+                                                                   the VLA planner to benefit directly from holistic
+    sion–Language–Action (VLA) with World Mod-
+                                                                scene-evolution modeling and reducing reliance
+     els to enhance decision-making and forward-
+                                                      on dense annotated supervision.  Additionally,
+     looking imagination. However, existing meth-
+                                                       DriveWorld-VLA incorporates the latent states of
+     ods fail to effectively unify future scene evolution
+                                                                  the world model as core decision-making states
+    and action planning within a single architecture
+                                                                     for the VLA planner, facilitating the planner to
+    due to inadequate sharing of latent states, limit-
+                                                                    assess how candidate actions impact future scene
+     ing the impact of visual imagination on action
+                                                                   evolution. By conducting world modeling en-
+     decisions.  To address this limitation, we pro-
+                                                                            tirely in the latent space, DriveWorld-VLA sup-
+    pose DriveWorld-VLA, a novel framework that
+                                                                   ports controllable, action-conditioned imagina-
+  *Equal contribution , †Corresponding authors, ‡Project leader.          tion at the feature level, avoiding expensive pixel-
+1School of Computer Science and Technology, Beijing Key          level rollouts. Extensive open-loop and closed-
+Laboratory  of  Traffic Data Mining and Embodied  Intelli-        loop evaluations demonstrate the effectiveness of
+gence, Beijing Jiaotong University 2Xiaomi EV. Correspondence
+                                                         DriveWorld-VLA, which achieves state-of-the-art
+to: Caiyan Jia <cyjia@bjtu.edu.cn>, Xiaoshuai Hao <haoxi-
+aoshuai@xiaomi.com>.                                       performance with 91.3 PDMS on NAVSIMv1,
+                                                              86.8 EPDMS on NAVSIMv2, and 0.16 3-second
+Proceedings of the 43 rd International Conference on Machine        average collision rate on nuScenes. Code and
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026        models are released at DriveWorld-VLA.
+by the author(s).
+
+
+                                                1
+
+=== PDF PAGE 2 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+1. Introduction                                        matching, and finally retroactively refining VLA decisions
+                                                          through a closed-loop reward mechanism. Extensive evalua-
+Autonomous  driving  is  undergoing  a  transformative                                                                  tions across open-loop and closed-loop benchmarks demon-
+paradigm shift from modular pipelines toward End-to-End                                                                       strate that DriveWorld-VLA achieves state-of-the-art perfor-
+(E2E) learning (Cui et al., 2024).  Despite their success                                                      mance, significantly outperforming specialized baselines in
+in mapping sensor inputs to control signals (Song et al.,                                                         both reasoning accuracy and safety-critical planning.
+2025a; Liu et al., 2025; Liao et al., 2025; Song et al., 2025b),
+these models often lack the capacity for long-horizon rea-    In summary, our main contributions are as follows:
+soning and fail to comprehend the causal consequences
+of their actions.  In response, the integration of Vision-        • We propose DriveWorld-VLA, a tightly coupled frame-
+Language-Action (VLA) models with World Models (WM)       work where a world model serves as the reasoning
+has emerged as a promising frontier to bridge this gap.        engine bridging action and prospective imagination.
+In this synergy, VLA models provide sophisticated multi-        • We introduce Feature-Level Sharing that uses LLM
+modal perception and linguistic reasoning, while World        hidden states as shared latent space for both imagina-
+Models empower agents with “prospective imagination” by          tion and action prediction, helping internalize physical
+explicitly modeling environmental dynamics and action-        laws and environment dynamics.
+conditioned future states.                                               • We develop action-conditioned “what-if” reasoning to
+                                                                generate and evaluate candidate trajectories for proac-Despite this potential synergy, existing attempts to unify
+                                                                                tive, consequence-aware decision-making.these paradigms remain loosely coupled, typically falling
+into two suboptimal categories. The first class includes        • We conduct extensive evaluations on both closed-loop
+Disentangled Interaction methods (Yan et al., 2025; Yang       (NAVSIM) and open-loop (nuScenes) benchmarks,
+et al., 2025a), as shown in Figure 1.(a), which treat the world         demonstrating feature-level sharing and causal rollout
+model merely as an external simulator or data source. How-        guidance are critical for robust decision-making.
+ever, these methods create a structural bottleneck that pre-
+vents the VLA from internalizing fundamental physical laws    2. Related Works
+and environment dynamics. The second category is com-
+                                              World Models for Autonomous Driving World modelsposed of Feature-Sharing approaches (Zhang et al., 2025;
+                                             (WMs) have emerged as a cornerstone for autonomous driv-Li et al., 2025b; Zhou et al., 2025b), depicted in Figure 1.(b),
+                                                                    ing, providing a technical foundation for modeling complexwhich employ shared representations for joint prediction but
+                                                        environmental evolutions (Jia et al., 2025; Tu et al., 2025;fail to leverage the world model’s most critical capability:
+explicit causal reasoning and prospective “what-if” imagina-   Guan et al., 2024; Feng et al., 2025b). Early efforts such as
+tion. Consequently, by neglecting the action-outcome causal    DriveWorld (Min et al., 2024) and Vista (Gao et al., 2024b)
+                                                         focus on generating spatiotemporally consistent video se-chain, these models remain restricted to reactive planning
+rather than proactive, long-horizon optimization through    quences, while LidarDM (Zyrianov et al., 2025) and Copi-
+counterfactual simulation.                                 lot4D (Zhang et al., 2023) explore driving-conditioned point
+                                                          cloud synthesis. Other works, including ViDAR (Yang et al.,
+To address these limitations, we propose DriveWorld-VLA    2024) and Occ-LLM (Xu et al., 2025), treat occupancy pre-
+(as shown in Figure 1.(c)), a unified framework that inte-    diction as a foundational representation for world dynamics.
+grates VLA and World Models across both representation   Beyond pixel-level generation, some models map obser-
+and decision-making through three core innovations. First,    vations into latent spaces to forecast agent behaviors and
+Feature-Level Sharing utilizes Large Language Model    motion (Li et al., 2024a; Hu et al., 2022), partially bridging
+(LLM) hidden states as a shared latent space for both imag-    the gap between conventional pipelines and holistic traffic
+ination and action prediction, enabling the model to inter-    modeling. Despite these advances, the community lacks a
+nalize fundamental physical laws and environmental dy-    unified objective, with research often split between high-
+namics within its core reasoning engine. Second, Action-     fidelity future prediction and trajectory modeling. Only
+Conditioned “What-If” Reasoning leverages a Diffusion    a few pioneering studies, such as HERMES (Zhou et al.,
+Transformer (DiT) architecture to perform prospective roll-   2025b) and Epona (Zhang et al., 2025), explicitly connect
+outs of multiple candidate actions; this empowers the agent    generative imagination with downstream planning. In this
+to transition from reactive planning to proactive optimiza-    context, DriveWorld-VLA unifies these paradigms by inte-
+tion by explicitly evaluating the long-term consequences    grating generative modeling and decision-making within a
+of distinct trajectories. Third, a Three-Stage Progressive     single framework.
+Training paradigm stabilizes joint optimization by sequen-
+                                        VLAs for Autonomous Driving The rapid evolution oftially aligning multi-modal perception with BEV genera-
+tion, enforcing action-conditioned controllability via flow-  VLA models in autonomous driving is primarily fueled by
+                                                             the profound semantic understanding and reasoning capa-
+
+                                                2
+
+=== PDF PAGE 3 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+                   Images                    BEV Features            History Action              Text
+
+
+                                                                                                                                                                   for                                                                                                                                                                                   autonomous                                                                                                                                                                                                                                      driving.                                                                                                                                                                                   Your                                                    BEV                                                      Youmodeltaskareis avehicletrajectoryprediction                                                                                                                                                       topredict                                                                                                                                                                    theego                                                                                                                                                                                                                               vehicle's
+                                                            Encoder                                                           secondtrajectorybasedonthe  4-
+                                                                                                                                                                                                     followinginputs......
+
+                            InternVIT                      BEV Tokenizer              Action Tokenizer            Text Tokenizer
+
+    Stage1:                        Stage2:                        Stage3:
+       VLA&WMJointTraining        ActionControllabilityFine-Tuning     Future-GuidedEval.&Refinement
+
+                   InternVL3-2B                               InternVL3-2B                               InternVL3-2B
+
+       VL-Tokens      BEV-Tokens     Action-Tokens     VL-Tokens      BEV-Tokens     Action-Tokens     VL-Tokens      BEV-Tokens     Action-Tokens
+
+
+                                   Action                                        Action                                        Action           Denoiser                                    Denoiser                                    Denoiser                             Head                                 Head                                 Head
+                                                          >>
+          Future Latent BEV                                     Future Latent BEV                                     Future Latent BEV
+                                                                                                     Reward
+                                                                                                        Model
+
+
+
+           T+1    T+2    T+3                                 T+1    T+2    T+3                                 T+1    T+2    T+3
+             >> Future                  >> Future                      Future             Future        Future            >> Future               >>       >> Future
+             Segment                   Action                  Segment       GT Action       Action            Segment                          Action
+
+Figure 2. DriveWorld-VLA pipeline. DriveWorld-VLA unifies action and prospective imagination through a progressive training scheme.
+Stage 1 jointly learns future BEV imagination and action prediction from a shared latent representation. Stage 2 conditions the generative
+branch on future actions, enabling controllable imagination that maps a given action sequence to its corresponding future. Stage 3 closes
+the loop: first predicts actions, then imagines the resulting future, and finally uses reward feedback to refine action prediction.
+
+
+bilities of VLMs. Early research predominantly utilized     trollability, and consequence-aware decision making, we
+VLMs as high-level semantic interpreters to process textu-    adopt a three-stage training paradigm. Each stage incremen-
+alized driving logic and rule-based constraints (Xu et al.,     tally unlocks a key capability of the world model, while
+2024; Zhou et al., 2025a; Yang et al., 2025b; Hao et al.,    ensuring stable joint optimization with the VLA. Specifi-
+2025b;a). However, with the emergence of multi-modal     cally, the training process is organized into three sequential
+foundation models, the paradigm has shifted toward end-to-    stages: VLA & WM Joint Training, Action Controllability
+end VLA architectures that directly map multi-sensor inputs    Fine-Tuning and Guided Evaluation & Refinement. Figure 2
+and linguistic instructions to control trajectories (Shao et al.,   shows the pipeline of DriveWorld-VLA.
+2024; Renz et al., 2025; Jiang et al., 2025). Recent fron-
+tiers have explored the deep integration of VLAs with world     3.1. VLA & WM Joint Training
+models to enable future-aware reasoning and latent state
+                                                   DriveWorld-VLA supports multi-modal inputs, includingprediction (Zhou et al., 2025b; Li et al., 2025b; Zhou et al.,
+                                                         multi-view images It, textual prompts Tt, historical ac-2025c; Wang et al., 2025; Zheng et al., 2025; Gao et al.,
+                                                                  tions At−1, and BEV representations Bt. All modalities are2024a; Gu et al., 2024). For instance, HERMES (Zhou
+                                                         independently tokenized before being fed into the Vision-et al., 2025b) jointly models scene interpretation and evolu-
+                                                    Language Model (VLM). Image and text tokenization followtion, while DriveVLA-W0 (Li et al., 2025b) employs future
+                                                       InternVL (Zhu et al., 2025), while dedicated tokenizers areimage prediction as a self-supervised signal for VLA refine-
+                                                          introduced for BEV features and historical actions. BEVment. DriveWorld-VLA advances this trajectory by unify-
+                                                               features Bt ∈RH×W ×C are extracted by BEVFormer (Liing future visual prediction and action generation within a
+                                                                        et al., 2024c), flattened spatially, and projected into the VLMshared latent space, systematically bridging the gap between
+                                                    embedding space as BEV tokens. Historical ego actions aregenerative imagination and proactive decision-making.
+                                                                 serialized into natural language prompts and concatenated
+                                                         with textual instructions, then encoded using the same text
+3. Method                                                 tokenizer as InternVL.
+DriveWorld-VLA is designed to tightly integrate VLA model    After tokenization, It, Tt, At−1, and Bt are jointly fed
+with World Model in a unified architecture that supports     into the VLM. The VLM aggregates information across all
+both multi-modal reasoning and prospective imagination.    modalities and produces a sequence of hidden states. We
+To progressively align representation learning, action con-    extract the hidden states from the final VLM layer as a
+
+
+                                                3
+
+=== PDF PAGE 4 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+shared latent representation, denoted as Ht,                                      BEV    Action  Timestep
+          Ht = VLM\θ(It, Bt, At−1, Tt),           (1)
+                                                                                                                                                                                                                                                                     Future
+where Ht serves as the common feature space for both
+                                                              EulerSampling                                         BEVfuture imagination and future action prediction. During                                                                                                                                                                                                                          Encoder
+         DriveWorld-VLAthis     stage,                                   is                                trained to jointly                                           perform                                                                                                                                                                                            Cross       Block                                                                                                                                                                                                         FusionConv                                                                                                                           DiT        Statefuture      imagination                             prediction                 and action                                      based on                                                 shared                                                                                                                                                                                                                                                                                                                                           Attention
+latent representation, facilitating the transfer of world model                                                     12
+knowledge into the VLA.
+
+Future imagination is modeled in the BEV space. Denoiser    Figure 3. The structure of Action-conditioned Flow-matching
+                                                                 Denoiser. The Denoiser conditions the flow-matching process ontakes Ht and Bt as input to predict future BEV states Bt+∆t
+                                                                     the BEV state and GT future actions. The BEV state is processed
+as below,                                                               through LayerNorm, followed by scaling and Embedding. These
+                                                                        features are then passed through DiT blocks to perform denoising
+          B′t =CROSSATTN\θ(Bt, Ht, Ht),                 and generate the future BEV states.
+                                                          (2)
+        Bt+∆t = DENOISER1θ(Ht, B′t, At−1),
+
+                                                              future scene generation. Ideally, DriveWorld-VLA shouldwhich are then decoded by a lightweight segmentation head
+                                                       be aware of how its actions affect the future evolution of theSEG,
+                                                      environment to evaluate action quality, rather than solely
+       St+∆t = SEGθ(Bt+∆t), St = SEGθ(B′t).      (3)    extrapolating from historical observations.
+
+                                                         Motivated by this limitation, this stage focuses on endowing
+DENOISER comprises a history-conditioned branch and a    DriveWorld-VLA with the capability of action-conditioned
+future action-conditioned branch. At this stage, only history-    future imagination. Due to the absence of sensor observa-
+conditioned branch is activated and enforce reasoning from     tions in the BEV space, we adopt an explicit feature-level
+historical observations. This lightweight branch provides    supervision strategy for BEV prediction, which fundamen-
+dense future supervision, enabling predictive representation     tally differs from downstream-task supervision used in prior
+learning and effective training of images to BEV tokenizers.   works such as WoTE (Li et al., 2025c) and LAW (Li et al.,
+The future action-conditioned branch follows a generative    2024a). After co-training, B′t produced by the BEV tok-
+paradigm to model controllable future evolution under dif-    enizer and VLM can be reliably decoded into a semantic
+ferent action sequences.                       BEV map. We therefore treat this BEV latent space as a
+                                                             pretrained variational representation. Given future multi-Action prediction is formulated as trajectory forecasting. A
+                                                     view images It+δt, we reuse the Stage 1 encoding pipelinelightweight action decoder takes Ht, Bt, and At−1 as input,
+                                                                to obtain the corresponding ground truth (GT) BEV latent
+and outputs the predicted future actions A′t+∆t:
+                                                               representation B′t+∆t as follows:
+          A′t+∆t = ACTθ(Ht, Bt, At−1),           (4)
+                                                 Ht+∆t = VLM θ(It+∆t, Bt+∆t, At+∆t, Tt+∆t),    (6)
+where ACT denotes an action decoder.                        B′t+∆t = CROSSATTN θ(Bt+∆t, Ht+∆t, Ht+∆t).   (7)
+Supervision. The future BEV state is supervised by de-
+coding a semantic BEV map, while the action decoder is    Subsequently, the second branch of the denoiser employs a
+supervised via imitation learning on expert actions. The    DiT-based architecture to learn an action-conditioned flow-
+overall loss at this stage is defined as:                       matching denoising process, using the BEV state B′t and the
+                                       GT future action At+∆t as conditions, as shown in Figure 3.
+                                                 The supervision is defined as:
+                Ls1 = Lseg + Lact,                 (5)
+                                                                           k
+where Lseg supervises the semantic BEV map decoding and    LF M = ||DITθ(B′t, At+∆t, xk,   ) −(B′t+∆t −x0)||2,
+                                                N
+Lact supervises the predicted actions.                                                                                    (8)
+                                                   where DIT = DENOISER2 denotes the second branch of
+3.2. Action Controllability Fine-Tuning                      the denoiser and x0 ∼N(0, I), k represents timestep in the
+                                                         flow matching process and is uniformly sampled from the
+During co-training, DriveWorld-VLA is not conditioned on
+                                                                   interval [1,N].
+future actions, which prevents it from imagining outcomes
+based on prospective actions. As a result, DriveWorld-VLA    Supervision. In Action Controllablity Fine-Tuning stage,
+cannot form a closed-loop reasoning between actions and    the overall loss Ls2 consists solely of the loss LF M.
+
+                                                4
+
+=== PDF PAGE 5 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+3.3. Future-Guided Evaluation & Refinement             4. Experiments
+
+This stage aims to establish a closed-loop interaction be-    4.1. Details
+tween action prediction and future imagination based on
+                                                      Dataset and Metrics. We evaluate DriveWorld-VLA onthe highly shared representation Ht between the VLA and
+                                          NAVSIMv1 (Dauner et al., 2024), NAVSIMv2 (Cao et al.,the world model. DriveWorld-VLA is required not only to
+                                                       2025) and nuScenes (Caesar et al., 2020). NAVSIMv1 is anpredict actions but also to effectively imagine the corre-
+                                                     autonomous driving planning benchmark built on the Open-sponding future outcomes induced by those actions, and to
+                                                     Scene (Contributors, 2023) dataset, providing 120 hours ofevaluate and refine actions according to the imagined future
+                                                             driving data at 2 Hz with multi-camera inputs and fusedstates. Given the Bt, Ht and At−1, DriveWorld-VLA first
+                                          LiDAR point clouds. NAVSIMv1 adopts a non-reactivepredicts future actions A′t+∆t and generates future imagi-
+                                                       open-loop simulation protocol, where the core metric Pre-nation Bt+∆t via the first denoising branch. The predicted
+                                                                  dictive Driver Model Score (PDMS) is defined as the prod-actions are subsequently used to condition the second de-
+                                                             uct of a penalty term and a weighted average score. Thenoising branch, where Euler-based sampling is performed
+to produce action-conditioned future imagination B′t+∆t:      penalty term reflects constraint satisfaction such as No Col-
+                                                                   lision (NC) and Drivable Area Compliance (DAC), while
+                                                             the weighted average combines Ego Progress (EP), Time-                  1                   k
+  Bk+1t+∆t = Bkt+∆t +   (DITθ(B′t, At+∆t, xk,    )),   (9)    To-Collision (TTC), and Comfort (C) with weights of 5:5:2.           N            N
+                                          NAVSIMv2 proposes a two-stage pseudo-simulation evalua-
+where B′t+∆t = Bk+1t+∆t, and N denotes the sampling steps     tion. Its core metric is called the Extended Predictive Driver
+                                                Model Score (EPDMS), which is constructed from the fol-and is set to 25.
+                                                       lowing metrics: No at-fault Collision (NC), Drivable Area
+To evaluate the quality of predicted actions, we jointly con-   Compliance (DAC), Driving Direction Compliance (DDC),
+sider the consistency between the action-conditioned imagi-    Traffic Light Compliance (TLC), Ego Progress (EP), Time
+nation B′t+∆t and the corresponding future BEV representa-    to Collision (TTC), Lane Keeping (LK), History Comfort
+tion Bt+∆t. A learned reward function R assigns a scalar    (HC), and Extended Comfort (EC). For open-loop planning,
+score ˆrt+∆t to each predicted trajectory, with ground-truth    nuScenes is a large-scale outdoor driving dataset with 1000
+rewards obtained by executing the predicted trajectories in    multi-modal scenes. Each scene lasts 20 s, is annotated at
+a simulator and performing online evaluation. This process    2 Hz, and includes six synchronized camera images and
+can be formulated as,                             LiDAR point clouds. We use L2 and Collision Rate (CR) as
+                                                              evaluation metrics. See Appendix A for more details.
+            ˆrt+∆t = R(B′t+∆t, Bt+∆t, A′t+∆t).       (10)
+                                                     Implementation. For NAVSIM, we concatenate the left-
+                                                                front view, front view, and right-front view in the orderBeyond trajectory quality assessment, this reward-driven
+                                                                to form a 256×1024 composite image as the model input.design promotes close-loop between future imagination
+                                      We use ResNet-34 (He et al., 2016) as the BEV encoder.and action generation.  Rather than uniformly supervis-
+ing all multi-modal predictions, training prioritizes trajec-    Training is performed with the AdamW optimizer using an
+                                                                          initial learning rate of 1e-4 and a batch size of 16. Eachtories with higher predicted rewards, reinforcing those that
+                                                            stage is trained for 20 epochs on 8 NVIDIA H20 GPUs,lead to more favorable imagined outcomes and enabling
+                                                        with a total training time of approximately 120 hours. Forconsequence-aware action refinement,
+                                                             the nuScenes open-loop evaluation, the 6-view input im-
+          L′act = ˆrt+∆t · ||A′t+∆t −At+∆t||2.       (11)    ages are resized to 640×384. We adopt a Swin-T (Liu
+                                                                     et al., 2021) backbone initialized with pretrained weights
+                                                    and follow BEV-Planner (Li et al., 2024d) to encode the
+Supervision. During this stage, DENOISER and VLM are                                     BEV feature map. We train with AdamW using an initial
+frozen. Training focuses on refining the reward function and                                                             learning rate of 7e-5 and a batch size of 1. Each stage is
+the action head. The future BEV latents generated by the                                                               trained for 24 epochs on 8 NVIDIA H20 GPUs, for a total
+two denoising branches are fused and fed into the segmen-                                                                training time of approximately 93 hours. Note that, for a
+tation decoder for supervised BEV decoding, resulting in                                                                        fair comparison, none of the nuScenes-based experiments
+three complementary supervision signals:                                                           uses ego-state information.
+
+             Ls3 = L′act + Lseg + Lrew,           (12)                                                                    4.2. Main Results
+
+where Lseg also supervises the semantic BEV map decod-   NAVSIMv1. Table 1 reports the closed-loop planning per-
+ing, L′act supervises the predicted actions weighted by re-   formance on NAVSIMv1. Our DriveWorld-VLA achieves
+wards and Lrew supervises the reward function R.           a PDMS of 91.3, outperforming top methods across dif-
+
+                                                5
+
+=== PDF PAGE 6 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Table 1. Comparison with state-of-the-art methods on the NAVSIMv1 (Dauner et al., 2024). Abbreviations: 1×C (front single-view
+camera), N×C (surround multi-view cameras), L (LiDAR), NC (No Collision), DAC (Drivable Area Compliance), TTC (Time-To-
+Collision), EP (Ego Process), C (Comfort), PDMS (Predictive Driver Model Score).
+
+  Methods                        Venue            Sensors    NC↑   DAC↑   TTC↑    C↑    EP↑   PDMS↑
+
+  Human                                     -                           -        100.0    100.0     100.0     99.9     87.5      94.8
+   E2E-based Methods
+   TransFuser (Chitta et al., 2022)     TPAMI 2023    3×C + L     97.7      92.8      92.8     100.0    79.2      84.0
+  PARA-Drive (Weng et al., 2024)    CVPR 2024      6×C       97.9      92.4      93.0      99.8     79.3      84.0
+  Hydra-MDP (Li et al., 2024b)       arXiv 2024     3×C + L     98.3      96.0      94.6     100.0    78.7      86.5
+   DiffusionDrive (Liao et al., 2025)   CVPR 2025    3×C + L     98.2      96.2      94.7     100.0    82.2      88.1
+   World-Model-based Methods
+  LAW (Li et al., 2024a)           ICLR 2024      1×C       96.4      95.4      88.7      99.9     81.7      84.6
+  DrivingGPT (Chen et al., 2025)    ICCV 2025      1×C       98.9      90.7      94.9      95.6     79.7      82.4
+  WoTE (Li et al., 2025c)          ICCV 2025     3×C + L     98.5      96.8      94.4      99.9     81.9      88.3
+  Epona (Zhang et al., 2025)        ICCV 2025      3×C       97.9      95.1      93.8      99.9     80.4      86.2
+   VLA-based Methods
+  AutoVLA (Zhou et al., 2025c)      NeurIPS 2025    3×C       98.4      95.6      98.0      99.9     81.9      89.1
+  ReCogDrive (Li et al., 2025d)      ICLR 2026      3×C       98.2      97.8      95.2      99.8     83.5      89.6
+  DriveVLA-W0 (Li et al., 2025b)    ICLR 2026      1×C       98.7      99.1      95.3      99.3     83.3      90.2
+  DriveWorld-VLA (Ours)              -             3×C       99.1      98.2      96.1     100.0    85.9      91.3
+
+
+Table 2. Comparison with state-of-the-art methods on the NAVSIMv2 (Cao et al., 2025). Abbreviations: NC (No at-fault Collision), DAC
+(Drivable Area Compliance), DDC (Driving Direction Compliance), TLC (Traffic Light Compliance), EP (Ego Progress), TTC (Time to
+Collision), LK (Lane Keeping), HC (History Comfort), EC (Extended Comfort), EPDMS (Extended Predictive Driver Model Score).
+
+  Methods                  NC↑  DAC↑  DDC↑   TLC↑   EP↑   TTC↑  LK↑  HC↑   EC↑  EPDMS↑
+
+  E2E-based Methods
+  TransFuser (Chitta et al., 2022)      96.9     89.9     97.8     99.7    87.1    95.4    92.7    98.3    87.2      76.7
+  DiffusionDrive (Liao et al., 2025)    98.2     95.9     99.4     99.8    87.5    97.3    96.8    98.3    87.7      84.5
+  HydraMDP++ (Li et al., 2025a)     97.2     97.5     99.4     99.6    83.1    96.5    94.4    98.2    70.9      81.4
+  DriveSuprim (Yao et al., 2025)      97.5     96.5     99.4     99.6    88.4    96.6    95.5    98.3    77.0      83.1
+  ARTEMIS (Feng et al., 2025a)      98.3     95.1     98.6     99.8    81.5    97.4    96.5    98.3       -        83.1
+  VLA-based Methods
+  DriveVLA-W0 (Li et al., 2025b)     98.5     99.1     98.0     99.7    86.4    98.1    93.2    97.9    58.9      86.1
+  DriveWorld-VLA (Ours)          98.6     99.1     99.6     99.8    87.4    97.9    97.0    97.8    78.6      86.8
+
+
+
+ferent paradigms, including DiffusionDrive (Liao et al.,    the policy of DriveWorld-VLA is beneficial throughout the
+2025), WoTE (Li et al., 2025c), and DriveVLA-W0 (Li     entire short-horizon planning process. We reiterate that
+et al., 2025b). Notably, DriveWorld-VLA attains an NC of     ego-state information is disabled.
+99.1 and an EP of 85.9, suggesting that our policy effec-
+tively enforces safety constraints while sustaining efficient     4.3. Ablation Study
+forward progress.
+                                                       Ablation on Training Process. Table 4 presents the perfor-
+NAVSIMv2. Table 2 reports the closed-loop planning per-   mance of different stages of the DriveWorld-VLA training
+formance on NAVSIMv2. DriveWorld-VLA achieves an    process across various datasets. For NAVSIMv1 (Dauner
+EPDMS of 86.8, again outperforming all compared meth-     et al., 2024), each training stage significantly improves the
+ods. Particularly, it performs excellently in DAC, DDC, and    model’s performance, with PDMS achieving increases of
+LK, achieving 99.1, 99.6, and 97.0, respectively.             +1.9 and +1.8, respectively. For nuScenes (Caesar et al.,
+                                                          2020), the positive impact of Stage 2 is more pronounced.nuScenes. Table 3 reports the 3-second planning results on
+                                                         Short-term planning in the 2nd and 3rd seconds shows al-the nuScenes (Caesar et al., 2020) validation dataset. The
+                                                   most no improvement from Stage 3, with only -0.01 andperformance of recent methods suggests that short-horizon
+                                                           -0.02 changes. We propose two hypotheses to explain thisplanning has been extensively studied. Compared with
+                                                    phenomenon. First, open-loop planning tasks do not neces-E2E-based methods and world-model-based methods, our
+                                                                    sarily benefit from generative supervision at all times. Sec-DriveWorld-VLA demonstrates a clear advantage, achiev-
+                                                          ond, the Reward Model has a greater effect on closed-looping an average L2 of 0.61m and a collision rate as low
+                                                          planning than on open-loop planning. From an engineeringas 0.16%. Even relative to the state-of-the-art approaches
+                                                               perspective, DriveWorld-VLA uses different baselines (LiFSDrive (Zeng et al., 2025) and HERMES-p (Zhou et al.,
+                                                                     et al., 2025c; 2024a) and Reward Models across the two2025b), DriveWorld-VLA still maintains a decisive advan-
+                                                       benchmarks. From a theoretical standpoint, the integrationtage in terms of collision rate. These results indicate that
+
+
+                                                6
+
+=== PDF PAGE 7 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Table 3. Comparison with state-of-the-art methods on the nuScenes (Caesar et al., 2020) validation dataset. ∗denotes results reproduced
+with the official checkpoint. Abbreviations: C (surround multi-view cameras), CR (Collision Rate).
+
+                                                                L2(m)↓                   CR(%)↓
+  Methods                       Venue           Sensors
+                                                                1s      2s      3s    Avg.     1s      2s      3s    Avg.
+
+   E2E-based Methods
+  UniAD (Hu et al., 2023)        CVPR 2023      C       0.48    0.96    1.65    1.03    0.05    0.17    0.71    0.31
+  VAD (Jiang et al., 2023)        ICCV 2023      C       0.41    0.70    1.05    0.72    0.07    0.17    0.41    0.22
+  MomAD (Song et al., 2025a)     CVPR 2025      C       0.43    0.88    1.62    0.98    0.06    0.16    0.68    0.30
+   World-Model-based Methods
+  LAW∗(Li et al., 2024a)         ICLR 2024      C       0.31    0.61    1.02    0.65    0.27    0.21    0.54    0.34
+  GenAD (Zheng et al., 2024)     ECCV 2024      C       0.36    0.83    1.55    0.91    0.06    0.23    1.00    0.43
+  Epona (Zhang et al., 2025)       ICCV 2025      C       0.61    1.17    1.98    1.25    0.01    0.22    0.85    0.36
+   FSDrive (Zeng et al., 2025)        NeurIPS 2025    C       0.28    0.52    0.80    0.53    0.06    0.13    0.32    0.17
+   VLA-based Methods
+  HERMES-p (Zhou et al., 2025b)   ICCV 2025      C       0.16    0.32    0.59    0.36    0.00    0.14    0.82    0.32
+  DriveWorld-VLA (Ours)            -            C       0.28    0.58    0.99    0.61    0.00    0.10    0.38    0.16
+
+
+Table 4. Ablation study of Training Process on NAVSIMv1 (Dauner et al., 2024) and nuScenes (Caesar et al., 2020) validation dataset.
+
+        Training Process              NAVSIMv1 (Closed-Loop)                        nuScenes (Open-Loop)
+  Stage 1   Stage 2   Stage 3  NC↑  DAC↑  TTC↑   C↑   EP↑  PDMS↑  CR↓@1s  CR↓@2s  CR↓@3s  CR↓@Avg.
+    ✗      ✗      ✗      98.5    95.8     94.4    99.9   80.9     87.1       0.27       0.21       0.54        0.34
+   ✓      ✗      ✗      98.6    96.1     95.1    99.9   81.0     87.6       0.09       0.19       0.48        0.25
+   ✓     ✓      ✗      98.9    97.3     94.4    100.0   84.5     89.5       0.05       0.11       0.40        0.19
+   ✓     ✓     ✓      99.1    98.2     96.1    100.0   85.9     91.3       0.00       0.10       0.38        0.16
+
+
+Table  5.     Ablation  study  of  Pipeline  Strategies  on    prediction branch. The ‘Progressive’ strategy follows the
+NAVSIMv1  (Dauner  et  al.,  2024).    ‘Non-progressive  1’
+                                                                  training scheme outlined in Figure 2. For a fair comparison,
+denotes that Stage 2 and Stage 3 are trained simultaneously after
+the completion of Stage 1, ‘Non-progressive 2’ denotes that Stage    both non-progressive strategies enable the reward model
+1 and Stage 2 are trained simultaneously before Stage 3, while    and adopt double the training length. Clearly, both ‘Non-
+‘Progressive’ denotes the strategy adopted in our work.             progressive’ strategies result in a significant performance
+  Pipeline Strategies NC↑DAC↑TTC↑  C↑  EP↑PDMS↑      drop, with ‘Non-progressive 1’ achieving -7.7 PDMS and
+                                                         ‘Non-progressive 2’ suffering a much more severe drop of
+  Non-progressive 1  97.8   94.5   93.5   99.9  75.6   83.6
+  Non-progressive 2  84.2   74.3   74.9  100.0  45.7   52.5       -38.8 PDMS, which indicates that our strategy is effective
+     Progressive     99.1   98.2   96.1  100.0  85.9   91.3      and non-redundant. The model must first learn from the GT
+                                                             action and enhance the latent feature space before benefit-
+Table 6.  Ablation study of VLM Strategies on NAVSIMv1    ing from action prediction. Additionally, ‘Non-progressive
+(Dauner et al., 2024). ‘Freeze’ denotes whether the parameters of    2’ makes the generative model hard to converge, forcing
+VLM are also frozen during Stage 1. ‘Pre-train’ denotes whether
+                                                        Stage 3 to optimize on noisy signals and leading to severe
+the pre-training strategy aligned with ReCogDrive (Li et al., 2025d)
+is adopted.                                              performance degradation. This further demonstrates that
+                                                        even within the same feature space, generative and planning
+  VLM Strategies
+              NC↑ DAC↑  TTC↑  C↑  EP↑  PDMS↑      tasks need to be asynchronously unified.
+  Freeze  Pre-train
+  ✓      ✗      98.4   95.7    96.2   99.9  80.4    87.2      Ablation on VLM Strategies. Table 6 shows the different
+  ✓    ✓      98.6   96.1    95.1   99.9  81.0    87.6    VLM strategies used during the training of DriveWorld-
+   ✗    ✓      98.7   96.7    95.6   99.9  83.1    88.3                                                 VLA. ‘Freeze’ indicates whether the VLM parameters are
+                                                             frozen during Stage 1, and ‘Pre-Train’ indicates whether the
+                                   VLM is pre-trained and fine-tuned following the settings in
+of generative tasks and planning tasks is constrained by the                                                    ReCogDrive (Li et al., 2025d) (conducting 3 epochs of SFT
+feedback mechanism within the inference process.                                                           using dataset constructed by the hierarchical data pipeline).
+Ablation on Pipeline Strategies. Table 5 shows the perfor-   The optimal strategy is shown in the third row of the ta-
+mance of DriveWorld-VLA under different pipeline strate-    ble. Both omitting pre-training and fully freezing the VLM
+gies.  The ‘Non-progressive 1’ strategy refers to updat-    parameters limit the model’s performance. This indicates
+ing the parameters of both the future imagination branch     that while non-targeted pre-training can contribute, it does
+and the action prediction branch after Stage 1. The ‘Non-    not fully unlock the VLM’s potential. The VLM parame-
+progressive 2’ strategy refers to training Stage 1 and the     ters must undergo optimization through a learning process
+future imagination branch simultaneously before the action    during the initial stage to accurately model shared space
+
+
+                                                 7
+
+=== PDF PAGE 8 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Table 7. Ablation study of Supervision on NAVSIMv1 (Dauner    This indicates that the model cannot maintain downstream
+et al., 2024). ‘Task’ denotes task-level supervision and ‘Features’
+                                                                task performance without relying on shared features, which
+denotes feature-level supervision.
+                                                             are effectively exploited for action generation and future
+   Supervision
+             NC↑ DAC↑  TTC↑   C↑   EP↑  PDMS↑      scenario imagination.
+  Task  Features
+                                                     Ablation on Text Masking. Table 9 presents the results  ✓     ✗      98.7   96.3    94.0   100.0  82.9    87.9
+  ✓    ✓     99.1   98.2    96.1   100.0  85.9    91.3       under different text mask settings. During inference, we re-
+                                                             place textual inputs with empty strings to simulate scenarios
+                                                         without language instructions. The planning performanceTable 8. Ablation study of VLM Perturbation on NAVSIMv1
+(Dauner et al., 2024). The perturbation is drawn from a Gaussian    drops remarkably after text masking. In DriveWorld-VLA,
+distribution N(0, 0.05).                                          textual prompts do not participate in decision-making via
+                                                             step-by-step reasoning chains. Nevertheless, this does not
+ VLM Perturbation NC↑DAC↑TTC↑  C↑  EP↑PDMS↑    mean the model merely treats text as trivial auxiliary con-
+       Stage 1       46.9   41.8   36.7   12.1   9.3     7.3         text. In our design, textual prompts serve as conditional
+       Stage 3       46.2   40.0   36.0   12.2   8.8     6.9                                                                constraints to directly regulate action generation.      None        99.1   98.2   96.1  100.0  85.9   91.3
+
+                                                                    4.4. Inference Speed
+Table 9. Ablation study of Text Masking on NAVSIMv1 (Dauner
+et al., 2024).                                                Table 10 reports the inference speed of different methods, all
+                                                      measured on a single NVIDIA H20 GPU for fair comparison.  Text Masking  NC↑ DAC↑  TTC↑   C↑   EP↑  PDMS↑
+                                                 Even though DriveWorld-VLA achieves the highest FPS,
+    ✓        98.2   94.0    94.4   99.9   75.6    84.1                                                                efficiency challenges are common among methods with      ✗        99.1   98.2    96.1   100.0  85.9    91.3
+                                                               similar technical pipelines (Jia et al., 2025; Mousakhan
+                                                                      et al., 2025). As such, this does not imply that DriveWorld-
+Table 10. Inference Speed. All results are validated on a single                                          VLA holds a dedicated advantage in raw inference speed.
+NVIDIA H20 GPU.
+                                                The core focus of DriveWorld-VLA is to improve planning
+                                  Function                    performance, and efficiency optimization is left for future.
+ Methods                                    FPS(Hz)
+                            Generation  Planning
+                                                                    4.5. Robustness Study
+  Vista(Gao et al., 2024b)     ✓       ✗        0.57
+  Epona(Zhang et al., 2025)    ✓     ✓       0.40                                                        Table 11 presents the robustness evaluation results based DriveWorld-VLA (Ours)    ✓     ✓       1.16
+                                                  on two corrupted benchmark datasets, namely NAVSIM-C
+                                                    and nuScenes-C. nuScenes-C (Dong et al., 2023) is a cor-
+                                                            ruption benchmark derived from nuScenes (Caesar et al.,
+features and enhance the model’s performance. Consider-
+                                                            2020), which contains 27 corruption types with five severity
+ing the future need for lightweight design, we believe that
+                                                                       levels. We focus on four representative corruption types, in-
+completely abandoning VLM updates is also acceptable.
+                                                            cluding adverse weather corruptions (Snow, Rain, and Fog)
+Ablation on Supervision.  Table 7 shows the impact    and sensor/motion corruption (Motion Blur). NAVSIM-C
+of task-level supervision and feature-level supervision on    (from NAVSIMv1 (Dauner et al., 2024)) adopts the same
+DriveWorld-VLA. Lseg and Lact are considered task-level    configuration as nuScenes-C, with the corruption severity
+supervision, while the supervision from the denoising pro-    fixed at level 5. Results demonstrate that DriveWorld-VLA
+cess is considered feature-level supervision. We introduce    achieves the optimal robustness across all corruption types
+noise that follows the distribution N(0, 5) into the latent    on both robustness benchmarks. On the NAVSIM-C bench-
+variables during the inference phase, in order to mitigate the    mark, Motion Blur (-18.3) and Fog (-14.5) cause dramatic
+constraining effect of feature-level supervision. The results    performance degradation. By contrast, on the nuScenes-C
+show that weakening feature-level supervision leads to a    benchmark, Rain (+0.37/+0.24) and Snow (+0.19/+0.11)
+decline in model performance. Relying solely on task-level    bring relatively mild performance variations.
+supervision causes the model to lack fine-grained feature
+guidance, which in turn affects performance.                    4.6. Visualization
+
+Ablation on VLM Perturbation. To verify the effective-   As shown in Figure 4, we provide some visual exam-
+ness of the shared latent space built by DriveWorld-VLA,    ples stemming from NAVSIM (Dauner et al., 2024) for
+we conduct perturbation experiments on VLM latent states,   DriveWorld-VLA. By the Figure, DriveWorld-VLA with
+as shown in Table 8. Perturbing VLM latent states causes     three-stage training scheme empowered by future imagina-
+significant performance drops in Stage 1 and Stage 3, even     tion demonstrates excellent and progressive planning results.
+though Stage 3 receives no direct supervision on latent states.
+
+
+                                                8
+
+=== PDF PAGE 9 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Table 11. Robustness study of planning performance on NAVSIM-C and nuScenes-C. ‘Clean’ denotes the dataset without artificial
+corruption, and four typical ‘Corruptions’ (Dong et al., 2023) including ‘Snow’, ‘Rain’, ‘Fog’, and ‘Motion Blur’ are used to simulate
+challenging real-world scenarios.
+
+                                                                                       Corruptions
+    Benchmark   Method                      Clean
+                                                     Motion Blur       Snow            Rain            Fog
+
+   NAVSIM-C    TransFuser(Chitta et al., 2022)   84.0         65.8-18.2            72.3-11.7            69.2-14.8            73.0-11.0
+    (PDMS↑)    DriveWorld-VLA (Ours)       91.3         73.0-18.3            80.6-10.7            85.2-6.1            76.8-14.5
+
+    nuScenes-C   LAW(Li et al., 2024a)         0.65/0.34 0.74/0.56+0.09/+0.22 0.92/0.44+0.27/+0.10 1.00/0.54+0.35/+0.20 0.68/0.55+0.03/+0.21
+ (L2↓/ CR↓@Avg.) DriveWorld-VLA (Ours)     0.61/0.16 0.62/0.45+0.01/+0.29 0.80/0.27+0.19/+0.11 0.98/0.40+0.37/+0.24 0.66/0.20+0.05/+0.04
+
+               Stage 2                        Stage 3                     GT
+
+     92427e4a55475ba6
+
+     67d74f48ba2a548e
+
+
+
+
+
+Figure 4. The 4s trajectory planning visualization examples from NAVSIM (Dauner et al., 2024) for DriveWorld-VLA. Stage 2
+generates predictions similar to the GTs, but with a higher collision risk. In contrast, Stage 3 introduces future imagination, resulting in
+more robust predictions and significantly reducing the collision risk. The changes observed across the training stages confirm the accuracy
+of world modeling and its understanding of physical dynamics. Left label: sample tokens. Top label: source of trajectory.
+
+
+See Appendix B for more illustration samples (Figures S2-    integration enables direct access to global information re-
+S6 for NAVSIM and Figures S7-S8 for nuScenes).            garding the future evolution of scenes, which is then applied
+                                                                  to the decision-making process. Unlike existing approaches,
+                                                     DriveWorld-VLA uses the latent states of the world model as5. Conclusion
+                                                              the basis for decision-making, assisting the system in eval-
+In this study, we introduce DriveWorld-VLA, a novel frame-    uating the long-term impact of actions on future scenarios.
+work designed to enhance autonomous driving decision-  We conduct extensive closed-loop and open-loop planning
+making and forward-looking reasoning by tightly integrat-    evaluations of DriveWorld-VLA across multiple benchmarks.
+ing VLA and world models. DriveWorld-VLA shares scene   The results demonstrate that DriveWorld-VLA significantly
+representations within the latent space, allowing the VLA    outperforms current state-of-the-art methods, showcasing
+to benefit more effectively from the world model.  This      its immense potential in decision-making.
+
+
+                                                9
+
+=== PDF PAGE 10 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Acknowledgements                                 Dauner, D., Hallgarten, M., Li, T., Weng, X., Huang, Z.,
+                                                        Yang, Z., Li, H., Gilitschenski, I., Ivanovic, B., Pavone,
+This work is accomplished under the support of Xiaomi                                                         M., et al. Navsim: Data-driven non-reactive autonomous
+EV. This work is supported by the National Natural Science                                                                vehicle simulation and benchmarking. Advances in Neu-
+Foundation of China (NSFC) under Grants No. 62536001                                                                   ral Information Processing Systems, 37:28706–28719,
+(Key Program) and No. 62576026.                                                           2024.
+
+Impact Statement                                 Dong, Y., Kang, C., Zhang, J., Zhu, Z., Wang, Y., Yang, X.,
+                                                             Su, H., Wei, X., and Zhu, J. Benchmarking robustness of
+This paper presents work aimed at advancing the field      3d object detection to common corruptions. In Proceed-
+of end-to-end autonomous driving by integrating Vision-      ings of the IEEE/CVF Conference on Computer Vision
+Language-Action (VLA) and World Models to enhance      and Pattern Recognition, pp. 1022–1032, 2023.
+decision-making and forward-looking imagination. The
+                                                       Feng, R., Xi, N., Chu, D., Wang, R., Deng, Z., Wang, A.,datasets and references used in this work are publicly avail-
+                                                           Lu, L., Wang, J., and Huang, Y. Artemis: Autoregressiveable, and the goal is to improve the safety of autonomous
+                                                              end-to-end trajectory planning with mixture of experts fordriving systems. We believe this work has positive soci-
+                                                     autonomous driving. arXiv preprint arXiv:2504.19580,etal implications, particularly in the context of autonomous
+                                                           2025a.vehicle technology, by contributing to safer transportation
+systems. Additionally, there are no specific ethical concerns                                                       Feng,  T., Wang,  W., and Yang,  Y.  A survey of
+that we feel must be highlighted here at this stage.                                                       world models for autonomous driving. arXiv preprint
+                                                           arXiv:2501.11260, 2025b.
+References
+                                                    Gao, D., Cai, S., Zhou, H., Wang, H., Soltani,  I., and
+Caesar, H., Bankiti, V., Lang, A. H., Vora, S., Liong, V. E.,      Zhang, J. Cardreamer: Open-source learning platform for
+  Xu, Q., Krishnan, A., Pan, Y., Baldan, G., and Beijbom, O.     world model based autonomous driving. IEEE Internet
+  nuscenes: A multimodal dataset for autonomous driving.       of Things Journal, 2024a.
+   In Proceedings of the IEEE/CVF conference on computer
+                                                    Gao, S., Yang, J., Chen, L., Chitta, K., Qiu, Y., Geiger, A.,   vision and pattern recognition, pp. 11621–11631, 2020.
+                                                         Zhang, J., and Li, H. Vista: A generalizable driving world
+Cao, W., Hallgarten, M., Li,  T., Dauner, D., Gu, X.,     model with high fidelity and versatile controllability. Ad-
+  Wang, C., Miron, Y., Aiello, M., Li, H., Gilitschenski, I.,      vances in Neural Information Processing Systems, 37:
+   et al. Pseudo-simulation for autonomous driving. arXiv      91560–91596, 2024b.
+   preprint arXiv:2506.04218, 2025.
+                                                   Gu, S., Yin, W., Jin, B., Guo, X., Wang, J., Li, H., Zhang,
+Chen, Y., Wang, Y., and Zhang, Z.  Drivinggpt: Unify-      Q., and Long, X. Dome: Taming diffusion model into
+  ing driving world modeling and planning with multi-       high-fidelity controllable occupancy world model. arXiv
+  modal autoregressive transformers.  In Proceedings of       preprint arXiv:2410.10429, 2024.
+  the IEEE/CVF International Conference on Computer                                                     Guan, Y., Liao, H., Li, Z., Hu, J., Yuan, R., Li, Y., Zhang, G.,
+  Vision, pp. 26890–26900, 2025.                                                      and Xu, C. World models for autonomous driving: An
+                                                                               initial survey. IEEE Transactions on Intelligent Vehicles,Chitta, K., Prakash, A., Jaeger, B., Yu, Z., Renz, K., and
+                                                           2024.  Geiger, A. Transfuser: Imitation with transformer-based
+  sensor fusion for autonomous driving. IEEE transactions                                                    Hao, X., Diao, Y., Wei, M., Yang, Y., Hao, P., Yin, R.,
+  on pattern analysis and machine intelligence, 45(11):                                                       Zhang, H., Li, W., Zhao, S., and Liu, Y. Mapfusion: A
+  12878–12895, 2022.                                                           novel bev feature fusion network for multi-modal map
+                                                                  construction. Information Fusion, 119:103018, 2025a.
+Contributors, O.   Openscene:  The largest up-to-date
+  3d occupancy prediction benchmark in autonomous    Hao, X., Zhou, L., Huang, Z., Hou, Z., Tang, Y., Zhang, L.,
+   driving. https://github.com/OpenDriveLab/       Li, G., Lu, Z., Ren, S., Meng, X., et al. Mimo-embodied:
+  OpenScene, 2023.                                  X-embodied foundation model technical report. arXiv
+                                                                 preprint arXiv:2511.16518, 2025b.
+Cui, C., Ma, Y., Cao, X., Ye, W., Zhou, Y., Liang, K., Chen,
+   J., Lu, J., Yang, Z., Liao, K.-D., et al. A survey on mul-    He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learn-
+  timodal large language models for autonomous driving.      ing for image recognition. In Proceedings of the IEEE
+  In Proceedings of the IEEE/CVF Winter Conference on      conference on computer vision and pattern recognition,
+  Applications of Computer Vision, pp. 958–979, 2024.          pp. 770–778, 2016.
+
+                                                10
+
+=== PDF PAGE 11 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+Hu, A., Corrado, G., Griffiths, N., Murez, Z., Gurau, C., Yeo,    Li, Z., Wang, W., Li, H., Xie, E., Sima, C., Lu, T., Yu, Q.,
+   H., Kendall, A., Cipolla, R., and Shotton, J. Model-based      and Dai, J. Bevformer: learning bird’s-eye-view represen-
+   imitation learning for urban driving. Advances in Neural       tation from lidar-camera via spatiotemporal transformers.
+  Information Processing Systems, 35:20703–20716, 2022.     IEEE Transactions on Pattern Analysis and Machine In-
+                                                                      telligence, 2024c.
+Hu, Y., Yang, J., Chen, L., Li, K., Sima, C., Zhu, X., Chai,
+   S., Du, S., Lin, T., Wang, W., et al. Planning-oriented     Li, Z., Yu, Z., Lan, S., Li, J., Kautz, J., Lu, T., and Alvarez,
+  autonomous driving. In Proceedings of the IEEE/CVF         J. M. Is ego status all you need for open-loop end-to-end
+  conference on computer vision and pattern recognition,     autonomous driving? In Proceedings of the IEEE/CVF
+  pp. 17853–17862, 2023.                                   Conference on Computer Vision and Pattern Recognition,
+                                                               pp. 14864–14873, 2024d.
+Jia,  F.,  Jia,  C., Song,  Z., Bao,  Z., Liu,  L., Xu,  S.,
+  Gong,  Y., Yang,  L., Zhang, X., Sun, B., Hao, X.,    Liao, B., Chen, S., Yin, H., Jiang, B., Wang, C., Yan, S.,
+  Chen,  L.,  and Luo,  Y.    Progressive  robustness-      Zhang, X., Li, X., Zhang, Y., Zhang, Q., et al. Diffu-
+  aware  world  models  in  autonomous  driving:  A       siondrive: Truncated diffusion model for end-to-end au-
+  review and outlook.  TechRxiv Preprint, 2025. URL      tonomous driving. In Proceedings of the Computer Vision
+  https://www.techrxiv.org/doi/full/10.      and Pattern Recognition Conference, pp. 12037–12047,
+  36227/techrxiv.176523308.84756413/v1.        2025.
+
+Jiang, A., Gao, Y., Sun, Z., Wang, Y., Wang, J., Chai, J., Cao,    Liu, L., Jia, C., Yu, G., Song, Z., Li, J., Jia, F., Wu, P.,
+  Q., Heng, Y., Jiang, H., Dong, Y., et al. Diffvla: Vision-      Hao, X., and Luo, Y. Guideflow: Constraint-guided flow
+  language guided diffusion planning for autonomous driv-      matching for planning in end-to-end autonomous driving.
+   ing. arXiv preprint arXiv:2505.19381, 2025.                 arXiv preprint arXiv:2511.18729, 2025.
+
+Jiang, B., Chen, S., Xu, Q., Liao, B., Chen, J., Zhou, H.,    Liu, Z., Lin, Y., Cao, Y., Hu, H., Wei, Y., Zhang, Z., Lin,
+  Zhang, Q., Liu, W., Huang, C., and Wang, X.  Vad:       S., and Guo, B. Swin transformer: Hierarchical vision
+  Vectorized scene representation for efficient autonomous       transformer using shifted windows. In Proceedings of the
+   driving. In Proceedings of the IEEE/CVF International     IEEE/CVF international conference on computer vision,
+  Conference on Computer Vision, pp. 8340–8350, 2023.        pp. 10012–10022, 2021.
+
+Li, K., Li, Z., Lan, S., Xie, Y., Zhang, Z., Liu, J., Wu, Z.,   Min, C., Zhao, D., Xiao, L., Zhao, J., Xu, X., Zhu, Z.,
+  Yu, Z., and Alvarez, J. M. Hydra-mdp++: Advancing        Jin, L., Li, J., Guo, Y., Xing, J., et al. Driveworld: 4d
+  end-to-end driving via expert-guided hydra-distillation.      pre-trained scene understanding via world models for
+  arXiv preprint arXiv:2503.12820, 2025a.                  autonomous driving. In Proceedings of the IEEE/CVF
+                                                           Conference on Computer Vision and Pattern Recognition,
+Li, Y., Fan, L., He, J., Wang, Y., Chen, Y., Zhang, Z., and       pp. 15522–15533, 2024.
+  Tan, T. Enhancing end-to-end autonomous driving with
+   latent world model. arXiv preprint arXiv:2406.08481,   Mousakhan, A., Mittal, S., Galesso, S., Farid, K., and
+  2024a.                                                  Brox, T. Orbis: Overcoming challenges of long-horizon
+                                                                prediction in driving world models.  arXiv preprint
+Li, Y., Shang, S., Liu, W., Zhan, B., Wang, H., Wang, Y.,      arXiv:2507.13162, 2025.
+  Chen, Y., Wang, X., An, Y., Tang, C., et al. Drivevla-w0:
+                                                      Renz, K., Chen, L., Arani, E., and Sinavski, O.  Sim-  World models amplify data scaling law in autonomous
+                                                                    lingo: Vision-only closed-loop autonomous driving with   driving. arXiv preprint arXiv:2510.12796, 2025b.
+                                                             language-action alignment. In Proceedings of the Com-
+Li, Y., Wang, Y., Liu, Y., He, J., Fan, L., and Zhang, Z. End-      puter Vision and Pattern Recognition Conference, pp.
+  to-end driving with online trajectory evaluation via bev      11993–12003, 2025.
+  world model. arXiv preprint arXiv:2504.01941, 2025c.
+                                                       Shao, H., Hu, Y., Wang, L., Song, G., Waslander, S. L.,
+Li, Y., Xiong, K., Guo, X., Li, F., Yan, S., Xu, G., Zhou, L.,      Liu, Y., and Li, H. Lmdrive: Closed-loop end-to-end
+  Chen, L., Sun, H., Wang, B., et al. Recogdrive: A rein-       driving with large language models. In Proceedings of the
+  forced cognitive framework for end-to-end autonomous     IEEE/CVF Conference on Computer Vision and Pattern
+   driving. arXiv preprint arXiv:2506.08052, 2025d.            Recognition, pp. 15120–15130, 2024.
+
+Li, Z., Li, K., Wang, S., Lan, S., Yu, Z., Ji, Y., Li, Z., Zhu,    Song, Z., Jia, C., Liu, L., Pan, H., Zhang, Y., Wang, J.,
+   Z., Kautz, J., Wu, Z., et al. Hydra-mdp: End-to-end      Zhang, X., Xu, S., Yang, L., and Luo, Y. Don’t shake
+  multimodal planning with multi-target hydra-distillation.      the wheel: Momentum-aware planning in end-to-end au-
+  arXiv preprint arXiv:2406.06978, 2024b.                  tonomous driving. In Proceedings of the Computer Vision
+
+                                                11
+
+=== PDF PAGE 12 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+  and Pattern Recognition Conference, pp. 22432–22441,    Yao, W., Li, Z., Lan, S., Wang, Z., Sun, X., Alvarez,
+  2025a.                                                                     J. M., and Wu, Z.  Drivesuprim: Towards precise tra-
+                                                                   jectory selection for end-to-end planning. arXiv preprint
+Song, Z., Liu, L., Pan, H., Liao, B., Guo, M., Yang, L.,      arXiv:2506.06659, 2025.
+  Zhang, Y., Xu, S., Jia, C., and Luo, Y. Diver: Reinforced
+                                                      Zeng, S., Chang, X., Xie, M., Liu, X., Bai, Y., Pan, Z.,  diffusion breaks imitation bottlenecks in end-to-end au-
+                                                      Xu, M., and Wei, X. Futuresightdrive: Thinking visually  tonomous driving.  arXiv preprint arXiv:2507.04049,
+                                                          with spatio-temporal cot for autonomous driving. arXiv  2025b.
+                                                                 preprint arXiv:2505.17685, 2025.
+Tu, S., Zhou, X., Liang, D., Jiang, X., Zhang, Y., Li,                                                     Zhang, K., Tang, Z., Hu, X., Pan, X., Guo, X., Liu, Y.,
+  X., and Bai, X. The role of world models in shaping                                                       Huang, J., Yuan, L., Zhang, Q., Long, X.-X., et al. Epona:
+  autonomous driving: A comprehensive survey.  arXiv                                                            Autoregressive diffusion world model for autonomous
+  preprint arXiv:2502.10498, 2025.                                                                    driving. arXiv preprint arXiv:2506.24113, 2025.
+
+Wang, H., Ye, X., Tao, F., Pan, C., Mallik, A., Yaman, B.,    Zhang, L., Xiong, Y., Yang, Z., Casas, S., Hu, R., and
+  Ren, L., and Zhang, J. Adawm: Adaptive world model      Urtasun, R.  Copilot4d: Learning unsupervised world
+  based planning for autonomous driving. arXiv preprint      models for autonomous driving via discrete diffusion.
+  arXiv:2501.13072, 2025.                                  arXiv preprint arXiv:2311.01017, 2023.
+
+                                                     Zheng, W., Song, R., Guo, X., Zhang, C., and Chen, L.Weng, X., Ivanovic, B., Wang, Y., Wang, Y., and Pavone,
+                                                      Genad: Generative end-to-end autonomous driving. In  M.  Para-drive: Parallelized architecture for real-time
+                                                     European Conference on Computer Vision, pp. 87–104.  autonomous driving. In Proceedings of the IEEE/CVF
+                                                                 Springer, 2024.  Conference on Computer Vision and Pattern Recognition,
+  pp. 15449–15458, 2024.                                                       Zheng, Y., Yang, P., Xing, Z., Zhang, Q., Zheng, Y., Gao, Y.,
+                                                                      Li, P., Zhang, T., Xia, Z., Jia, P., et al. World4drive: End-
+Xu,  T., Lu, H., Yan, X., Cai, Y., Liu, B., and Chen,                                                             to-end autonomous driving via intention-aware physical
+  Y.   Occ-llm:  Enhancing autonomous driving with                                                                      latent world model. arXiv preprint arXiv:2507.00603,
+  occupancy-based large language models. arXiv preprint                                                          2025.
+  arXiv:2502.06419, 2025.
+                                                       Zhou, X., Han, X., Yang, F., Ma, Y., Tresp, V., and Knoll, A.
+Xu, Z., Zhang, Y., Xie, E., Zhao, Z., Guo, Y., Wong, K.-      Opendrivevla: Towards end-to-end autonomous driving
+  Y. K., Li, Z., and Zhao, H.  Drivegpt4: Interpretable      with large vision language action model. arXiv preprint
+  end-to-end autonomous driving via large language model.      arXiv:2503.23463, 2025a.
+  IEEE Robotics and Automation Letters, 2024.
+                                                     Zhou, X., Liang, D., Tu, S., Chen, X., Ding, Y., Zhang,
+Yan, T., Tang, T., Gui, X., Li, Y., Zhesng, J., Huang, W.,      D., Tan,  F., Zhao,  H., and Bai, X.   Hermes: A
+  Kong, L., Han, W., Zhou, X., Zhang, X., et al.  Ad-       unified self-driving world model for simultaneous 3d
+   r1: Closed-loop reinforcement learning for end-to-end      scene understanding and generation.  arXiv preprint
+  autonomous driving with impartial world models. arXiv      arXiv:2501.14729, 2025b.
+  preprint arXiv:2511.20325, 2025.                                                     Zhou, Z., Cai, T., Zhao, S. Z., Zhang, Y., Huang, Z., Zhou,
+                                                                    B., and Ma, J. Autovla: A vision-language-action model
+Yang, J., Chitta, K., Gao, S., Chen, L., Shao, Y., Jia, X., Li,
+                                                                  for end-to-end autonomous driving with adaptive rea-
+  H., Geiger, A., Yue, X., and Chen, L. Resim: Reliable
+                                                          soning and reinforcement fine-tuning.  arXiv preprint
+  world simulation for autonomous driving. arXiv preprint
+                                                           arXiv:2506.13757, 2025c.
+  arXiv:2506.09981, 2025a.
+                                                     Zhu, J., Wang, W., Chen, Z., Liu, Z., Ye, S., Gu, L., Tian,
+Yang, Z., Chen, L., Sun, Y., and Li, H. Visual point cloud       H., Duan, Y., Su, W., Shao, J., et al. Internvl3: Exploring
+   forecasting enables scalable autonomous driving. In Pro-      advanced training and test-time recipes for open-source
+  ceedings of the IEEE/CVF Conference on Computer Vi-      multimodal models. arXiv preprint arXiv:2504.10479,
+  sion and Pattern Recognition, pp. 14673–14684, 2024.        2025.
+
+Yang, Z., Chai, Y., Jia, X., Li, Q., Shao, Y., Zhu, X., Su,    Zyrianov, V., Che, H., Liu, Z., and Wang, S.  Lidardm:
+  H., and Yan, J. Drivemoe: Mixture-of-experts for vision-      Generative lidar simulation in a generated world.  In
+  language-action model in end-to-end autonomous driving.     2025 IEEE International Conference on Robotics and
+  arXiv preprint arXiv:2505.16278, 2025b.                   Automation (ICRA), pp. 6055–6062. IEEE, 2025.
+
+                                                12
+
+=== PDF PAGE 13 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+A. More Experiment Details.
+
+A.1. Prompt
+
+In the system prompt for InternVL (Zhu et al., 2025), we include a description of the task, metrics, input and output.
+Figure S1 is an example for the two benchmarks (Dauner et al., 2024; Cao et al., 2025; Caesar et al., 2020).
+
+
+A.2. Image Tokens
+
+We explicitly inject visual information into the input sequence in the form of a ‘text-domain visual placeholder token
+sequence’. Given an input image (after view stitching), we first perform adaptive tiling to accommodate varying aspect
+ratios. Where the image is partitioned into NP feature patches of size 448 × 448. When multiple patches are used, an
+additional 448 × 448 thumbnail is appended to provide a global view. We then insert the textual prompts into a placeholder
+span delimited by special boundary markers (e.g., <img>...</img>), within which a dedicated placeholder token
+<IMG CONTEXT> is repeated. We assign a fixed number of K = 256 <IMG CONTEXT> tokens to each patch. This design
+ensures that variations in image resolution or the number of patches are directly reflected in the number of text-side image
+tokens, while the overall sequence is subsequently tokenized and padded to a fixed maximum length.
+
+
+A.3. Vision-language Representation
+
+On the vision side, we stack the normalized patches into a tensor in RP ×3×448×448, together with an accompanying mask that
+indicates which patches are valid. During multi-modal fusion, the model first locates all occurrences of <IMG CONTEXT>
+in the text indices, and then applies a visual encoder to extract per-patch features and project them into the language hidden
+space. The resulting visual features and language tokens are jointly processed by the backbone network. This yields fused
+sequence hidden states H ∈RB×L×D, where L denotes the maximum tokenized sequence length and D is the language
+backbone hidden dimension. The representation thus captures both textual context and visual information carried at the
+<IMG CONTEXT> positions. To obtain a fixed-length compact representation, we first linearly project the fused hidden
+states from D = 1536 to a lower dimension d = 256, producing ˜H ∈RB×L×d. We then introduce a set of learnable
+latent query vectors Z0 ∈RB×NL×d, where we set the number of latents to NL = 700. Using cross-attention with Z0 as
+queries and ˜H as keys/values, we aggregate information from a variable-length sequence into a fixed-length representation
+Z ∈RB×NL×d, which serves as a compact vision–language representation for downstream tasks.
+
+B. More Visualization.
+
+We have provided more visual examples showed in Figure S2, Figure S3, Figure S4, Figure S5 and Figure S6 for
+NAVSIM (Dauner et al., 2024), as well as Figure S7, Figure S8 for nuScenes (Caesar et al., 2020).
+
+
+
+
+
+                                                13
+
+=== PDF PAGE 14 ===
+      DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+
+
+
+
+  For NAVSIM
+  You are a vehicle trajectory prediction model for autonomous driving. Your task is to predict the ego vehicle's 4-second trajectory based on
+   the following inputs: multi-view images from 8 cameras, ego vehicle states (position), and discrete navigation commands. The input
+   provides a 2-second history, and your output should ensure a safe trajectory for the next 4 seconds. Your predictions must adhere to the
+   following metrics:
+   1. Non Collisions (NC): Avoid collisions with other objects/vehicles.
+   2. Drivable Area Compliance (DAC): Stay within the drivable area.
+   3. Time to Collision (TTC): Maintain a safe distance from other vehicles.
+   4. Ego Progress (EP): Ensure the ego vehicle moves forward without being stuck.
+   5. Comfort (C): Avoid sharp turns and sudden decelerations.
+   6. Driving Direction Compliance (DDC): Align with the intended driving direction.
+   For evaluation, use the PDM Score, which combines these metrics: PDM Score = NC * DAC * (5*TTC + 5*EP + 2*C + 0*DDC) / 12.
+  Your predictions will be evaluated through a non-reactive 4-second simulation with an LQR controller and background actors following
+   their recorded trajectories. The better your predictions, the higher your score.
+
+  For nuScenes
+  You are an autonomous vehicle planning model for autonomous driving. Your task is to plan the ego vehicle's 3-second trajectory based on
+   the following inputs: multi-view images from 6 cameras, ego vehicle states (position, velocity), and discrete navigation commands. The
+   input provides a 2-second history, and your output should ensure a safe and efficient trajectory for the next 3 seconds. Your predictions will
+   be evaluated using the following metrics:
+   1. L2 Distance (L2): The square root of the sum of squared differences between the corresponding coordinates of predicted and actual
+   points, measuring the accuracy of the predicted trajectory.
+   2. Collision Rate (CR): Measures the safety of the predicted trajectory by quantifying the frequency of collisions with vehicles, pedestrians,
+   and obstacles. The goal is to avoid such collisions.
+
+ Common
+  As an autonomous driving system, predict the vehicle's trajectory based on:
+   1. Visual perception from camera
+   2. Historical motion context (last 4 timesteps): {history_str}
+   3. Active navigation command: [{command_str}]
+   Output requirements: Predict 8 future trajectory points
+    - Each point format: (x:float, y:float, heading:float)
+    - Use [PT, ...] to encapsulate the trajectory
+    - Maintain numerical precision to 2 decimal places
+
+
+Figure S1. InternVL system prompts. {history str} denotes the ground-truth historical trajectory sequence, where each frame
+in the sequence is represented by a 2D coordinate. {command str} denotes navigation commands in text form, e.g., ‘turn left’, ‘go
+straight’ or ‘turn right’. The full prompt fed into the model is composed of each benchmark’s specific prompt and the common prompt.
+
+
+
+
+
+                                                14
+
+=== PDF PAGE 15 ===
+    DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+              Stage 2                        Stage 3                     GT
+
+e88e44d720f65e0e
+
+2360cd7b0fd85480
+
+65fc12f7836f58ed
+
+0a08850db6e35ab7
+
+
+
+
+
+ Figure S2. Visualization examples of NAVSIM (Dauner et al., 2024). Left label: sample tokens. Top label: source of trajectory.
+
+
+                                              15
+
+=== PDF PAGE 16 ===
+     DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+                Stage 2                        Stage 3                     GT
+
+             0a6906b694b65108
+
+             2daa400892ce5a95
+
+             2dca181fa97153a0
+
+             96b5b1c350745a73
+
+
+
+
+
+Figure S3. Visualization examples (cont.) of NAVSIM (Dauner et al., 2024). Left label: sample tokens. Top label: source of trajectory.
+
+
+                                               16
+
+=== PDF PAGE 17 ===
+     DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+                Stage 2                        Stage 3                     GT
+        f34af4dbbbd35a23
+
+             d925879cb467504c
+
+             d04049c3978354f0
+
+             77919997d5c352d8
+
+
+
+
+
+Figure S4. Visualization examples (cont.) of NAVSIM (Dauner et al., 2024). Left label: sample tokens. Top label: source of trajectory.
+
+
+                                               17
+
+=== PDF PAGE 18 ===
+     DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+                Stage 2                        Stage 3                     GT
+
+             566cac9a7c0358ce
+
+             5317b890d3e45958
+
+             542d8c3b05145bbe
+
+             41f3712a30b956e6
+
+
+
+
+
+Figure S5. Visualization examples (cont.) of NAVSIM (Dauner et al., 2024). Left label: sample tokens. Top label: source of trajectory.
+
+
+                                               18
+
+=== PDF PAGE 19 ===
+     DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+                Stage 2                        Stage 3                     GT
+
+             e7756dc30c605482
+
+             ea1c363c888b59c7
+
+             511ba067a1835f86
+
+             5a80299213875068
+
+
+
+
+
+Figure S6. Visualization examples (cont.) of NAVSIM (Dauner et al., 2024). Left label: sample tokens. Top label: source of trajectory.
+
+
+                                               19
+
+=== PDF PAGE 20 ===
+DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+
+
+                  6-view Camera                                Stage 3             GT
+
+
+
+
+
+                              、
+
+ Figure S7. Visualization examples of nuScenes (Caesar et al., 2020) validation dataset. Top label: source of trajectory.
+
+
+
+
+
+                                          20
+
+=== PDF PAGE 21 ===
+  DriveWorld-VLA: Unified Latent-Space World Modeling with Vision–Language–Action for Autonomous Driving
+
+
+
+
+                    6-view Camera                                Stage 3             GT
+
+
+
+
+
+Figure S8. Visualization examples (cont.) of nuScenes (Caesar et al., 2020) validation dataset. Top label: source of trajectory.
+
+
+
+
+
+                                            21

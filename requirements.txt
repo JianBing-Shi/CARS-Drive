@@ -1,0 +1,33 @@
+# FRESH-Drive training from precomputed events/ and bev_features/.
+# Target: Linux x86_64, Python 3.10, NVIDIA L40S, PyTorch 2.1.0 / CUDA 11.8.
+# Install in the FRESH-Drive environment; see docs/remote_training_environment.md.
+# This is a training dependency list, not an export of the local BEVFormer stack.
+
+--extra-index-url https://download.pytorch.org/whl/cu118
+
+# Keep the CUDA build and torchvision matched to the remote image.
+torch==2.1.0+cu118
+torchvision==0.16.0+cu118
+
+# Training framework. Pin both distributions because the code imports
+# lightning.pytorch and lightning also depends on pytorch-lightning.
+lightning==2.0.9
+pytorch-lightning==2.0.9
+torchmetrics==1.2.1
+lightning-utilities==0.15.3
+fsspec[http]==2024.12.0
+packaging==24.2
+
+# Dataset loading and numerical dependencies. NumPy 1.x is required for
+# compatibility with this PyTorch generation and the existing caches.
+torch-geometric==2.3.1
+numpy==1.23.5
+scipy==1.10.1
+scikit-learn==1.7.2
+Pillow==9.5.0
+PyYAML==6.0.3
+tqdm==4.70.1
+
+# No mmcv-full/mmdet/mmdet3d, nuplan-devkit, or PyG CUDA extensions are
+# required to train on the existing caches. Do not reuse the local cu117
+# BEVFormer binaries with the cu118 / torch 2.1 environment.

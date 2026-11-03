@@ -1,0 +1,1246 @@
+=== PDF PAGE 1 ===
+         Reasoning-VLA: An Efficient and Spatial-Guided General
+     Vision-Language-Action Reasoning Model for Autonomous Driving
+
+
+
+     Dapeng Zhang 1 2 * Zhenlong Yuan 3 * Zhangquan Chen 4 Chih-Ting Liao 5 Yinda Chen 6  Fei Shen 1
+                                 Qingguo Zhou 2 Tat-Seng Chua 1
+
+
+                 Abstract                           as poor scalability, cumulative errors, and limited gener-
+                                                                 alization across hardware and datasets. These limitations
+    Vision-Language-Action (VLA) models have re-                                                          hinder their generalization ability to new driving scenar-
+     cently shown strong decision-making capabilities                                                                      ios.  Recently, foundation models—especially large lan-
+     in autonomous driving. However, existing VLAs                                                      guage and vision–language models like CLIP, Qwen2.5-VL,
+     often struggle with achieving efficient inference                                                    and DeepSeek-V3 (Radford et al., 2021; Bai et al., 2025;
+    and generalizing to novel autonomous vehicle                                                      Liu et al., 2025)—have shown remarkable generalization
+     configurations and driving scenarios. In this pa-                                                        through large-scale pretraining. Their capabilities offer a
+     per, we propose Reasoning-VLA, a general and                                                       promising direction for building more flexible and robust
+      efficient action-generation VLA framework. The                                   AD systems.
+    proposed model employs a set of learnable ac-
+     tion queries, implicitly guided by predefined spa-        Building on these advancements, contemporary frameworks
+      tial representations to enhance spatial awareness.         in robotic manipulation and autonomous driving increas-
+    These learnable queries interact with reasoning-         ingly adopt vision–language generative paradigms (e.g., au-
+    enhanced vision–language features to generate         toregressive or diffusion-based models (Black et al., 2024;
+     continuous action trajectories in parallel. To pro-      Kim et al., 2024; Yuan et al., 2025; Yang et al., 2025)),
+    mote robust generalization, we consolidate eight          collectively referred to as Vision–Language–Action (VLA)
+     publicly available autonomous driving datasets        models. These systems generate fine-grained action trajec-
+     into a standardized, Chain-of-Thought reason-          tories from high-level visual–linguistic reasoning, thereby
+     ing–based, and easy-to-use data format for model        enhancing flexibility and practicality in motion planning
+      training. Leveraging both supervised learning and        and control. Leveraging large-scale pretrained foundation
+     reinforcement learning fine-tuning, extensive em-        models, recent approaches such as DriveMOE (Yang et al.,
+     pirical evaluations across multiple benchmarks        2025) have achieved strong benchmark performance while
+     demonstrate that Reasoning-VLA achieves state-        simultaneously improving interpretability and robustness
+     of-the-art performance, strong generalization ca-          capabilities in autonomous driving tasks.
+      pability, and the excellent inference speed with                                                         Despite these promising results, several challenges hin-
+     parallel decode.                                                          der the widespread deployment of VLAs in autonomous
+                                                               driving: 1) Most existing VLA architectures are based on
+1. Introduction                                          autoregressive or diffusion models that require multiple
+                                                            inference steps to generate actions, limiting their suitabil-
+Autonomous driving (AD) is a highly complex system                                                                       ity for real-time, high-frequency control. 2) Current VLA
+that requires precise environmental perception and reliable                                                     methods lack robust generalization to new vehicle platforms
+driving behavior generation.  Traditional end-to-end AD                                                            or unseen driving scenarios. We argue that developing a
+methods initially advanced the field but face issues such                                                          general-purpose foundation VLA requires diverse, large-
+                                                              scale datasets that encompass various environments and  *Equal contribution  1National University of Singapore, Sin-
+gapore 2Lanzhou University, China 3Meituan LongCat Team    vehicle configurations. 3) Existing fine-tuning strategies
+4Tsinghua University, China 5University of New South Wales,    are often inefficient in exploring the full potential of VLAs,
+Australia 6University of Science and Technology of China, China.    constraining their generalization capability.
+Correspondence to: Fei Shen <shenfei29@nus.edu.sg>, Qingguo
+Zhou <zhouqg@lzu.edu.cn>.                           To address these challenges, we propose Reasoning-VLA,
+                      rd                                  an efficient and generalist VLA framework that establishes
+Proceedings of the 43   International Conference on Machine                                                        a new state-of-the-art for autonomous driving.  First, we
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026
+                                                         design a novel interaction mechanism between action andby the author(s).
+
+
+                                                1
+
+=== PDF PAGE 2 ===
+                                             Reasoning-VLA
+
+                Reasoning-VLA Pipeline
+                                                                                               N Hidden States
+
+
+                                                                                      VLto A                          Refinement                                   VLM                              Parallel Action                  Question                                                                       Interaction
+         CoT Reasoning Prompt
+           Ego Status Prompt                                                                   Learnable Action Query
+                        ......                       Images                       Text                                                                         x1, y1,  ...... xn, yn            <answer></answer>                                                                      Gaussian Distribution Initializing
+
+
+                Training Process
+
+                                                                                                      Generated                                                                                                                 Answer:                                                                                                                                                                                                               [-3.75,                                                                                                                                                                                                                0.05],                                  ...     CoT Reasoning                                                                                    t-3.0s                                                                                                                                [0.00, 0.01],                                                                                                                                             [3.30, -0.03],                                                                                                                                                                                            Acceleration:                                                                                                                                      X                 Rule-Based Reward
+                                                                   Structured Reasoning      [6.67,[12.67,-0.16],-0.10],[9.71,[15.39,0.13],-0.28],                                          -1.12,m/s^2,YVelocity:0.13      Policy
+                          User: You are an autonomous driving                                                        [17.78, -0.23], [20.57, -0.51],                          X 0.57, Y 0.0     Model
+                           agent. You have access to multi-view                                                        [22.74, -0.22], [24.89, -0.37]                                 m/s
+                      camera images..                              Causal Reasoning
+                             Assistant:                                  Provided                                            are                                                 the                                                    previous                                                   ego                                                                                                                                                                          t-2.0s
+                            vehicle                                      status.                                 The                                           data                                                                is presented                                                                          in                                                                                                                                                                                           [-3.6,                                                                                                                                                                                0.02],
+                           the                              format                                                 [x,                                                y]:(t-3.0s)                                                         [-0.35,                                                               0.02],                                                                                                                                                               Acceleration:                                                                                                                   X                                                                                          KL                            Acceleration:                            X                                              -0.52,                                 Y                                                0.23                                                    m/s^2,                                                                                                                                                               0.84,                                                                                                             Y                                                                                                                                                        0.12                                                                      Strategy QA          Regression                             Velocity:                         X                                       0.49,                              Y 0.0                                                m/s,                                                              (t-2.5s)                                                                     [-0.16,                                                                                                                                                  m/s^2,                                                                                                                                                                                Velocity:                                                                                                                    X
+                              0.02],                                  Acceleration:                                X                                                    -0.38,                                     Y                                                     0.26                                                          m/s^2,                                                                                                                                                               0.22,                                                                                                             Y                                                                                                                                                                0.0 m/s
+                           Qestion:                               Your                                         task                                                         is                                                    to                                         do                                                  your                                                        best                                                                     to
+                             predict future waypoints for the vehicle                  Math QA
+                                                                                                                                                                                                         t-1.0s                         over                                the                                  next                                 10                                                  timesteps......                                                                            GT                                                                                                          Answer:
+                                                                                                                                                                                                                             [-2.9,                                                                                                                                                                                                               0.01],                                                                                                                                [0.00,                                                                                                                                      0.00],                                                                                                                                             [3.36,                                                                                                                                                        -0.02],
+                                                                                                                                                                                            Acceleration:                                                                                                                                      X  Reference                                                                                                                                [6.60,                                                                                                                                          -0.06],                                                                                                                                              [9.75,                                                                                                                                                         -0.11],                  GT                           Answer:                                           [0.00,                                                  0.00],                                                         [3.36,                                                                 -0.02],                                                        Answer Generation                                                                                                                                                                                                         2.2,                                                                                                                                Y                                                                                                                                                                                  0.06                                                                                                                          [12.75,                                                                                                                                            -0.16],                                                                                                                                        [15.52,                                                                                                                                                           -0.20],                                                                                                  Model                              [6.60,                                      -0.06],                                            [9.75,                                                    -0.11],                                                        [12.75,                                                                    -0.16],                                                                                                                                                                             m/s^2,                                                                                                                                                                                                               Velocity:                                                                                                                          [17.85,                                                                                                                                            -0.27],                                                                                                                                        [20.48,                                                                                                                                                           -0.30],                             [15.52,                                       -0.20],                                           [17.85,                                                       -0.27],                                                          [20.48,                                                                                      -                                                                                                                             X                                                                                                                                                                                               1.72,                                                                                                                                  Y 0.0                                                                                                                          [22.63,                                                                                                                                            -0.32],                                                                                                                                        [24.46,                                                                                                                                                    -0.42]                              0.30],                                   [22.63,                                              -0.32],                                                  [24.46,                                                           -0.42]                                                                                                                                                            m/s
+                                 SFT                                                  RL
+Figure 1. Reasoning-VLA is an efficient Vision–Language–Action (VLA) framework for autonomous driving that employs parallel
+actions to interact with reasoning-enhanced vision–language models (VLMs), enabling one-step prediction of future trajectories. The
+model is trained on our unified and generalized autonomous driving dataset using a combination of supervised fine-tuning (SFT) and
+reinforcement learning (RL), guided by specifically designed rule-based reward functions.
+
+vision–language modalities by introducing a set of learnable        based autonomous driving dataset that merges eight
+action queries, implicitly guided by predefined spatial rep-         existing datasets, facilitating generalization across ve-
+resentations to enhance spatial awareness. These learnable          hicle types and driving environments.
+queries interact with reasoning-enhanced vision–language
+representations through cross-attention to extract action-        • We employ a combined SFT and RL fine-tuning strat-
+related information efficiently and generate continuous tra-        egy augmented with physical and dynamic rewards to
+jectories in parallel.  Second, to enable generalization,        enhance the general reasoning ability of Reasoning-
+we construct a unified, Chain-of-Thought reasoning-based      VLA, achieving substantial improvements over prior
+dataset that merges eight publicly available autonomous        methods.
+driving datasets into a coherent and easy-to-use format.
+This dataset covers diverse vehicle platforms and driving    2. Related Work
+scenarios, enhancing the generalization ability of Reasoning-
+                                                                    2.1. Vision-Language-Action Models
+VLA. Finally, we adopt a two-stage training strategy that
+combines supervised fine-tuning (SFT) and reinforcement    With the rapid advancement of VLMs in recent years (Rad-
+learning (RL) to fully exploit the model’s reasoning and    ford et al., 2021; Zhu et al., 2023; Li et al., 2022a; 2023; Bai
+planning potential. Extensive experiments demonstrate that     et al., 2025; Liu et al., 2025; Zhu et al., 2025), researchers
+Reasoning-VLA significantly improves generalization abil-   have increasingly integrated VLMs into autonomous driv-
+ity, planning performance, and inference speed compared    ing and robotic systems to enhance overall performance.
+with existing VLA approaches. To summarize, the main    For instance, DriveVLM and DriveMM (Tian et al., 2024;
+contributions are as follows:                          Huang et al., 2024) incorporate VLM modules to improve
+                                                                   situational understanding and enhance generalization in ve-
+   • We propose Reasoning-VLA, an efficient and general     hicle control. DriveMLM (Wang et al., 2023) introduces
+   VLA framework that employs learnable action queries    a behavior planning module that produces optimal driv-
+     to interact with reasoning-enhanced vision–language    ing decisions along with rationales. Although these meth-
+     representations, enabling one-step parallel action gen-    ods effectively model vision-language representations, they
+     eration.                                                often neglect the role of action generation, limiting their
+                                                                 practical applicability. To address this, recent works have
+   • We introduce an Implicit Spatial Guidance strategy,
+                                                           explored integrating vision-language understanding with ac-
+    which enhances spatial awareness during the initializa-
+                                                                  tion prediction, directly fine-tuning large pre-trained VLMs
+     tion of learnable action queries.
+                                                                to estimate robot actions (Brohan et al., 2023; Black et al.,
+   • We construct a unified, Chain-of-Thought reasoning-    2024; Zhang et al., 2025b). These approaches, commonly
+
+                                                2
+
+=== PDF PAGE 3 ===
+                                             Reasoning-VLA
+
+referred to as Vision–Language–Action (VLA) models. Re-    sights.
+cent representative VLA methods demonstrate significant
+performance improvements. OpenVLA (Kim et al., 2024)     3.1. Preliminaries: Vision-Language Models
+employs a pre-trained VLM combined with a discretization    In this work, we adopt Qwen2.5-VL (Bai et al., 2025) as
+bin tokenizer to predict actions. Similarly, π0.5 (Intelligence    our foundational model. Qwen2.5-VL effectively simulates
+et al., 2025) leverages co-training and hybrid multimodal    human-like analytical thinking, supporting multi-step rea-
+examples—incorporating robot observations, language in-    soning, deliberate planning, and problem-solving. Qwen2.5-
+structions, and low-level actions—within a single unified   VL incorporates several architectural innovations: a re-
+model, achieving SOTA performance. The success of VLAs    designed Vision Transformer (ViT) with 2D-RoPE and
+in robotics provides a promising direction for autonomous   windowed attention for computational efficiency; an MLP-
+driving. Some approaches extend novel VLM architectures    based vision–language merger that compresses visual fea-
+to train billion-parameter policies with task-specific modifi-    tures into tokens suitable for the LLM; and a large language
+cations, offering a direct pathway for AD systems to benefit    model initialized with pre-trained Qwen2.5 weights. The
+from rapid VLM advancements (Yuan et al., 2025). How-   model not only exhibits strong vision–language understand-
+ever, most existing VLA methods rely on autoregressive    ing but also maintains robust LLM reasoning capabilities.
+or diffusion-based training and inference, which inherently    Furthermore, it generalizes effectively across domains with-
+limits their speed and efficiency (Yang et al., 2025).           out requiring task-specific fine-tuning, making it a suitable
+                                                          base model for applications such as autonomous driving and
+2.2. Fine-tuning with Reinforcement Learning              action execution in real-world scenarios.
+
+With the development of extensive pre-training techniques                                                                    3.2. The Structure of Reasoning-VLA
+and high-level general capabilities, Reinforcement Learn-
+                                                 Most existing Vision-Language-Action (VLA) methods ei-ing (RL) has achieved remarkable success in advancing
+                                                                   ther rely on a specialized action tokenizer to convert actionsthe reasoning and decision-making abilities of LLMs. Re-
+                                                                into a format compatible with LLMs, followed by autore-inforcement Learning from Human Feedback (RLHF) ap-
+                                                                gressive generation or employ diffusion/flow matching mod-proaches, such as PPO (Schulman et al., 2017), typically
+                                                                ules to refine VLM hidden states or noise in order to producerequire training a reward model to optimize the policy net-
+                                                          continuous action values. In contrast, our Reasoning-VLA,work. However, this process can be complex and often
+                                                                    built on the Qwen2.5-VL symbolic reasoning framework,unstable. Notably, models such as GPT-4 (OpenAI et al.,
+                                                         fundamentally differs from these autoregression-based and2024) follow this RL-based fine-tuning paradigm. Build-
+                                                            diffusion-based approaches (Black et al., 2024; Kim et al.,ing upon PPO, DPO (Rafailov et al., 2023) fine-tunes pre-
+                                                       2024; Yuan et al., 2025). To bridge vision-language repre-trained models to follow instructions and align with human
+                                                                 sentations and action prediction, Reasoning-VLA comprisespreferences, while eliminating the need for sampling during
+                                                              three primary components: A pre-trained VLM reasoningfine-tuning. Similarly, Qwen3 (Wu et al., 2025) employs
+                                                      backbone; A VL-to-Action module that leverages a set ofDPO to improve performance in applications. Another vari-
+                                                             learnable action queries for parallel action decoding; Aant, GRPO (Shao et al., 2024), uses sampling to estimate
+                                                          refinement module that enhances action prediction perfor-advantages, thereby effectively enhancing the reasoning ca-
+                                                    mance. As illustrated in Fig. 1, these queries are guidedpabilities of actors. For example, DeepSeek-R1 (Guo et al.,
+                                                          with spatial awareness and undergo self-attention and cross-2025) applies GRPO to advance LLM reasoning, emphasiz-
+                                                                attention with the VLM simultaneously. By employinging self-evolution rather than fine-tuning data. Inspired by
+                                                              additional learnable queries, Reasoning-VLA can predictthese methods, recent works have adopted analogous RL-
+                                                               action chunks in a single step, rather than generating actionsbased fine-tuning strategies to improve the reasoning and
+                                                        token by token, as required in autoregressive approaches.decision-making capabilities of autonomous driving models
+                                                The features from these action queries, together with inter-(Yuan et al., 2025).
+                                                        mediate VLM representations, are subsequently processed
+3. Method                                         by a series of refinement modules to produce the final action
+                                                                     trajectories. The architectural design of Reasoning-VLA
+As illustrated in Fig. 1, the Reasoning-VLA framework com-
+                                                                  offers four key advantages:
+prises three main components: (1) a reasoning-enhanced
+vision–language model (VLM) backbone, (2) an action mod-    1. Leverages the reasoning capabilities of the VLM for more
+ule that interacts with the VLM and enables parallel decod-    informed and context-aware action generation.
+ing of action trajectories, and (3) a multi-stage intermediate                                                                  2.  Parallel action generation via action queries enables
+refinement module. In the following sections, we present a
+                                                                    significantly higher inference speed compared to autoregres-
+detailed description of our approach to developing a VLA                                                                      sive.
+framework for autonomous driving and highlight key in-
+
+
+                                                3
+
+=== PDF PAGE 4 ===
+                                             Reasoning-VLA
+
+3. Learnable action queries are guided with implicit spatial
+enhancement, improving model performance.                                           VLM                                                                                                                                                                                                                                                                                                                                   Learnable
+4. Refinement modules interact with intermediate hidden                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      Embeddings                    Cross-Attn                      Self-Attn                  Implicit Spatial Guidance               Actionstates to enhance feature representation and trajectory accu-                                                                                                                                                                                                                                                                                                   Queries
+                                                                                                                                                                                                Gaussian                                                                                                                                                                                           Sampleracy.                                                                                                                                    Image                                                                                                                                                                                        Text                                                                                                                                                                         Reasoning                                                                                                                                                                                                                                                   Distribution                                                                                                                                                                                                                                                                of Data
+                                                                                                                      KV Cache                                                                                                                              KV Cache                                                                                                                                       KV Cache            Action KV
+3.3. Learnable Action Queries and Implicit Spatial
+                                                               Figure 2. The action module interacts with the vision-language
+   Guidance                                                         model (VLM). The learnable action queries are initialized using a
+3.3.1. LEARNABLE ACTION QUERIES                      Gaussian distribution derived from the ground-truth (GT) action
+                                                                          data. Through self-attention and cross-attention mechanisms with
+We initialize a set of learnable action queries AQ ∈T ×N×     the reasoning VLM, the model transfers the generalized reasoning
+D. Here T is the number of future time steps to be predicted,     capability from the VL to A.
+N is the dimensions of action trajectory coordinate, D is the
+feature dimensionality. As shown in Fig.2. Unlike VLMs,
+which embedded input tokens into embeddings, our action                                                                    3.4. How Do Actions Interact with Vision-Language
+queries are initialized as learnable parameters. This design                                                       Reasoning?
+provides greater flexibility and expressive capacity, enabling                                                       Unlike autoregression-based or diffusion-based vision-
+parallel prediction of action trajectories, and offering an                                                          language-action (VLA) methods, our approach employs
+efficient alternative to sequential token generation.                                                        independent learnable action queries to predict action tra-
+3.3.2. IMPLICIT SPATIAL GUIDANCE                           jectories. Consequently, the interaction between the action
+                                                  module and the vision-language model (VLM) differs sub-
+To enhance accurate spatial awareness and accelerate train-                                                                          stantially. Since the action queries are not tied to the VLM’s
+ing convergence, this module initializes learnable action                                                         token representations, they first perform self-attention and
+queries with predefined geometric representations derived                                                          then interact with the VLM through cross-attention, as il-
+from ground-truth statistics. These representations guide                                                                 lustrated in Fig. 2. Through these attention mechanisms,
+the learnable action queries to develop robust spatial com-                                                             the action queries can extract rich and semantically mean-
+prehension capabilities. By enforcing alignment at the ini-                                                              ingful information from the VLM’s hidden states, which
+tialization stage of action queries, this module enables our                                                            contain extensive reasoning content. This interaction strat-
+VLA to encode richer spatial features, thereby improving                                                    egy provides a significant advantage: the action queries
+action precision. These predefined geometric representa-                                                      can generate all expected actions in parallel during a sin-
+tions parameters must satisfy two criteria: 1. The predefined                                                             gle forward pass, enabling efficient action chunking. This
+parameters must match the shape of action queries; 2. The                                                               contrasts with autoregression-based VLAs that require se-
+reasonable initial values that reflect typical action distribu-                                                               quential token-by-token processing. Our approach reduces
+tions and are equipped with spatial information. Given that                                                               action generation from more than N × T sequential passes
+the total number of action values is T × N, in our method,                                                                to a single pass, substantially improving both training and
+we predict future T steps for N coordinates (e.g., x, y), total                                                            inference efficiency.  Furthermore, we eliminate the dis-
+action query is N × T. We have to generate T × N action                                                                 cretization process used in autoregressive VLAs, which
+queries with D dimensions.                                                            often degrades fine-grained action details. In addition, we
+Specifically, we extract the action trajectory values of    replace the causal attention mask with bidirectional mask,
+each frame firstly (each frame have N × T action val-    allowing models to predict all actions simultaneously.
+ues, the total action trajectory values are Dall × N ×
+                                                                    3.5. Action Refinement ModuleT, where Dall  is the  total number of frames in our
+datasets), then we calculate the mean action values, such   To further enhance the representation quality and accuracy
+as, x1, y1, x2, y2, xi, yi, ..., xN, yN, each xi, yi represents    of the predicted action trajectories, we introduce an Ac-
+the average coordinate for the corresponding position. To     tion Refinement Module (ARM). Specifically, the ARM
+match the feature dimension of action queries, we extend    takes the selected hidden states of the action queries as in-
+the N × T action values to N × T × D, by sampling D    put and refines them through a combination of multilayer
+values from a Gaussian distribution with the previously cal-    perceptron (MLP) and attention mechanisms. Unlike next-
+culated mean and variance. This procedure completes the    token prediction methods (e.g., π0), which employ discrete
+initialization of the learnable action queries, providing a    action representations, our approach adopts a regression-
+well-structured and informative starting point for training.     based strategy to generate continuous actions. This design
+                                                           preserves the efficiency benefits of parallel action predic-
+                                                                tion while improving the precision and smoothness of the
+                                                                 resulting action trajectories.
+
+                                                4
+
+=== PDF PAGE 5 ===
+                                             Reasoning-VLA
+
+3.6. SFT and RL
+
+Drawing inspiration from recent advances in VLMs, we
+employ two complementary training strategies to enhance
+the generalization ability of our model: supervised fine-
+tuning (SFT) and reinforcement learning (RL) fine-tuning.
+
+SFT. In this stage, we utilize our unified reasoning dataset
+to construct structured reasoning chains. Prior studies in
+VLMs have shown that base models tend to generate tangen-
+tial or unstructured responses without supervised fine-tuning.                                                                     Figure 3. Statistical distribution of the unified dataset.
+Therefore, the SFT process is essential for establishing a
+solid foundation for subsequent RL training. Reasoning-
+                                                         Vehicle Dynamic Reward In autonomous driving, most
+VLA demonstrates excellent performance on the unified
+                                                               existing studies rarely incorporate vehicle kinematic and
+reasoning dataset after SFT.
+                                                     dynamic constraints into motion trajectory prediction. How-
+RL. Although SFT effectively fits the training data, it often     ever, these constraints exert a non-negligible influence on
+struggles to generalize to unseen or out-of-distribution sce-    the vehicle’s behavior and overall driving safety. To address
+narios. To address this limitation, we apply the GRPO     this limitation, we propose a Vehicle Dynamics Reward that
+(Shao et al., 2024) during RL fine-tuning.  Unlike con-    explicitly accounts for steering and acceleration to constrain
+ventional policy-based methods, GRPO replaces the critic    the limitations of real-world vehicle dynamics. This de-
+model—typically as large as the policy model—with an    sign establishes a dynamic constraint optimization objective
+estimation of group scores. This design not only simplifies     that ensures physically feasible and stable motion trajec-
+the overall architecture but also significantly reduces com-     tories. The generated action trajectories are governed by
+putational overhead during training. The rule-based reward    both steering kinematics and acceleration dynamics. Specif-
+functions used for RL optimization are introduced in the     ically, the maximum steering angle is limited to 40 degrees,
+following subsection.                                   and the maximum acceleration is constrained to 0.6 gravity.
+                                                      Moreover, abrupt changes in steering or acceleration may
+3.7. Reward Functions                                     lead to vehicle instability or discomfort for passengers. To
+                                                           achieve comfortable and safe driving behavior, the steering
+Normally, AD methods use BEV 2-dimensions coordinates                                                                constraint reward is defined as:
+x, y to optimize the loss function, while neglecting phys-
+                                                       N−1                                         (1, | yj −yj−1 / xj −xj−1  | < 0.84                                                           1ical trajectory constraints and vehicle dynamics.  In our                      X                                                                                      rsteer =
+RL fine-tuning stage, we design two types of verifiable re-      N −1                                                                     j=1   0, | yj −yj−1 / xj −xj−1  | ≥0.84
+ward functions to more accurately evaluate and enhance the                                                              (2)
+quality of generated responses.                           where (xj, yj) and (xj−1, yj−1) respectively denote the pre-
+Physical  Trajectory Reward  Different  from  most    dicted coordinates at j −th and (j −1) −th time step. In
+regression-based reward functions that employ the mean     this reward function, we reward with 1 when the turning
+squared Euclidean distance N1 PNi=1(xi −xigt)2, we adopt    angle is less than 0.84.
+a weighted Euclidean distance to better align the predicted   We further introduce an Acceleration Reward to constrain
+coordinates with the ground-truth trajectories. Specifically,                                                           non-physical vehicle dynamics. The acceleration reward is
+our physical trajectory reward is defined as:                                                            defined as:
+           N
+   rtraj = 1 −1     X γi α(xi −xigt)2 + β(yi −yigt)2   (1)         p(xj+1 −xj)2 + (yj+1 −yj)2       N                                                                   accj =                i=1                                                                 T 2                                                                                                                           (3)
+                                p(xj −xj−1)2 + (yj −yj−1)2where N is the number of trajectory steps, xi and yi are the         −
+predicted coordinates at the i-th time step, and xigt and yigt                         T 2
+are their corresponding ground-truth values. Because the
+x and y coordinates in autonomous driving often differ in
+                                                                   1                                                             N−2 (1,   |accj| < 6
+scale, the weighting factors α and β are introduced to bal-                 racc =  X                           (4)
+                                         N −2                                                                                                  0,   |accj| ≥6                                                                             j=1ance their respective contributions to the reward. The term
+γi represents a discount factor that reduces the influence
+of future trajectory points. This reward function encour-   Here N is the number of trajectory steps, T is the time
+ages the autonomous vehicle to follow the desired route by     interval between consecutive actions, j is the j-th trajectory
+penalizing deviations across the entire trajectory.                step.
+
+                                                5
+
+=== PDF PAGE 6 ===
+                                             Reasoning-VLA
+
+Table 1. Open-loop performance on the nuScenes dataset. Our fully generalized methods, Reasoning-VLA-3B and Reasoning-VLA-7B,
+follow the complete SFT and RL training process described in the Methods section. The training dataset is our unified dataset, which is
+constructed from eight public datasets. The validation dataset comprises the corresponding nuScenes validation clips from the unified
+dataset. Reasoning-VLA-7B+ is fine-tuned with an additional RL process using the corresponding nuScenes training clips from the
+unified dataset. *: Official checkpoints re-validated with corrected metrics, sourced from (Hu et al., 2022). †: Reproduced with our united
+dataset(same train and val datasets with Reasoning-VLA. Reasoning-VLA-7B represents our general model.
+
+                                        L2 (m) ↓                     Collision Rate (%) ↓
+              Methods                                          1s      2s      3s     Avg.     1s      2s      3s     Avg.
+    End2End Autonomous Driving Methods
+         ST-P3(Hu et al., 2022)          1.33     2.11     2.90     2.11     0.23     0.62     1.27     0.71
+        UniAD(Hu et al., 2023)*         0.45     0.70     1.04     0.73     0.62     0.58     0.63     0.61
+         VAD(Jiang et al., 2023)*         0.41     0.70     1.05     0.72     0.07     0.17     0.41     0.22
+       PPAD(Chen et al., 2024b)         0.30     0.69     1.26     0.75     0.03     0.22     0.73     0.33
+       SparseDrive(Sun et al., 2024)       0.29     0.63     0.97     0.63     0.03     0.09     0.19     0.10
+   VLM & VLA Autonomous Driving Methods
+     DriveVLM-Dual(Tian et al., 2024)     0.15     0.29     0.48     0.31     0.05     0.08     0.17     0.10
+      OmniDrive(Wang et al., 2025)       0.14     0.29     0.55     0.33     0.00     0.13     0.78     0.30
+     EMMA+(Hwang et al., 2025)       0.13     0.27     0.48     0.29     –       –       –       –
+      AutoVLA (Zhou et al., 2025)       0.21     0.38     0.60     0.40     0.13     0.18     0.28     0.20
+     AutoDrive-R2 (Yuan et al., 2025)†     0.16     0.29     0.47     0.31     0.03     0.12     0.30     0.15
+    Impromptu-VLA(Chi et al., 2025)†     0.14     0.30     0.51     0.32     –       –       –       –
+     Impromptu-VLA(Chi et al., 2025)     0.13     0.27     0.53     0.30     –       –       –       –
+    Our Reasoning-VLA Methods
+          Reasoning-VLA-3B            0.08     0.33     0.48     0.30     0.04     0.13     0.23     0.13
+          Reasoning-VLA-7B           0.05     0.20     0.44     0.23     0.01     0.07     0.15     0.08
+          Reasoning-VLA-7B+           0.05     0.19     0.41     0.22     0.02     0.06     0.13     0.07
+
+
+As shown in equation above, the reward function effectively     quality clips to form a reasoning-intensive dataset. Each clip
+constrains steering and acceleration within physical limits,   was processed using a strong reasoning VLM to generate
+ensuring that the generated action trajectories are both phys-    Chain-of-Thought descriptions, followed by comprehensive
+ically realizable and socially acceptable in mixed traffic sce-   human verification and visualization to ensure correctness
+narios. This design further reinforces the autonomous driv-   and annotation quality. The final dataset is provided in
+ing system’s ability to maintain stable and reasonable mo-    a consistent, standardized format, facilitating downstream
+tion patterns, which are essential for safe and comfortable     training and evaluation. The statistical analysis of the result-
+driving. The final reward rtotal is defined as the weighted    ing unified dataset is presented in Fig. 3. The processing
+sum of rtraj, rsteer and racc.                                 pipeline for the unified dataset is illustrated in Fig. 5 of
+                                                    Appendix B. A representation of the dataset is also provided
+                   rtotal = θ1rtraj + θ2rsteer + θ3racc           (5)    in the Appendix B.
+                                                        5. Experiments
+Here, θ1, θ2, θ3 are coefficients that balance the contribu-
+tions of each sub-reward.                       We conduct experiments to evaluate Reasoning-VLA as
+                                                     an efficient VLA method for autonomous driving, assess
+4. Unified Datasets                                      the effectiveness of our training process, and explore its
+To capture diverse driving scenarios and further improve     potential as a unified base model for specific autonomous
+generalization, we specifically selected eight widely used au-    driving tasks. The experiments are designed to answer the
+tonomous driving datasets as the foundation for our unified    following questions:
+dataset: NAVSIM (Dauner et al., 2024), nuScenes (Cae-                                                                     1. How does Reasoning-VLA compare to prior autonomous
+sar et al., 2020), Waymo (Sun et al., 2020), Argoverse-V2                                                             driving VLA, when evaluated across multiple datasets and
+(Wilson et al., 2023), KITTI (Geiger et al., 2013), Mapil-                                                        under various generalization scenarios?
+lary (Neuhold et al., 2017), ONCE (Mao et al., 2021), and
+IDD (Varma et al., 2019). However, many of the origi-    2. How does each design affect the performance of fine-
+nal clips lack meaningful text-image associations and often    tuned Reasoning-VLA on general autonomous driving
+have coarse annotations, limiting their suitability for vision-    tasks?
+language-action (VLA) reasoning and creative generation.                                                                  3. Can the design of Reasoning-VLA influence inference
+From these sources, we carefully selected over 75,000 high-    efficiency (action generation throughput and latency) and
+
+
+                                                6
+
+=== PDF PAGE 7 ===
+                                             Reasoning-VLA
+
+Table 2. Closed-loop performance on the NeuroNCAP. We utilize the challenging closed-loop NeuroNCAP simulator to emulate a wide
+range of complex real-world driving scenarios. Since NeuroNCAP offers a standardized benchmark and evaluation metrics commonly
+used by other methods, we adhered to its recommended configuration. The Reasoning-VLA modules and fine-tuning process are identical
+to those employed in the open-loop evaluation. *: Sourced from (Ljungbergh & et al., 2024; Zhang et al., 2025a). †: Reproduced with our
+united dataset(same train and val datasets with Reasoning-VLA.
+
+                                 NeuroNCAP Score ↑                  Collision Rate (%) ↓
+            Methods                                         Stationary   Frontal   Side   Avg.   Stationary   Frontal   Side   Avg.
+  End2End & VLA Autonomous Driving Methods
+      UniAD(Hu et al., 2023)*           0.84       0.10     1.26   0.73      87.8       98.4     79.6   88.6
+      VAD(Jiang et al., 2023)*           0.47       0.04     1.45   0.66      96.2       99.6     81.6   92.5
+    SparseDrive(Sun et al., 2024)*        –         –      –     0.92       –         –      –     93.9
+  BridgeAD-B(Zhang et al., 2025a)*       –         –      –     1.60       –         –      –     72.6
+  AutoDrive-R2 (Yuan et al., 2025)†      1.64       2.11     1.93   1.89      68.2       59.5     62.2   63.3
+  Impromptu-VLA(Chi et al., 2025)†      1.50       2.08     1.96   1.85      71.3       58.1     69.5   66.3
+   Impromptu-VLA(Chi et al., 2025)      1.77       2.31     2.10   2.15      70.0       59.0     65.0   65.5
+  Our Reasoning-VLA Methods
+        Reasoning-VLA-3B             1.88       2.29     1.94   2.04      63.7       60.4     64.1   62.7
+        Reasoning-VLA-7B             1.93       2.57     2.24   2.25      59.8       56.0     62.2   59.4
+        Reasoning-VLA-7B+            2.06       2.33     2.17   2.19      57.9       57.4     64.0   59.8
+
+
+make it more accessible?                                     ized model, Reasoning-VLA-7B, surpasses previous works
+                                                             across benchmarks, achieving substantial improvements of
+5.1. Experiment Setups                             +23.3% in average L2 and +20.0% in average Collision
+                                                      Rate over the existing best methods. Reasoning-VLA-3B
+In our experiments, we mainly evaluate Reasoning-VLA’s                                                              also achieves results comparable to state-of-the-art meth-
+performance on unified AD datasets, which are constructed                                                              ods. When fine-tuned with GRPO on specific datasets (i.e.,
+from eight autonomous driving datasets. To fairly compare                                                              selected nuScenes training clips from the unified dataset),
+with existing methods, we retain the original training and                                                         our generalized model demonstrates excellent task-specific
+testing splits of each dataset. During training, we shuffle the                                                          performance. As shown in the last row of Table 1, the addi-
+unified datasets and fine-tune Reasoning-VLA sequentially                                                                  tional fine-tuning further improves performance across all
+using SFT followed by RL. The decay learning rate are                                                         time intervals: Reasoning-VLA-7B+ achieves increases of
+start from 5e-4 and e-6 form SFT and RL separately, the                                                  4.3% and 12.5% over Reasoning-VLA-7B in average L2 and
+accumulated size is 2. Training is performed for 4 epochs                                                              Collision Rate, respectively. These results indicate that our
+for SFT and 1 epoch for RL, using a total batch size of 8                                                      approach provides significant improvements in open-loop
+distributed across 8 H200 GPUs. For open-loop evaluation,                                                               evaluation, highlighting the strong generalization capabil-
+we use the same testing and validation clips as employed                                                                       ity of the Reasoning-VLA architecture. Consequently, it
+by prior methods. For closed-loop evaluation, the model                                                      can serve as an effective base model for downstream au-
+is tested on the NeuroNCAP benchmark to enable a fair                                                   tonomous driving tasks.
+comparison with other approaches.
+                                                             5.2.2. CLOSED-LOOP EVALUATION
+5.2. Main Comparison Results                                        We use NeuroNCAP (Ljungbergh et al., 2024) as the closed-
+5.2.1. OPEN-LOOP EVALUATION                          loop real-world simulator because it provides renderings of
+Since our goal is to propose a generalized VLA model for    novel, unseen scenarios. As shown in Table 2, the three main
+autonomous driving, we train our model using the proposed    models evaluated are the same as those in the open-loop ex-
+unified dataset. To ensure a fair comparison with prior meth-    periments. Our methods demonstrate significant advantages
+ods, we adopt the same validation splits and report results on     in closed-loop performance on NeuroNCAP. The general-
+open-loop benchmarks. The open-loop performance on the    ized model, Reasoning-VLA-7B, substantially outperforms
+nuScenes dataset is summarized in Table 1. Three main mod-    prior methods in terms of NeuroNCAP Score and Colli-
+els are presented in this table: Reasoning-VLA-3B: Based    sion Rate, achieving an average NeuroNCAP Score of 2.25
+on Qwen2.5-VL-3B, trained using the complete SFT and RL    and an average Collision Rate of 59.4. When additionally
+process. Reasoning-VLA-7B: Based on Qwen2.5-VL-7B     fine-tuned with RL on selected nuScenes training clips from
+and fine-tuned using the SFT and RL process. Reasoning-    the unified dataset, performance on stationary scenarios
+VLA-7B+: Similar to Reasoning-VLA-7B, but additionally    shows slight improvement; however, overall performance
+fine-tuned with RL on selected nuScenes training clips from    decreases. This is because the smaller nuScenes dataset
+the unified dataset. Our results show that the purely general-    adjusts the model to fit that specific data, thereby reducing
+
+
+                                                7
+
+=== PDF PAGE 8 ===
+                                             Reasoning-VLA
+
+Table 3. Generalized performance on our unifed dataset. We trained two models using the unified dataset: Reasoning-VLA-7B +
+SFT: This model is fine-tuned using only supervised fine-tuning (SFT). Reasoning-VLA-7B + SFT + RL: This model undergoes the full
+training process, including both SFT and reinforcement learning (RL). The training dataset for both models is the unified training dataset.
+For evaluation, the dataset splits follow the recommendations provided by each original dataset.
+
+                                    Reasoning-VLA-7B + SFT      Reasoning-VLA-7B + SFT + RL
+                Datasets                                       L2 (m) ↓                    L2 (m) ↓
+                                         1s      2s      3s     Avg.     1s      2s      3s      Avg.
+     NAVSIM(Dauner et al., 2024)       0.05     0.18     0.43     0.22     0.04     0.18     0.41     0.21
+       nuScenes(Caesar et al., 2020)       0.06     0.23     0.48     0.26     0.05     0.20     0.44     0.23
+       Waymo(Sun et al., 2020)         0.04     0.15     0.44     0.21     0.03     0.14     0.48     0.22
+    Argoverse-V2(Wilson et al., 2023)     0.01     0.13     0.45     0.20     0.01     0.14     0.43     0.19
+        KITTI(Geiger et al., 2013)        0.02     0.15     0.48     0.22     0.01     0.15     0.43     0.20
+      Mapillary(Neuhold et al., 2017)      0.04     0.44     0.92     0.47     0.04     0.41     1.01     0.49
+       ONCE(Mao et al., 2021)         0.07     0.49     0.87     0.48     0.06     0.43     0.90     0.46
+        IDD(Varma et al., 2019)         0.02     0.29     0.77     0.36     0.03     0.27     0.81     0.37
+                 Unified                 0.05     0.20     0.47     0.24     0.05     0.20     0.44     0.23
+
+
+its generalization ability in closed-loop evaluation. Notably,    5.3. Ablation Study
+even Reasoning-VLA-3B surpasses competing methods,                                                             5.3.1. KEY DESIGN CONTRIBUTIONS
+achieving more than a 4.3% improvement in average Col-
+                                      We conducted ablation studies to evaluate the effective-lision Rate. These results demonstrate the strong general-
+                                                          ness of key component designs, with results summarizedization capability of our model, particularly in closed-loop
+                                                                in Table 4.  Five experimental groups were constructedenvironments that involve previously unseen scenarios.
+                                                         using different combinations of model components. As
+                                                shown in Group-1 of Tab.4, the evaluation result of origi-
+Table 4. Ablation study of components contributions. R-VLA    nal Qwen2.5-VL-7B in poor performance. Differently, in
+(Reasoning-VLA) is a 7B-parameter model. All experiments were                                                         Group-2, we replaced the learnable action queries with non-
+conducted on our unified dataset and evaluated using a selected
+                                                             learnable queries and trained the model exclusively on thesubset of the nuScenes dataset extracted from the unified dataset.
+                                                               unified dataset. This modification yielded suboptimal re-
+                            L2 (m) ↓              sults, achieving an average L2 of 0.32 and 0.30 with SFT          Methods                                1s   2s   3s  Avg.
+                                                      and SFT+RL fine-tuning, respectively. In Group-3, only the
+       Qwen2.5-VL-7B        0.46 1.33 2.55  1.45      implicit spatial enhance strategy of learnable action query
+     R-VLA(w/o AQ)+SFT     0.09 0.31 0.55  0.32     was removed, resulting in a slight performance degrada-
+   R-VLA(w/o AQ)+SFT+RL   0.08 0.30 0.52  0.30       tion compared to the full Reasoning-VLA model (Group-5),
+   R-VLA(w/o AQ-Init)+SFT   0.06 0.27 0.55  0.29     which proves the effectiveness of spatial enhancement. The
+ R-VLA(w/o AQ-Init)+SFT+RL 0.08 0.23 0.50  0.27       results from Groups 2 and 3 suggest that learnable action
+    R-VLA(w/o ARM)+SFT    0.06 0.28 0.53  0.29      queries significantly contribute to the model’s ability to gen-
+  R-VLA(w/o ARM)+SFT+RL  0.05 0.24 0.57  0.29       eralize across diverse autonomous driving scenarios, thereby
+       R-VLA+SFT          0.06 0.23 0.48  0.26     enhancing the overall performance of Reasoning-VLA. In
+      R-VLA+SFT+RL        0.05 0.20 0.44  0.23     Group-4, the action refinement module was removed, and
+                                                               actions were directly regressed from parallel action outputs
+                                                         using an MLP. This strategy led to a modest performance
+5.2.3. GENERALIZED PERFORMANCE                                                      drop relative to Group-5. Overall, these ablation studies
+To evaluate the generalization capability of Reasoning-VLA,    demonstrate that each component of Reasoning-VLA con-
+we tested Reasoning-VLA-7B on eight sub-datasets. As     tributes to its final performance, confirming the effectiveness
+shown in Table 3, our results demonstrate that Reasoning-    of the proposed design.
+VLA exhibits strong generalization performance. The model
+was trained on the unified dataset and evaluated separately                                                                    5.4. Zero-Shot Performance
+on each sub-dataset. We observed that the L2 performance
+for each sub-dataset closely matches that of the overall   We also conducted a ”zero shot” experiment to further val-
+unified validation dataset. The variance of the L2 values     idate the generalization capability of our model. Specifi-
+is minimal, with variance values of 0.012 and 0.014 for     cally, the unified dataset was partitioned into distinct sce-
+average L2 in Reasoning-VLA-7B with SFT and Reasoning-    narios, where the NAVSIM, Waymo, KITTI, and ONCE
+VLA-7B with SFT plus RL, respectively. These results    sub-datasets were used for training, and the remaining four
+indicate that our method maintains robust generalization    sub-datasets served as validation sets. As shown in Table
+across different driving scenarios and vehicle configurations.
+
+                                                8
+
+=== PDF PAGE 9 ===
+                                             Reasoning-VLA
+
+Table 5. Zero shot performance on our unified dataset. The unified dataset is divided into two parts: the training set, which includes
+data from NAVSIM, Waymo, KITTI, and ONCE, and the evaluation sets, which consist of the remaining four sub-datasets along with the
+unified validation set.
+
+                                    Reasoning-VLA-7B + SFT      Reasoning-VLA-7B + SFT + RL
+                Datasets                                       L2 (m) ↓                    L2 (m) ↓
+                                         1s      2s      3s     Avg.     1s      2s      3s      Avg.
+
+       nuScenes(Caesar et al., 2020)       0.07     0.24     0.52     0.28     0.08     0.26     0.50     0.28
+    Argoverse-V2(Wilson et al., 2023)     0.03     0.18     0.59     0.27     0.04     0.18     0.55     0.26
+      Mapillary(Neuhold et al., 2017)      0.08     0.59     1.09     0.59     0.07     0.57     1.01     0.55
+        IDD(Varma et al., 2019)         0.09     0.41     0.96     0.49     0.08     0.38     0.93     0.46
+                    All                   0.07     0.28     0.57     0.31     0.07     0.27     0.53     0.29
+
+                          Table 6. Performance on the NAVSIM. *: Sourced from (Dauner et al., 2024).
+
+            Methods           NC↑    DAC↑    TTC↑     Comfort↑    EP↑    PDMS↑
+
+     TransFuser(Chitta et al., 2022)*      97.7       92.8        92.8         100         79.2        84.0
+      UniAD(Hu et al., 2023)*         97.8       91.9        92.9         100         78.8        83.4
+     Para-Drive(Weng et al., 2024)*      97.9       92.4        93.0          99.8         79.3        84.0
+         Reasoning-VLA-7B           97.8       93.2        98.1          99.8         80.7        91.7
+
+
+5, our method exhibits strong generalization performance   Acknowledgements
+on unseen datasets. This experiment confirms that the pro-
+                                                          This research is supported by the National Research Founda-posed Reasoning-VLA possesses robust adaptability to new
+                                                                      tion, Singapore under its National Large Language Modelsdriving scenarios and tasks, highlighting its potential as a
+                                                    Funding Initiative (AISG Award No: AISG-NMLP-2024-general-purpose autonomous driving framework.
+                                                              002). Any opinions, findings and conclusions or recommen-
+                                                             dations expressed in this material are those of the author(s)
+5.5. Performance on NAVSIM
+                                                    and do not reflect the views of National Research Founda-
+Moreover, Tab.6 demonstrates the evaluation results on the     tion, Singapore.
+NAVSIM evaluation. Compared to the Para-Drive method,
+our approach achieves respective improvements of 0.8, 5.1,   Impact Statement
+1.4, and 7.7 in DAC, TTC, EP, and PDMS metrics. Over-
+all, the proposed model consistently delivers accurate and    This paper presents work whose goal is to advance the field
+reliable predictions across the NAVSIM evaluations, estab-    of Machine Learning. There are many potential societal
+lishing its state-of-the-art performance and strong general-    consequences of our work, none which we feel must be
+ization capability.                                                specifically highlighted here.
+
+6. Conclusions                                              References
+This paper presents a general and efficient VLA frame-
+work based on a reasoning-enhanced vision-language model    Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang,
+for autonomous driving. The proposed method introduces       K., Wang, P., Wang, S., Tang, J., Zhong, H., Zhu, Y.,
+learnable action queries, initialized through Gaussian sam-      Yang, M., Li, Z., Wan, J., Wang, P., Ding, W., Fu, Z., Xu,
+pling from ground-truth trajectories, which interact with        Y., Ye, J., Zhang, X., Xie, T., Cheng, Z., Zhang, H., Yang,
+reasoning-augmented vision–language features to generate        Z., Xu, H., and Lin, J. Qwen2.5-vl technical report. arXiv
+continuous action trajectories in parallel, thereby signifi-       preprint arXiv:2502.13923, 2025.
+cantly improving inference efficiency. To enhance general-
+ization, we unify eight existing autonomous driving datasets    Black, K., Brown, N., Driess, D., Esmail, A., Equi, M.,
+into a standardized, reasoning-based, and easy-to-use uni-      Finn, C., Fusai, N., Groom, L., Hausman, K., Ichter,
+fied dataset. Following supervised fine-tuning (SFT) and re-       B., Jakubczak, S., Jones, T., Ke, L., Levine, S., Li-
+inforcement learning (RL) optimization, our method demon-       Bell, A., Mothukuri, M., Nair, S., Pertsch, K., Shi,
+strates outstanding performance and strong generalization      L. X., Tanner, J., Vuong, Q., Walling, A., Wang, H.,
+capabilities in autonomous driving tasks.                    and Zhilinsky, U.  π0: A vision-language-action flow
+                                                    model for general robot control, 2024. URL https:
+
+                                                9
+
+=== PDF PAGE 10 ===
+                                             Reasoning-VLA
+
+  //arxiv.org/abs/2410.24164.                 Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R.,
+                                                         Zhu, Q., Ma, S., Wang, P., and et al. Deepseek-r1: Incen-
+Brohan, A., Brown, N., Carbajal, J., Chebotar, Y., Chen,                                                                    tivizing reasoning capability in llms via reinforcement
+  X., Choromanski, K., Ding, T., Driess, D., Dubey, A.,                                                                  learning, 2025. URL https://arxiv.org/abs/
+  Finn, C., Florence, P., Fu, C., Arenas, M. G., Gopalakr-                                              2501.12948.
+  ishnan, K., Han, K., Hausman, K., Herzog, A., Hsu, J.,
+   Ichter, B., Irpan, A., Joshi, N., Julian, R., Kalashnikov,   Hu, S., Chen, L., Wu, P., Li, H., Yan, J., and Tao, D. St-
+  D., Kuang, Y., Leal, I., Lee, L., Lee, T.-W. E., Levine,      p3: End-to-end vision-based autonomous driving via
+   S., Lu, Y., Michalewski, H., Mordatch, I., Pertsch, K.,      spatial-temporal feature learning, 2022. URL https:
+  Rao, K., Reymann, K., Ryoo, M., Salazar, G., Sanketi,    //arxiv.org/abs/2207.07601.
+   P., Sermanet, P., Singh, J., Singh, A., Soricut, R., Tran,
+  H., Vanhoucke, V., Vuong, Q., Wahid, A., Welker, S.,   Hu, Y., Yang, J., Chen, L., Li, K., Sima, C., Zhu, X., Chai, S.,
+  Wohlhart, P., Wu, J., Xia, F., Xiao, T., Xu, P., Xu, S.,      Du, S., Lin, T., Wang, W., Lu, L., Jia, X., Liu, Q., Dai, J.,
+  Yu, T., and Zitkovich, B. Rt-2: Vision-language-action      Qiao, Y., and Li, H. Planning-oriented autonomous driv-
+                                                                    ing, 2023. URL https://arxiv.org/abs/2212.  models transfer web knowledge to robotic control, 2023.
+                                                10156.  URL https://arxiv.org/abs/2307.15818.
+
+Caesar, H., Bankiti, V., Lang, A. H., Vora, S., Liong, V. E.,   Huang, J. and Huang, G. Bevdet4d: Exploit temporal cues
+  Xu, Q., Krishnan, A., Pan, Y., Baldan, G., and Beijbom,       in multi-camera 3d object detection, 2022. URL https:
+  O. nuscenes: A multimodal dataset for autonomous driv-    //arxiv.org/abs/2203.17054.
+   ing.  In Proceedings of the IEEE/CVF Conference on
+                                                   Huang, Z., Fen, C., Yan, F., Xiao, B., Jie, Z., Zhong, Y.,
+  Computer Vision and Pattern Recognition (CVPR), June
+                                                            Liang, X., and Ma, L. Drivemm: All-in-one large mul-
+  2020.
+                                                           timodal model for autonomous driving. arXiv preprint
+Chen, S., Jiang, B., Gao, H., Liao, B., Xu, Q., Zhang,      arXiv:2412.07689, 2024.
+  Q., Huang, C., Liu, W., and Wang, X.  Vadv2: End-
+                                                Hwang, J.-J., Xu, R., Lin, H., Hung, W.-C., Ji, J., Choi,
+  to-end vectorized autonomous driving via probabilistic
+                                                                K., Huang, D., He, T., Covington, P., Sapp, B., Zhou, Y.,
+  planning, 2024a. URL https://arxiv.org/abs/
+                                                    Guo, J., Anguelov, D., and Tan, M. Emma: End-to-end
+  2402.13243.
+                                                        multimodal model for autonomous driving, 2025. URL
+Chen, Z., Ye, M., Xu, S., Cao, T., and Chen, Q.  Ppad:     https://arxiv.org/abs/2410.23262.
+   Iterative interactions of prediction and planning for end-
+                                                                 Intelligence, P., Black, K., Brown, N., Darpinian, J., Dha-  to-end autonomous driving, 2024b. URL https://
+                                                                      balia, K., Driess, D., Esmail, A., Equi, M., Finn, C.,  arxiv.org/abs/2311.08100.
+                                                                Fusai, N., Galliker, M. Y., Ghosh, D., Groom, L., Haus-
+Chi, H., ang Gao, H., Liu, Z., Liu, J., Liu, C., Li, J., Yang, K.,     man, K., Ichter, B., Jakubczak, S., Jones, T., Ke, L.,
+  Yu, Y., Wang, Z., Li, W., Wang, L., Hu, X., Sun, H., Zhao,      LeBlanc, D., Levine, S., Li-Bell, A., Mothukuri, M.,
+   H., and Zhao, H. Impromptu vla: Open weights and open       Nair, S., Pertsch, K., Ren, A. Z., Shi, L. X., Smith, L.,
+  data for driving vision-language-action models, 2025.      Springenberg, J. T., Stachowicz, K., Tanner, J., Vuong,
+  URL https://arxiv.org/abs/2505.23757.         Q., Walke, H., Walling, A., Wang, H., Yu, L., and
+                                                                Zhilinsky, U.   π0.5:  a vision-language-action model
+Chitta, K., Prakash, A., Jaeger, B., Yu, Z., Renz, K., and      with open-world generalization, 2025. URL https:
+  Geiger, A. Transfuser: Imitation with transformer-based     //arxiv.org/abs/2504.16054.
+  sensor fusion for autonomous driving. IEEE transactions
+  on pattern analysis and machine intelligence, 45(11):     Jia, X., Wu, P., Chen, L., Xie, J., He, C., Yan, J., and
+  12878–12895, 2022.                                            Li, H.  Think twice before driving: Towards scalable
+                                                            decoders for end-to-end autonomous driving, 2023. URL
+Dauner, D., Hallgarten, M., Li, T., Weng, X., Huang, Z.,     https://arxiv.org/abs/2305.06242.
+  Yang, Z., Li, H., Gilitschenski, I., Ivanovic, B., Pavone,
+  M., Geiger, A., and Chitta, K.  Navsim: Data-driven     Jia, X., Yang, Z., Li, Q., Zhang, Z., and Yan, J. Bench2drive:
+  non-reactive autonomous vehicle simulation and bench-     Towards multi-ability benchmarking of closed-loop end-
+  marking, 2024. URL https://arxiv.org/abs/      to-end autonomous driving, 2024. URL https://
+  2406.15349.                                arxiv.org/abs/2406.03877.
+
+Geiger, A., Lenz, P., Stiller, C., and Urtasun, R. Vision meets     Jiang, B., Chen, S., Xu, Q., Liao, B., Chen, J., Zhou, H.,
+   robotics: The kitti dataset. The international journal of      Zhang, Q., Liu, W., Huang, C., and Wang, X. Vad: Vector-
+  robotics research, 32(11):1231–1237, 2013.                  ized scene representation for efficient autonomous driv-
+
+                                                10
+
+=== PDF PAGE 11 ===
+                                             Reasoning-VLA
+
+   ing, 2023. URL https://arxiv.org/abs/2303.   Ljungbergh, W. and et al. Neural rendering for safety-critical
+  12077.                                             autonomous driving simulation, 2024.
+
+Kim, M. J., Pertsch, K., Karamcheti, S., Xiao, T., Balakr-    Ljungbergh, W., Tonderski, A., Johnander, J., Caesar, H.,
+  ishna, A., Nair, S., Rafailov, R., Foster, E., Lam, G.,       ˚Astr¨om, K., Felsberg, M., and Petersson, C. Neuroncap:
+  Sanketi, P., Vuong, Q., Kollar, T., Burchfiel, B., Tedrake,       Photorealistic closed-loop safety testing for autonomous
+   R., Sadigh, D., Levine, S., Liang, P., and Finn, C. Open-       driving, 2024. URL https://arxiv.org/abs/
+   vla: An open-source vision-language-action model, 2024.     2404.07762.
+  URL https://arxiv.org/abs/2406.09246.
+                                                Mao, J., Minzhe, N., Jiang, C., liang, h., Chen, J., Liang,
+Langley, P. Crafting papers on machine learning. In Langley,      X., Li, Y., Ye, C., Zhang, W., Li, Z., Yu, J., XU, C., and
+   P. (ed.), Proceedings of the 17th International Conference      Xu, H. One million scenes for autonomous driving: Once
+  on Machine Learning (ICML 2000), pp. 1207–1216, Stan-       dataset. In Vanschoren, J. and Yeung, S. (eds.), Proceed-
+   ford, CA, 2000. Morgan Kaufmann.                          ings of the Neural Information Processing Systems Track
+                                                     on Datasets and Benchmarks, volume 1, 2021.
+Li, J., Li, D., Xiong, C., and Hoi, S. BLIP: Bootstrapping
+  language-image pre-training for unified vision-language    Neuhold, G., Ollmann, T., Rota Bulo, S., and Kontschieder,
+  understanding and generation. In Chaudhuri, K., Jegelka,        P. The mapillary vistas dataset for semantic understanding
+   S., Song, L., Szepesvari, C., Niu, G., and Sabato, S.      of street scenes. In Proceedings of the IEEE international
+   (eds.), Proceedings of the 39th International Conference      conference on computer vision, pp. 4990–4999, 2017.
+  on Machine Learning, volume 162 of Proceedings of Ma-
+  chine Learning Research, pp. 12888–12900. PMLR, 17–   OpenAI, Achiam, J., Adler, S., Agarwal, S., Ahmad, L.,
+  23 Jul 2022a. URL https://proceedings.mlr.      et al. Gpt-4 technical report, 2024. URL https://
+  press/v162/li22n.html.                     arxiv.org/abs/2303.08774.
+
+Li, J., Li, D., Savarese, S., and Hoi, S.  BLIP-2: Boot-    Philion, J. and Fidler, S. Lift, splat, shoot: Encoding images
+  strapping language-image pre-training with frozen im-     from arbitrary camera rigs by implicitly unprojecting to
+  age encoders and large language models.  In Krause,      3d, 2020. URL https://arxiv.org/abs/2008.
+  A., Brunskill,  E., Cho, K., Engelhardt, B., Sabato,     05711.
+   S., and Scarlett, J. (eds.), Proceedings of the 40th In-
+                                                           Prakash, A., Chitta, K., and Geiger, A. Multi-modal fusion  ternational Conference on Machine Learning, volume
+                                                             transformer for end-to-end autonomous driving, 2021.  202 of Proceedings of Machine Learning Research, pp.
+                                       URL https://arxiv.org/abs/2104.09224.  19730–19742. PMLR, 23–29 Jul 2023. URL https://
+  proceedings.mlr.press/v202/li23q.html.                                                         Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G.,
+                                                        Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark,Li, Z., Wang, W., Li, H., Xie, E., Sima, C., Lu, T., Yu, Q.,
+                                                                                       J., Krueger, G., and Sutskever, I. Learning transferable  and Dai, J. Bevformer: Learning bird’s-eye-view repre-
+                                                                 visual models from natural language supervision, 2021.  sentation from multi-camera images via spatiotemporal
+  transformers, 2022b. URL https://arxiv.org/    URL https://arxiv.org/abs/2103.00020.
+  abs/2203.17270.                                                               Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-
+Liang, M., Yang, B., Zeng, W., Chen, Y., Hu, R., Casas,     mon, S., and Finn, C. Direct preference optimization:
+   S., and Urtasun, R. Pnpnet: End-to-end perception and      Your language model is secretly a reward model. Ad-
+   prediction with tracking in the loop, 2020. URL https:     vances in Neural Information Processing Systems, 36:
+  //arxiv.org/abs/2005.14711.                    53728–53741, 2023.
+
+Liu, A., Feng, B., Xue, B., Wang, B., Wu, B., Lu, C.,   Schulman,  J., Wolski,  F., Dhariwal,  P., Radford,  A.,
+  Zhao, C., Deng, C., Zhang, C., and et al. Deepseek-v3      and Klimov, O.  Proximal policy optimization algo-
+  technical report, 2025. URL https://arxiv.org/       rithms, 2017.  URL https://arxiv.org/abs/
+  abs/2412.19437.                             1707.06347.
+
+Liu, Y., Zhang, J., Fang, L., Jiang, Q., and Zhou, B. Multi-    Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang,
+  modal motion prediction with stacked transformers, 2021.       H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push-
+  URL https://arxiv.org/abs/2103.11624.         ing the limits of mathematical reasoning in open language
+                                                           models. arXiv preprint arXiv:2402.03300, 2024.
+Liu, Y., Yuan, T., Wang, Y., Wang, Y., and Zhao, H. Vec-
+  tormapnet: End-to-end vectorized hd map learning, 2023.    Sun, P., Kretzschmar, H., Dotiwalla, X., Chouard, A., Pat-
+  URL https://arxiv.org/abs/2206.08920.         naik, V., Tsui, P., Guo, J., Zhou, Y., Chai, Y., Caine, B.,
+
+                                                11
+
+=== PDF PAGE 12 ===
+                                             Reasoning-VLA
+
+   et al. Scalability in perception for autonomous driving:      Feng, W., Xu, X., Wang, Y., Zhang, Y., Zhu, Y., Wu, Y.,
+  Waymo open dataset. In Proceedings of the IEEE/CVF       Cai, Y., and Liu, Z. Qwen-image technical report, 2025.
+  conference on computer vision and pattern recognition,    URL https://arxiv.org/abs/2508.02324.
+  pp. 2446–2454, 2020.
+                                                     Yang, Z., Chai, Y., Jia, X., Li, Q., Shao, Y., Zhu, X., Su,
+Sun, W., Lin, X., Shi, Y., Zhang, C., Wu, H., and Zheng, S.       H., and Yan, J. Drivemoe: Mixture-of-experts for vision-
+  Sparsedrive: End-to-end autonomous driving via sparse      language-action model in end-to-end autonomous driv-
+  scene representation, 2024. URL https://arxiv.      ing, 2025. URL https://arxiv.org/abs/2505.
+  org/abs/2405.19620.                          16278.
+
+Tian, X., Gu, J., Li, B., Liu, Y., Wang, Y., Zhao, Z., Zhan,
+                                                      Yuan, T., Liu, Y., Wang, Y., Wang, Y., and Zhao, H.
+   K., Jia, P., Lang, X., and Zhao, H. Drivevlm: The conver-
+                                                       Streammapnet: Streaming mapping network for vector-
+  gence of autonomous driving and large vision-language
+                                                              ized online hd map construction, 2023. URL https:
+  models, 2024. URL https://arxiv.org/abs/
+                                             //arxiv.org/abs/2308.12570.
+  2402.12289.
+
+                                                      Yuan, Z., Tang, J., Luo, J., Chen, R., Qian, C., Sun, L.,Varma, G., Subramanian, A., Namboodiri, A., Chandraker,
+                                                      Chu, X., Cai, Y., Zhang, D., and Li, S.  Autodrive-r2:  M., and Jawahar, C. Idd: A dataset for exploring prob-
+                                                                Incentivizing reasoning and self-reflection capacity for  lems of autonomous navigation in unconstrained environ-
+                                                               vla model in autonomous driving. 2025. URL https:  ments. In 2019 IEEE winter conference on applications
+                                             //arxiv.org/abs/2509.01944.   of computer vision (WACV), pp. 1743–1751. IEEE, 2019.
+
+Wang, S., Yu, Z., Jiang, X., Lan, S., Shi, M., Chang,    Zhang, B., Song, N., Jin, X., and Zhang, L.  Bridging
+  N., Kautz, J., Li, Y., and Alvarez, J. M.  Omnidrive:      past and future: End-to-end autonomous driving with
+ A holistic vision-language dataset for autonomous driv-       historical prediction and planning, 2025a. URL https:
+  ing with counterfactual reasoning, 2025. URL https:    //arxiv.org/abs/2503.14182.
+  //arxiv.org/abs/2405.01533.
+                                                     Zhang, D., Zhi,  P., Yong, B., Wang,  J.-Q., Hou,  Y.,
+Wang, W., Xie, J., Hu, C., Zou, H., Fan, J., Tong, W., Wen,     Guo, L., Zhou, Q., and Zhou, R.  Ehss: An efficient
+   Y., Wu, S., Deng, H., Li, Z., Tian, H., Lu, L., Zhu, X.,      hybrid-supervised symmetric stereo matching network.
+  Wang, X., Qiao, Y., and Dai, J. Drivemlm: Aligning multi-     2023 IEEE 26th International Conference on Intelli-
+  modal large language models with behavioral planning      gent Transportation Systems (ITSC), pp. 1044–1051,
+   states for autonomous driving, 2023. URL https://      2023.  URL https://api.semanticscholar.
+  arxiv.org/abs/2312.09245.                  org/CorpusID:267661311.
+
+Wang, Y., Guizilini, V., Zhang, T., Wang, Y., Zhao, H., and                                                     Zhang, D., Chen, D., Zhi, P., Chen, Y., Yuan, Z., Li, C.,
+  Solomon, J.  Detr3d: 3d object detection from multi-                                                              Sunjing, Zhou, R., and Zhou, Q. Mapexpert: Online hd
+  view images via 3d-to-2d queries, 2021. URL https:                                             map construction with simple and efficient sparse map
+  //arxiv.org/abs/2110.06922.                                                         element expert. 2024. URL https://arxiv.org/
+                                              abs/2412.12704.Weng, X., Ivanovic, B., Wang, Y., Wang, Y., and Pavone,
+  M.  Para-drive: Parallelized architecture for real-time
+                                                     Zhang, D., Sun, J., Hu, C., Wu, X., Yuan, Z., Zhou, R.,
+  autonomous driving. In Proceedings of the IEEE/CVF
+                                                          Shen, F., and Zhou, Q. Pure vision language action (vla)
+  Conference on Computer Vision and Pattern Recognition,
+                                                          models: A comprehensive survey. 2025b. URL https:
+  pp. 15449–15458, 2024.
+                                             //arxiv.org/abs/2509.19012.
+Wilson, B., Qi, W., Agarwal, T., Lambert, J., Singh, J.,
+  Khandelwal, S., Pan, B., Kumar, R., Hartnett, A., Pontes,   Zhou, Z., Cai, T., Zhao, S. Z., Zhang, Y., Huang, Z.,
+   J. K., et al. Argoverse 2: Next generation datasets for      Zhou, B., and Ma, J. Autovla: A vision-language-action
+   self-driving perception and forecasting. arXiv preprint      model for end-to-end autonomous driving with adaptive
+  arXiv:2301.00493, 2023.                                   reasoning and reinforcement fine-tuning, 2025. URL
+                                             https://arxiv.org/abs/2506.13757.
+Wu, C., Li, J., Zhou, J., Lin, J., Gao, K., Yan, K., ming Yin,
+   S., Bai, S., Xu, X., Chen, Y., Chen, Y., Tang, Z., Zhang,    Zhu, D., Chen, J., Shen, X., Li, X., and Elhoseiny, M.
+   Z., Wang, Z., Yang, A., Yu, B., Cheng, C., Liu, D., Li,      Minigpt-4: Enhancing vision-language understanding
+  D., Zhang, H., Meng, H., Wei, H., Ni, J., Chen, K., Cao,      with advanced large language models. arXiv preprint
+  K., Peng, L., Qu, L., Wu, M., Wang, P., Yu, S., Wen, T.,      arXiv:2304.10592, 2023.
+
+                                                12
+
+=== PDF PAGE 13 ===
+                                             Reasoning-VLA
+
+Zhu, J., Wang, W., Chen, Z., Liu, Z., Ye, S., Gu, L., Tian,
+   H., Duan, Y., Su, W., Shao, J., Gao, Z., Cui, E., Wang, X.,
+  Cao, Y., Liu, Y., Wei, X., Zhang, H., Wang, H., Xu, W.,
+   Li, H., Wang, J., Deng, N., Li, S., He, Y., Jiang, T., Luo,
+   J., Wang, Y., He, C., Shi, B., Zhang, X., Shao, W., He, J.,
+  Xiong, Y., Qu, W., Sun, P., Jiao, P., Lv, H., Wu, L., Zhang,
+  K., Deng, H., Ge, J., Chen, K., Wang, L., Dou, M., Lu,
+   L., Zhu, X., Lu, T., Lin, D., Qiao, Y., Dai, J., and Wang,
+  W. Internvl3: Exploring advanced training and test-time
+  recipes for open-source multimodal models, 2025. URL
+  https://arxiv.org/abs/2504.10479.
+
+
+
+
+
+                                                13
+
+=== PDF PAGE 14 ===
+                                             Reasoning-VLA
+
+A. Appendix A
+
+A.1. More Ablation Studies
+
+A.1.1. THE SOURCE OF PERFORMANCE: GENERALIZATION ABILITY OR DATA CONTRIBUTION?
+
+To further demonstrate that the SOTA performance of Reasoning-VLA arises from its generalization capabilities rather than
+from reliance on a specific dataset, we conducted two types of experiments, as shown in Tables 7 and 8. We evaluated two
+types of fine-tuned models:
+
+Reasoning-VLA Fine-tuned on the nuScenes Dataset: The Reasoning-VLA (3B and 7B) models were fine-tuned
+exclusively on the selected nuScenes subset extracted from the unified dataset.
+
+Reasoning-VLA Fine-tuned on the Unified Dataset: The Reasoning-VLA (3B and 7B) models were fine-tuned on the
+entire unified dataset.
+
+Open-loop evaluations were performed on the corresponding nuScenes validation subset of the unified dataset. As shown in
+Table 7, the Reasoning-VLA models fine-tuned on the unified dataset outperform those fine-tuned solely on the nuScenes
+subset in terms of average L2 error and collision rate. Specifically, Reasoning-VLA-7B fine-tuned on the selected nuScenes
+subset achieves an average L2 error of 0.25 and a collision rate of 0.10, which are 8.7% and 25% lower, respectively, than
+the general Reasoning-VLA-7B fine-tuned on the unified dataset. Closed-loop evaluations, summarized in Table 8, further
+indicate that models fine-tuned on the unified dataset outperform those trained only on the nuScenes subset across all metrics.
+These results confirm that Reasoning-VLA possesses strong generalization capabilities in autonomous driving scenarios,
+comparable to those observed in VLMs.
+
+                               Table 7. Generalization performance on the Open-loop Metrics.
+
+                                 L2 (m) ↓                         Collision Rate (%) ↓
+           Methods
+                                 1s       2s       3s      Avg.      1s       2s       3s      Avg.
+
+       Reasoning-VLA Finetuned with nuScenes Dataset
+
+       Reasoning-VLA-3B     0.10     0.38     0.51      0.33      0.05     0.13     0.27      0.15
+       Reasoning-VLA-7B     0.07     0.23     0.46      0.25      0.01     0.08     0.20      0.10
+
+       Reasoning-VLA Finetuned with Our Unified Dataset
+
+       Reasoning-VLA-3B     0.08     0.33     0.48      0.30      0.04     0.13     0.23      0.13
+       Reasoning-VLA-7B     0.05     0.20     0.44      0.23      0.01     0.07     0.15      0.08
+
+
+                               Table 8. Generalization performance on the Closed-loop Metrics.
+
+                           NeuroNCAP Score ↑                    Collision Rate (%) ↓
+          Methods
+                                Stationary    Frontal    Side   Avg.    Stationary    Frontal    Side   Avg.
+
+      Reasoning-VLA Finetuned with nuScenes Dataset
+
+       Reasoning-VLA-3B      1.67        2.16     1.83    1.89       69.0        63.3     66.6    66.3
+       Reasoning-VLA-7B      1.79        2.44     2.12    2.12       61.5        57.1     65.1    61.3
+
+      Reasoning-VLA Finetuned with Our Unified Dataset
+
+       Reasoning-VLA-3B      1.88        2.29     1.94    2.04       63.7        60.4     64.1    62.7
+       Reasoning-VLA-7B      1.93        2.57     2.24    2.25       59.8        56.0     62.2    59.4
+
+
+A.1.2. INFERENCE EFFICIENCY
+
+To evaluate the inference efficiency of Reasoning-VLA, we conducted experiments summarized in Table 9. Compared to
+existing autoregression-based VLMs, our method achieves superior performance using the same backbone. Reasoning-VLA
+can generate multiple future trajectories (e.g., 6 or 10 trajectories) in a single inference step, whereas autoregression-based
+VLA/VLMs must generate these trajectories sequentially. Even when employing the efficient bin-tokenizer proposed by
+OpenVLA (Kim et al., 2024) and π0 (Black et al., 2024), these methods require at least 12 to 20 steps to generate the
+
+                                                14
+
+=== PDF PAGE 15 ===
+                                             Reasoning-VLA
+
+desired trajectories, including both reasoning and trajectory tokens. Our experiments show that Reasoning-VLA achieves a
+generation speed of 0.089s per inference for 10 trajectories using vLLM, which is approximately 61 times faster than the
+autoregression-based Qwen2.5-VL-7B for the same number of trajectories. These results clearly demonstrate the superior
+inference efficiency of the Reasoning-VLA design.
+
+Table 9. The Efficiency Comparisons. Steps: Theoretical number of VLM inference steps required to complete a single prediction
+process. Speed(s): Measured inference time to generate a complete prediction process. All experiments were conducted on an NVIDIA
+H200 GPU using vLLM. Traj: Number of predicted trajectories.
+
+                    Methods                            Steps                   Speed(s)
+               Qwen2.5-VL-7B(6 Traj)             ≫12                     5.396
+               Qwen2.5-VL-7B(10 Traj)            ≫20                     5.472
+              Reasoning-VLA-7B(6 Traj)                    1                       0.081
+              Reasoning-VLA-7B(10 Traj)                   1                       0.089
+
+
+A.1.3. MODEL SIZE
+
+As is well known, the performance of LLMs and VLMs generally improves with an increase in model parameters. To
+analyze the impact of model size, we compare the 3B and 7B variants of our Reasoning-VLA. As shown in Tables 1 and 2,
+the Reasoning-VLA-7B model achieves superior performance, with an average L2 error of 0.23 and an average NeuroNCAP
+Score of 2.25, representing improvements of 30.4% and 9.3%, respectively, over the Reasoning-VLA-3B model. This
+performance gap indicates that larger models inherently possess stronger representational capacity, enabling them to capture
+more complex patterns and achieve better results.
+
+A.1.4. REASONING ABLATION
+
+To examine the effectiveness of the reasoning component in our method, we conducted an ablation study. As shown in
+10, removing the reasoning process from our Reasoning-VLA model results in a 26% performance decrease compared to
+Reasoning-VLA-7B. These results demonstrate the critical role of the reasoning process in our approach.
+
+                                     Table 10. Ablation study of reasoning contributions.
+
+                                                       L2 (m) ↓
+                  Methods                                                      1s            2s            3s           Avg.
+         Reasoning-VLA-7B w/o Reasoning           0.08           0.26           0.53           0.29
+               Reasoning-VLA-7B                  0.05           0.20           0.44           0.23
+
+
+
+A.2. Qualitative Results of Action Trajectories
+
+We also provide qualitative results to further demonstrate the effectiveness of Reasoning-VLA. As illustrated in Fig.4,
+the visualization of predicted action trajectories across eight datasets highlights the strong generalization capability of
+our method. Notably, Reasoning-VLA produces consistent and accurate trajectory predictions even in previously unseen
+scenarios, confirming its robustness and adaptability.
+
+B. Appendix B
+
+B.1. Unified Dataset
+
+Existing individual autonomous driving datasets are often limited in scope, providing narrow coverage of the diverse
+scenarios encountered in real-world driving. To address this, we aggregate eight public datasets to construct a unified,
+reasoning-intensive dataset designed to support Chain-of-Thought generation with a strong reasoning VLM. This unified
+dataset is organized into a coherent, easy-to-use format to facilitate model training and enhance the generalization capability
+of Reasoning-VLA.
+
+The processing pipeline for the unified dataset is illustrated in Fig. 5.  First, all source datasets are converted into a
+standardized data format. The resulting image-text pairs are then input into a VLM, which generates detailed reasoning
+content according to a predefined labeling protocol. This reasoning output undergoes a rule-based verification process,
+
+                                                15
+
+=== PDF PAGE 16 ===
+                                             Reasoning-VLA
+
+
+              NAVSIM
+
+                nuScnes
+
+           Waymo
+                         MapillaryV2
+
+                                                                                                                                                             Once
+
+           KITTI
+
+                     Argoverse
+
+
+
+         Once
+
+
+
+       IDDNAVSIM
+
+
+
+
+
+Figure 4. Qualitative Results of Action Trajectories. Reasoning-VLA predictions on eight different datasets.Red lines denote GT
+trajectories while green lines represent predicted trajectories.
+
+
+
+
+                                                16
+
+=== PDF PAGE 17 ===
+                                             Reasoning-VLA
+
+
+                                                                         Rule-Based Verification                          Data Selection          Labels Formatting
+                            Time series alignment         "role": "user",                    Temporary alignment
+                                                                                                 Format checking                        ...    Raw data filter                "content": "You are ...                      Cam FOV alignment           "role": "assistant",                 Coordinate alignment
+                                Labels Alignment             "content": " Given the            Time stamp alignment
+                                                        ... ...                    ego status of ... ...              Scene checking                                                                                                         Objects checking
+        Public Datasets                                       ……
+
+                                                           Human Verification                                                                 Question:                                                                              Ranking         Unsatisfactory              X1        X2                       XT-2         XT-1      XT                                                                           You are driving on the                                                                                           Reasoning
+                                                                                                               street,                                                                                              from                                                                                                         Step                                                                                                     1                                                                                                           the images   Step                                                                                            1                                                                                                         The                                                                                                                                        predicted                                                                               and ego                                                                                                                                                                             ...                                                                                                         Step                                                                              N                                                                                                Step                                                                       N                                                                                                                                       action                                                                                                                                                                   x, y ….                            Logits
+                VLM Model                                                                 The action is 19                           Projection
+                                                         Enhanced Reasoning                                             Labels
+                                                               we should break down the prediction of future waypoints
+              X0       X1        X2                        XT-2        XT-1                    into …original question asks for predicting the future waypoints                     Images
+                                                                                                      directly from the given vehicle status, but let's derive the…             ……             Qwen2.5-VL                                               Reasoning CoT generation
+
+
+                                 Figure 5. Pipeline for generating the unified reasoning dataset.
+
+
+followed by human review. During human verification, annotators assess the clips along with their associated labels to select
+the final set of high-quality data.
+
+
+B.2. CoT Reasoning Unifided Dataset Format and Prompt
+
+During the SFT stage of our method, we designed a structured input prompt to facilitate the generation of high-quality
+chain-of-thought (CoT) reasoning data. The prompt template is presented as follows:
+
+
+ {’role’: ’system’, ’content’: [{’type’: ’text’, ’text’: ’You are a helpful assistant’}]},
+
+ {’role’: ’user’, ’content’: [{’type’: ’image’, ’image’: ’nuScences_441_4000.CAM_FRONT.png
+     ’}, {’type’: ’image’, ’image’: ’nuScences_441_4000.CAM_LEFT.png’}, {’type’: ’image’,
+     ’image’: ’nuScences_441_4000.CAM_RIGHT.png’}, {’type’: ’text’, ’text’: "You are an
+     autonomous driving agent. You have access to multi-view camera images of a vehicle:
+     (1) front view (which you should focus on with the most attention) <image>, (2) front
+      right view <image>, and (3) front left view <image>. Your task is to do your best to
+      predict future waypoints for the vehicle over the next 10 timesteps, given the
+     vehicle’s intent inferred from the images. Provided are the previous ego vehicle
+     status recorded over the last 3.0 seconds (at 0.5-second intervals). This includes
+     the x and y coordinates of the ego vehicle. Positive x means forward direction while
+     positive y means leftwards. The data is presented in the format [x, y]:(t-3.0s)
+     [-21.95, -0.11], Acceleration: X 0.22, Y 0.21 m/sˆ2, Velocity: X 6.93, Y 0.0 m/s, (t
+     -2.5s) [-18.42, -0.07], Acceleration: X 0.19, Y 0.22 m/sˆ2, Velocity: X 7.03, Y 0.0 m
+     /s, (t-2.0s) [-14.88, -0.05], Acceleration: X 0.26, Y 0.15 m/sˆ2, Velocity: X 7.16, Y
+      0.0 m/s, (t-1.5s) [-11.22, -0.02], Acceleration: X 0.16, Y 0.15 m/sˆ2, Velocity: X
+     7.25, Y 0.0 m/s, (t-1.0s) [-7.15, 0.02], Acceleration: X -0.21, Y 0.16 m/sˆ2,
+     Velocity: X 7.23, Y 0.0 m/s, (t-0.5s) [-3.52, 0.02], Acceleration: X -0.39, Y 0.19 m/
+     sˆ2, Velocity: X 7.09, Y 0.0 m/s, (t-0.0s) [0.0, 0.0], Acceleration: X -0.51, Y -0.06
+      m/sˆ2, Velocity: X 6.88, Y 0.0 m/s\n\nPlease think deeply. Engage in an internal
+     dialogue other natural language thought expressions It’s a reasoning process. Provide
+      your reasoning between the <think> </think> tags, and then give your answer between
+     the <answer> </answer> tags. Predicted future movement details for the next 5 seconds
+      (sampled at 0.5-second intervals), including BEV location in x and y directions (in
+     meters). Positive x means forward direction while positive y means leftwards. The
+     output is formatted as [x, y]."}]},
+
+ {’role’: ’assistant’, ’content’: [{’type’: ’text’, ’text’: "<think>\nLet me think. To
+     rephrase the question in a way that requires Chain-of-Thought reasoning with
+     numerical or mathematical expressions, we should break down the prediction of future
+     waypoints into smaller steps, starting from understanding the provided data and
+
+
+                                                17
+
+=== PDF PAGE 18 ===
+                                             Reasoning-VLA
+
+
+     applying relevant physics equations. \n\nThe original question asks for predicting
+     the future waypoints directly from the given vehicle status, but let’s derive the
+     waypoints through intermediate calculations. \n \nOh, I see. The question now needs
+     to be framed in such a way that the responder understands they need.\n</think>\n<
+     answer><|place_holder|><|place_holder|><|place_holder|><|place_holder|><|place_holder
+     |><|place_holder|><|place_holder|><|place_holder|><|place_holder|><|place_holder|><|
+     place_holder|><|place_holder|><|place_holder|><|place_holder|><|place_holder|><|
+     place_holder|><|place_holder|><|place_holder|><|place_holder|><|place_holder|></
+     answer>"}]},
+  {’actions’: array([[0.        , 0.        ],
+       [0.40046561, 0.39716284],
+       [0.39221381, 0.33593741],
+       [0.39243497, 0.31284149],
+       [0.38875668, 0.28942805],
+       [0.38467048, 0.27311695],
+       [0.38409407, 0.26829267],
+       [0.38829151, 0.27437078],
+       [0.3931127 , 0.28797924],
+       [0.39968362, 0.29992925]])}
+
+
+B.3. Training Details
+
+The training details of SFT and RL are illustrated below.
+
+B.3.1. SFT
+
+
+batch_size 8
+gradient_accumulation_steps 2
+learning_rate 5e-5
+bf16
+gradient_checkpointing true
+attn_implementation flash_attention_2
+num_train_epochs 4
+max_grad_norm 5
+
+zero2 config:
+{
+    "fp16": {
+        "enabled": "auto",
+        "loss_scale": 0,
+        "loss_scale_window": 1000,
+        "initial_scale_power": 16,
+        "hysteresis": 2,
+        "min_loss_scale": 1
+    },
+    "bf16": {
+        "enabled": "auto"
+    },
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": "auto",
+            "betas": "auto",
+            "eps": "auto",
+            "weight_decay": "auto"
+        }
+    },
+    "zero_optimization": {
+        "stage": 2,
+        "offload_optimizer": {
+            "device": "none",
+            "pin_memory": true
+        },
+
+
+                                                18
+
+=== PDF PAGE 19 ===
+                                             Reasoning-VLA
+
+
+        "allgather_partitions": true,
+        "allgather_bucket_size": 2e8,
+        "overlap_comm": false,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 2e8,
+        "contiguous_gradients": true
+    },
+    "gradient_accumulation_steps": "auto",
+    "gradient_clipping": "auto",
+    "steps_per_print": 100,
+    "train_batch_size": "auto",
+    "train_micro_batch_size_per_gpu": "auto",
+    "wall_clock_breakdown": false
+}
+
+
+B.3.2. RL
+
+
+max_prompt_length 16384
+max_completion_length 768
+batch_size 8
+gradient_accumulation_steps 2
+learning_rate 1e-6
+lr_scheduler_type "cosine"
+weight_decay 0.01
+bf16
+gradient_checkpointing true
+temporal true
+len_control true
+attn_implementation flash_attention_2
+max_pixels 401408
+num_train_epochs 1
+beta 0.04
+max_grad_norm
+num_generations 8
+
+zero3 config:
+
+    "fp16": {
+        "enabled": "auto",
+        "loss_scale": 0,
+        "loss_scale_window": 1000,
+        "initial_scale_power": 16,
+        "hysteresis": 2,
+        "min_loss_scale": 1
+    },
+    "bf16": {
+        "enabled": "auto"
+    },
+
+    "zero_optimization": {
+        "stage": 3,
+        "offload_optimizer": {
+            "device": "none",
+            "pin_memory": true
+        },
+        "offload_param": {
+            "device": "none",
+            "pin_memory": true
+        },
+        "overlap_comm": true,
+        "contiguous_gradients": true,
+        "sub_group_size": 1e9,
+        "reduce_bucket_size": "auto",
+
+
+                                                19
+
+=== PDF PAGE 20 ===
+                                             Reasoning-VLA
+
+
+        "stage3_prefetch_bucket_size": "auto",
+        "stage3_param_persistence_threshold": "auto",
+        "stage3_max_live_parameters": 1e9,
+        "stage3_max_reuse_distance": 1e9,
+        "stage3_gather_16bit_weights
+          _on_model_save": true
+    },
+
+    "gradient_accumulation_steps": "auto",
+    "gradient_clipping": "auto",
+    "steps_per_print": 100,
+    "train_batch_size": "auto",
+    "train_micro_batch_size_per_gpu": "auto",
+    "wall_clock_breakdown": false
+}
+
+
+B.4. Reward Function Implements
+
+Our reward functions significantly influence the RL process. For trajectory reward function:
+
+
+                                N
+                                                   rtraj = 1 −1              X γi α(xi −xigt)2 + β(yi −yigt)2                                  (6)                       N
+                                              i=1
+
+normally, we can select hyper-parameters (1 in this function) to achieve an accurate reward. Some times we need change the
+1 to large numbers such as 2. We can also replaced with another easy way:
+
+
+                                   N
+                                         1
+                                           rtraj = 1 −min(1.0, X γi α(xi −xigt)2 + β(yi −yigt)2 )                            (7)                         N
+                                                  i=1
+
+
+B.5. Related Works: Classic Autonomous Driving
+
+Classic autonomous driving (AD) methods have been developed over many years, evolving from modular systems to modern
+end-to-end learning frameworks (Philion & Fidler, 2020; Huang & Huang, 2022; Zhang et al., 2024; Yuan et al., 2023;
+Liang et al., 2020; Prakash et al., 2021; Zhang et al., 2023). Early AD systems were typically constructed by cascading
+these single-task modules into a sequential pipeline (Li et al., 2022b; Wang et al., 2021; Liu et al., 2023; Zhang et al., 2024;
+Liu et al., 2021). However, such designs suffer from error accumulation, where inaccuracies in upstream tasks propagate
+through subsequent modules, ultimately degrading overall system performance. To address this issue, recent research
+has shifted toward end-to-end learning-based approaches that integrate all sub-tasks into a unified framework. Modern
+open-source end-to-end AD methods increasingly rely on bird’s-eye view (BEV) feature representations and generate
+planning trajectories through cross-interactions among internal components (Hu et al., 2023; Jiang et al., 2023; Chen et al.,
+2024a; Jia et al., 2023; 2024). Meanwhile, other approaches exploit sparse feature extraction from the 3D environment to
+directly infer results from image features, thereby avoiding the computational cost of constructing explicit BEV features
+(Wang et al., 2021; Sun et al., 2024). Collectively, these advances have simplified the traditional multi-stage AD pipeline,
+marking the beginning of a new era of data-driven autonomous driving.
+
+
+
+
+
+                                                20

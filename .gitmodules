@@ -1,0 +1,3 @@
+[submodule "3rdparty/BEVFormer"]
+	path = 3rdparty/BEVFormer
+	url = https://github.com/fundamentalvision/BEVFormer.git

@@ -1,0 +1,19 @@
+{
+  "paper": "Reasoning-VLA",
+  "repo": "xipi702/Reasoning-VLA",
+  "checked_at": "2026-10-17T13:33:21.933643+00:00",
+  "metadata": {
+    "html_url": "https://github.com/xipi702/Reasoning-VLA",
+    "description": "A Fast and General Vision-Language-Action Reasoning Model for Autonomous Driving",
+    "default_branch": "main",
+    "pushed_at": "2025-11-28T01:14:58Z",
+    "license": null,
+    "size": 1,
+    "archived": false
+  },
+  "files": [
+    "README.md"
+  ],
+  "tree_sha": "f38f0a185ce41e57155fccfb4b2a94720a0a8957",
+  "readme": "# Reasoning-VLA\nA Fast and General Vision-Language-Action Reasoning Model for Autonomous Driving\n# Comming Soon.\n"
+}

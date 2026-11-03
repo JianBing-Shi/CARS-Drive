@@ -1,0 +1,232 @@
+{
+  "DriveWorld-VLA": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\DriveWorld-VLA.pdf",
+    "pages": 21,
+    "characters": 87559,
+    "urls": [
+      "https://github.com/OpenDriveLab/OpenScene",
+      "https://github.com/liulin815/DriveWorld-VLA.git",
+      "https://www.techrxiv.org/doi/full/10.36227/techrxiv.176523308.84756413/v1"
+    ]
+  },
+  "SafeAuto": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\SafeAuto Knowledge-Enhanced Safe Autonomous Driving with Multimodal Foundation Models.pdf",
+    "pages": 21,
+    "characters": 111182,
+    "urls": [
+      "https://github.com/AI-secure/SafeAuto",
+      "https://github.com/ultralytics/ultralytics",
+      "https://www.dmv.ca.gov/portal/handbook/california-driver-handbook/",
+      "mailto:bol@uchicago.edu",
+      "mailto:jwz@uchicago.edu"
+    ]
+  },
+  "DeepSight": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\DeepSight.pdf",
+    "pages": 14,
+    "characters": 81648,
+    "urls": [
+      "https://arxiv.org/abs/1711.03938",
+      "https://arxiv.org/abs/2206.08129",
+      "https://arxiv.org/abs/2402.11502",
+      "https://arxiv.org/abs/2405.01533",
+      "https://arxiv.org/abs/2405.14062",
+      "https://arxiv.org/abs/2406.03877",
+      "https://arxiv.org/abs/2406.08481",
+      "https://arxiv.org/abs/2409.18341",
+      "https://arxiv.org/abs/2410.22313",
+      "https://arxiv.org/abs/2410.23262",
+      "https://arxiv.org/abs/2501.03747",
+      "https://arxiv.org/abs/2501.14729",
+      "https://arxiv.org/abs/2503.03125",
+      "https://arxiv.org/abs/2503.05689",
+      "https://arxiv.org/abs/2503.07656",
+      "https://arxiv.org/abs/2503.08612",
+      "https://arxiv.org/abs/2503.09594",
+      "https://arxiv.org/abs/2503.19855",
+      "https://arxiv.org/abs/2503.22020",
+      "https://arxiv.org/abs/2504.01941",
+      "https://arxiv.org/abs/2505.17685",
+      "https://arxiv.org/abs/2507.00603",
+      "https://arxiv.org/abs/2509.13769",
+      "https://arxiv.org/abs/2601.04453",
+      "https://github.com/hotdogcheesewhite/DeepSight"
+    ]
+  },
+  "Reasoning-VLA": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\Reasoning-VLA.pdf",
+    "pages": 20,
+    "characters": 116261,
+    "urls": [
+      "https://api.semanticscholar.org/CorpusID:267661311",
+      "https://arxiv.org/abs/1707.06347",
+      "https://arxiv.org/abs/2005.14711",
+      "https://arxiv.org/abs/2008.05711",
+      "https://arxiv.org/abs/2103.00020",
+      "https://arxiv.org/abs/2103.11624",
+      "https://arxiv.org/abs/2104.09224",
+      "https://arxiv.org/abs/2110.06922",
+      "https://arxiv.org/abs/2203.17054",
+      "https://arxiv.org/abs/2203.17270",
+      "https://arxiv.org/abs/2206.08920",
+      "https://arxiv.org/abs/2207.07601",
+      "https://arxiv.org/abs/2212.10156",
+      "https://arxiv.org/abs/2303.08774",
+      "https://arxiv.org/abs/2303.12077",
+      "https://arxiv.org/abs/2305.06242",
+      "https://arxiv.org/abs/2307.15818",
+      "https://arxiv.org/abs/2308.12570",
+      "https://arxiv.org/abs/2311.08100",
+      "https://arxiv.org/abs/2312.09245",
+      "https://arxiv.org/abs/2402.12289",
+      "https://arxiv.org/abs/2402.13243",
+      "https://arxiv.org/abs/2404.07762",
+      "https://arxiv.org/abs/2405.01533",
+      "https://arxiv.org/abs/2405.19620",
+      "https://arxiv.org/abs/2406.03877",
+      "https://arxiv.org/abs/2406.09246",
+      "https://arxiv.org/abs/2406.15349",
+      "https://arxiv.org/abs/2410.23262",
+      "https://arxiv.org/abs/2410.24164",
+      "https://arxiv.org/abs/2412.12704",
+      "https://arxiv.org/abs/2412.19437",
+      "https://arxiv.org/abs/2501.12948",
+      "https://arxiv.org/abs/2503.14182",
+      "https://arxiv.org/abs/2504.10479",
+      "https://arxiv.org/abs/2504.16054",
+      "https://arxiv.org/abs/2505.16278",
+      "https://arxiv.org/abs/2505.23757",
+      "https://arxiv.org/abs/2506.13757",
+      "https://arxiv.org/abs/2508.02324",
+      "https://arxiv.org/abs/2509.01944",
+      "https://arxiv.org/abs/2509.19012",
+      "https://proceedings.mlr.press/v162/li22n.html",
+      "https://proceedings.mlr.press/v202/li23q.html"
+    ]
+  },
+  "CoIRL-AD": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\CoIRL-AD.pdf",
+    "pages": 19,
+    "characters": 105941,
+    "urls": [
+      "https://api.semanticscholar.org/CorpusID:276903042",
+      "https://arxiv.org/abs/2402.03300",
+      "https://arxiv.org/abs/2412.15544",
+      "https://arxiv.org/abs/2503.07536",
+      "https://arxiv.org/abs/2503.10434",
+      "https://arxiv.org/abs/2602.12222",
+      "https://github.com/SEU-zxj/CoIRL-AD",
+      "https://openreview.net/forum?id=28qUA2bSe5",
+      "https://openreview.net/forum?id=9V3crVSPH7",
+      "https://openreview.net/forum?id=FXTeJvHE0k",
+      "https://openreview.net/forum?id=JoXwhGbuMi",
+      "https://openreview.net/forum?id=Lv7PjbcaMi",
+      "https://openreview.net/forum?id=NEu8wgPctU",
+      "https://openreview.net/forum?id=Vv76fCYffN",
+      "https://openreview.net/forum?id=fd2u60ryG0"
+    ]
+  },
+  "AutoVLA": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\AutoVLA.pdf",
+    "pages": 37,
+    "characters": 218242,
+    "urls": [
+      "https://arxiv.org/abs/2407.04281",
+      "https://arxiv.org/abs/2504.19854",
+      "https://arxiv.org/abs/2505.00284",
+      "https://arxiv.org/abs/2505.05360",
+      "https://arxiv.org/abs/2505.08854",
+      "https://autovla.github.io/",
+      "https://github.com/OpenDriveLab/OpenScene",
+      "https://neurips.cc/Conferences/2025/LLM",
+      "https://neurips.cc/public/EthicsGuidelines",
+      "https://nips.cc/public/guides/CodeSubmissionPolicy",
+      "https://waymo.com/open/challenges/2025/e2e-driving/"
+    ]
+  },
+  "CRAFT": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\CRAFT.pdf",
+    "pages": 22,
+    "characters": 105970,
+    "urls": [
+      "https://arxiv.org/abs/2605.04470v1",
+      "https://currychen77.github.io/CRAFT",
+      "https://github.com/Lightning-AI/pytorch-lightning",
+      "https://openreview.net/forum?id=4OLbpaTKJe"
+    ]
+  },
+  "RIFT": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\RIFT.pdf",
+    "pages": 27,
+    "characters": 108789,
+    "urls": [
+      "https://arxiv.org/abs/2505.03344v3",
+      "https://currychen77.github.io/RIFT/",
+      "https://github.com/Lightning-AI/pytorch-lightning",
+      "https://github.com/OpenDriveLab/DriveLM/blob/DriveLM-CARLA/docs/report.pdf",
+      "https://github.com/jchengai/pluto",
+      "https://leaderboard.carla.org/"
+    ]
+  },
+  "CarPlanner": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\CarPlanner.pdf",
+    "pages": 10,
+    "characters": 69755,
+    "urls": []
+  },
+  "AdaWM": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\ADAWM.pdf",
+    "pages": 25,
+    "characters": 89260,
+    "urls": []
+  },
+  "Raw2Drive": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\Raw2Drive.pdf",
+    "pages": 26,
+    "characters": 103486,
+    "urls": [
+      "https://developer.nvidia.com/drive",
+      "https://github.com/Thinklab-SJTU/Raw2Drive",
+      "https://leaderboard.carla.org/leaderboard/",
+      "https://neurips.cc/Conferences/2025/LLM",
+      "https://neurips.cc/public/EthicsGuidelines",
+      "https://nips.cc/public/guides/CodeSubmissionPolicy",
+      "https://www.mobileye.com"
+    ]
+  },
+  "Self-Play": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\Robust Autonomy Emerges from Self-Play.pdf",
+    "pages": 28,
+    "characters": 175480,
+    "urls": [
+      "http://arxiv.org/abs/1412.6980",
+      "http://arxiv.org/abs/1707.06347",
+      "http://arxiv.org/abs/1711.09846",
+      "http://arxiv.org/abs/2306.16927",
+      "http://www.aaai.org/Library/AAAI/2004/aaai04-112.php",
+      "https://arxiv.org/abs/2106.11810",
+      "https://arxiv.org/abs/2107.08142",
+      "https://arxiv.org/abs/2108.05805",
+      "https://arxiv.org/abs/2306.11868",
+      "https://arxiv.org/abs/2309.17080",
+      "https://arxiv.org/abs/2311.15736",
+      "https://arxiv.org/abs/2402.06559",
+      "https://arxiv.org/abs/2404.02524",
+      "https://arxiv.org/abs/2407.21783",
+      "https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813435",
+      "https://dx.doi.org/10.7302/8636",
+      "https://github.com/waymo-research/waymax/pull/54",
+      "https://proceedings.mlr.press/v164/rudin22a.html",
+      "https://rosap.ntl.bts.gov/view/dot/6281",
+      "https://storage.googleapis.com/waymo-uploads/files/research/2023%20Technical%20Reports/SA_2nd_MTR%2B%2B%2B%20(1).pdf",
+      "https://storage.googleapis.com/waymo-uploads/files/research/2023%20Technical%20Reports/SA_hm_jointMP.pdf",
+      "https://waymo.com/open/challenges/2023/sim-agents/"
+    ]
+  },
+  "CorrectionPlanner": {
+    "source": "C:\\Users\\shi-jia-liang\\Desktop\\CorrectionPlanner Self-Correction Plannerwith Reinforcement Learning in Autonomous Driving.pdf",
+    "pages": 20,
+    "characters": 94822,
+    "urls": []
+  }
+}

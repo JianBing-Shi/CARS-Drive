@@ -1,0 +1,969 @@
+=== PDF PAGE 1 ===
+  DeepSight: Long-Horizon World Modeling via Latent States Prediction for
+                   End-to-End Autonomous Driving
+
+
+
+   Lingjun Zhang * 1 2 Changjie Wu * 2 Linzhe Shi 2 Jiangyang Li 2 3  Jiaxin Liu 1 Lei Yang 4 Hang Zhang 2
+                          Mu Xu 2 Hong Wang 1
+
+
+                 Abstract                           2025). A growing body of work has explored the integration
+                                                             of text reasoning mechanisms to enhance model generaliza-
+    End-to-end autonomous driving systems are in-                                                                tion and interpretability (Hwang et al., 2025; Jiang et al.,
+     creasingly integrating Vision-Language Model                                                          2024). To address the pervasive spatiotemporal misalign-
+   (VLM) architectures, incorporating text reason-                                                  ment in text reasoning, several approaches have proposed
+     ing or visual reasoning to enhance the robust-
+                                                                unified architectures that jointly support generation and un-
+     ness and accuracy of driving decisions. How-
+                                                              derstanding, aiming to construct world models that capture
+     ever, the reasoning mechanisms employed in most
+                                                    complex spatiotemporal dynamics and thereby improve de-
+    methods are direct adaptations from general do-
+                                                                cision robustness (Zeng et al., 2025; Xiong et al., 2026).
+     mains, lacking in-depth exploration tailored to
+    autonomous driving scenarios, particularly within         Despite the promising potential of world modeling and vi-
+     visual reasoning modules. In this paper, we pro-         sual reasoning, significant challenges remain in visual rep-
+    pose a driving world model that performs par-         resentation forms and long-horizon prediction.  First, ex-
+      allel prediction of latent semantic features for          isting works adopt an autoregressive approach to predict
+     consecutive future frames in the bird’s-eye-view        codebook-based representations, prioritizing image texture
+    (BEV) space, thereby enabling long-horizon mod-        while overlooking crucial semantic information. Second,
+     eling of future world states. We also introduce        most unified models predict only short-term future obser-
+    an efficient and adaptive text reasoning mecha-         vations (e.g., 0.5 seconds), offering insufficient foresight
+    nism that utilizes additional social knowledge and          for safe trajectory planning in complex dynamic environ-
+     reasoning capabilities to further improve driving         ments. Finally, current research predominantly focuses on
+    performance in challenging long-tail scenarios.        forward-view prediction and lacks modeling of surrounding
+   We present a novel, efficient, and effective ap-         agents around the vehicle. This deficiency in spatial aware-
+    proach that achieves state-of-the-art (SOTA) re-         ness can easily lead to safety hazards in complex interactive
+      sults on the closed-loop Bench2drive benchmark.         scenarios (Zhao et al., 2025b).
+    Codes are available  at: https://github.
+                                                              Inspired by human driving behavior, we argue that an ideal
+   com/hotdogcheesewhite/DeepSight.
+                                                             driving world model should be equipped with human-like
+                                                             cognitive capabilities: precise semantic understanding, ac-
+                                                             curate spatial localization, long-horizon motion modeling,
+1. Introduction                                    and rapid response capability. To this end, we propose
+                                                        DeepSight, an efficient unified world model architectureRecent advances in Multimodal Large Language Models
+                                                                for autonomous driving. DeepSight performs parallel pre-(MLLMs) have opened new paradigms for end-to-end au-
+                                                                diction of implicit semantic features for consecutive futuretonomous driving, leveraging their rich world knowledge
+                                                       frames in the BEV space, enabling long-horizon modelingacquired through pretraining in massive datasets and their
+                                                            of future world states.  Furthermore, to handle long-tailaligned vision–language representation spaces (Hu et al.,
+                                                               scenarios, such as yielding to emergency vehicles, we in-2026; Wang et al., 2025; Zhang et al., 2024; Luo et al.,
+                                                          troduce an adaptive Chain-of-Thought (CoT) mechanism.
+  *Equal  contribution   1Tsinghua  University 2Amap,  Al-    This module adaptively activates the powerful logical rea-
+ibaba Group  3Xi’an  Jiaotong  University  4Nanyang  Tech-    soning and social commonsense capabilities of the language
+nological  University.    Correspondence  to:  Hong Wang                                                  model on demand, effectively balancing system efficiency
+<hong wang@tsinghua.edu.cn>.
+                                                     and performance.
+Proceedings of the 43 rd International Conference on Machine                                      We conduct comprehensive evaluations of DeepSight on
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026
+                                                       Bench2Drive, a highly challenging closed-loop simulationby the author(s).
+
+
+                                                1
+
+=== PDF PAGE 2 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+(a)  Images                                                                                                                   (c)       Driving Score
+                                         Reconstruction Codebook                                                                                     Short
+            Dream                                                                   sighted                  Efficiency                Success    VLMs
+                                                                        t = 0.5s                                                                              Rate
+        t = 0s
+
+(b)  Images                              Latent Semantic Feature
+                                                                      Long
+            Dream                                                                   sighted                                                                    Ours
+    VLMs                                                                                                                                                                                      Orion
+        t = 0s                         t = 0s         t = 0.5s        t = 1.0s        t = 1.5s        t = 2.0s                                Ability Mean         1/L2       ReasonPlanVAD
+
+Figure 1.  Illustration of Paradigms of Different Unified World Models.  (a) the VLMs predicting images by explicitly outputting
+codebook tokens for future single-frame cannot support long-term prediction, this short-sightedness hinders accurate trajectory planning.
+(b)our VLMs achieve long-term world modeling by predicting future multi-frame latent features, enabling long-sighted planning of safe
+trajectories.(c)The proposed DeepSight achieves leading performance on most of metrics compared with E2E methods.
+
+
+benchmark. To ensure a fair comparison, all experiments are    within a single framework. HiP-AD (Tang et al., 2025)
+conducted under the standard Think2Drive expert data pro-    enables comprehensive interaction by allowing planning
+tocol, distinguishing our results from methods that utilize    queries to iteratively interact with perception queries in the
+different expert distributions, such as PDM-Lite. By incor-  BEV space while dynamically extracting image features
+porating long-horizon modeling of the future world states,   from perspective views. Meanwhile, generative approaches
+our method achieves Driving Score (DS) of 84.52 (+5.68)    such as GenAD (Zheng et al., 2024) and GoalFlow (Xing
+and Success Rate (SR) of 65.91% (+8.81), substantially     et al., 2025b) utilize diffusion models to produce diverse,
+outperforming the latest state-of-the-art approaches. With    multimodal future trajectories conditioned on the context of
+the adaptive CoT mechanism enabled, DeepSight further im-    the scene. However, these imitation learning-based systems
+proves to DS of 86.23 (+7.39) and SR of 71.36% (+13.63),    struggle with interpretability and generalization in long-
+with only a marginal increase in inference latency (∼4%).     tail closed-loop scenarios (Tian et al., 2025; Renz et al.,
+Furthermore, DeepSight achieves superior performance on    2025). In this work, we develop a system that excels in
+the open-loop nuScenes dataset.                             closed-loop evaluations, generating accurate trajectories in
+                                                    complex driving scenarios.
+In summary, our contributions include:
+
+                                                                    2.2. MLLM for Autonomous Driving
+   • We propose a novel driving-world model that incorpo-
+     rates long-horizon modeling of the future world states    Recent studies have increasingly integrated VLMs or LLMs
+     through parallel prediction of implicit semantic fea-    into autonomous driving systems, motivated by the re-
+     tures for consecutive future frames.                   markable capabilities of LLMs in world knowledge, rea-
+                                                            soning, and interpretability (Kim et al., 2024). Notably,
+   • We design an adaptive CoT mechanism that effectively  EMMA (Hwang et al., 2024; Xing et al., 2025a) leverages
+     integrates social common sense and logical reasoning    the multimodal foundation of Gemini by encoding all non-
+     to improve driving performance in long-tail scenarios.    sensor inputs and outputs into natural language text, fully
+                                                               exploiting the pre-trained LLM’s world knowledge and en-
+   • DeepSight  achieves SOTA  performance on  the                                                       hancing planning through CoT textual generation. Sim-
+    Bench2Drive, validating the superiority of our ap-                                                    Lingo (Renz et al., 2025) incorporates a CoT Annotation
+     proach (Jia et al., 2024).                                                   mechanism into its architecture, which injects textual reason-
+                                                            ing prior to action generation. This provides an explanatory
+2. Related Work                                        intermediate text to mitigate hallucinations commonly ob-
+                                                          served in large models. Orion (Fu et al., 2025) bridges the
+2.1. End-to-End Autonomous Driving                                                     gap between the reasoning space and the planning space by
+                                                               integrating Visual Question Answering (VQA) tasks intoEnd-to-end autonomous driving systems (Jia et al., 2023b;
+                                                                  trajectory planning, using a dedicated generator to produceLi et al., 2024b; Sima et al., 2025; Liao et al., 2024; Li et al.,
+                                                                   trajectories conditioned on semantic reasoning. To fully2024a) directly map raw sensor inputs to driving trajectories
+                                                          harness the reasoning capabilities of MLLMs while main-through unified architectures, eliminating the need for hand-
+                                                               taining optimal system efficiency, We design an adaptivecrafted intermediate modules. Prominent examples include
+                                          CoT that dynamically injects external knowledge into theUniAD (Hu et al., 2023) and VAD (Jiang et al., 2023), which
+                                                            reasoning process, boosting DeepSight performance in long-unify perception, motion prediction, and trajectory planning
+
+
+                                                2
+
+=== PDF PAGE 3 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+
+
+
+
+                                                                                        CoT: None
+
+
+                      DINOv3                                         CoT: Due to construction warning
+                                                                                                           signs and traffic cones ahead, and the
+                                                                                                                        right lane being proceed with ……
+
+           𝐿𝑜𝑠𝑠!"#$%&'(                 World Feature              Adaptive CoT             Trajectory
+
+
+                          Large Language Model
+
+
+
+            Vision Encoder                World Query                Text Tokenizer
+
+
+                                                                  Ego states
+                                                                         Speed
+
+                                                                                          Instruction
+ 𝑇= 𝑡−1, 𝑡−2, …  𝑇= 𝑡         𝑇= 𝑡, 𝑡+ 1, …                 Lane follow
+
+Figure 2. The pipeline of our method, a holistic training and inference framework for closed-loop driving. It consists of two main modules:
+(a) Long-term driving-world model, for aligning DINOv3 features extracted from future multi-frame RGB images in the BEV space
+during training. (b) An adaptive CoT module for integrating external knowledge to enhance reasoning and decision-making in long-tail
+cases.
+
+
+tail driving scenarios.                                     This paper proposes an implicit world modeling approach
+                                                                     built upon the VLM architecture, enabling long-horizon
+2.3. World Models for Autonomous Driving              image feature prediction and enhancing future trajectory
+                                                          planning capabilities.
+The commonly acceptable description of world models is
+understanding the current state and predicting the future
+state (Li et al., 2025a; Zhao et al., 2025a; Li et al., 2025b;    3. Proposed Method: DeepSight
+Li & Cui, 2025). With the advancement of VLMs, assign-                                                The proposed DeepSight is illustrated in Figure 2. Sec-
+ing world-modeling responsibilities to VLMs has emerged                                                                 tion 3.1 describes the preliminaries. Section 3.2 elaborates
+as a promising research direction. This powerful architec-                                                   on the driving-world model. Section 3.3 presents the Adap-
+ture enables facilitates a comprehensive understanding and                                                                      tive CoT method. Section 3.4 describes the unified training
+accurate prediction of the ego-vehicle’s state, which sup-                                                                strategy and Section 3.5 details the inference pipeline.
+ports decision-making and trajectory planning grounded in
+predicted world dynamics. FSDrive (Zeng et al., 2025) em-
+                                                                    3.1. Preliminary
+ploys VLMs as its world model to generate future frames for
+predicting environmental dynamics and trajectory planning.  We propose DeepSight, a unified generative-understanding
+ReasonPlan (Liu et al., 2025) generates the next-frame im-    framework, denoted as Muni. Figure 2 illustrates the overall
+age in a self-supervised manner and combines it with textual     pipeline of our proposed method. DeepSight simultaneously
+CoT reasoning for decision-making. HERMES (Zhou et al.,    outputs future latent features F = [f0, f1, f2, f3, f4], where
+2025a) employs a shared LLM to jointly drive future LiDAR    each fk ∈Rhbev×wbev×dbev corresponds to the latent represen-
+point cloud generation and scene understanding. However,     tation at time t+k·∆t (k = 0, 1, 2, 3, 4), CoT text Tcot, and
+these world models emphasize the texture of future images,    future trajectory waypoints Pt = {p1, p2, . . . , pn}. Each
+while overlooking the semantic information critical to driv-    waypoint pi = (xi, yi) represents the ego-vehicle’s position
+ing tasks. Moreover, they are limited to short-term predic-    at time t + i · ∆t. Typically, the time step ∆t = 0.5 s, so
+tions, failing to enable safe and reliable trajectory planning.    this sequence covers the dynamic scene evolution over the
+
+
+                                                3
+
+=== PDF PAGE 4 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+next 2 seconds from the current moment. The trajectory    emergency vehicle yielding), the model may need to in-
+waypoints Pt are subsequently converted into ego-vehicle    voke external knowledge. To address this, we introduce
+control commands, such as longitudinal acceleration and    an Adaptive Chain-of-Thought mechanism: after observ-
+steering angle.                                             ing all inputs and modeling the future world state F, the
+                                                  model autonomously determines whether to activate CoT
+Given N multi-view image inputs at current time t, It =
+                      left                                                 for enhanced reasoning. The adaptive CoT generation is{Ifrontt    , Ifrontt         , . . . , Ibackt  } where It ∈RH×W ×3, along                                                          formulated as:
+with historical frames It−τ, where τ = 1, 2, 3, 4, the ego-
+vehicle state Tego, the target point Ttarget, and a set of learn-                                                                              Tcot = Muni(It, It′, Ttarget, Tego, Qworld | F)     (4)
+able World Queries Qworld =  [q0, q1, q2, q3, q4], where
+qk ∈Rhbev×wbev×dbev corresponds to query at time t + k · ∆t,     If the model activates CoT, it generates a structured thought
+the model Muni jointly generates future latent features F,     text; otherwise, it outputs a designated placeholder token
+adaptive CoT text Tcot, and the trajectory Pt. This process   T cot∅  to minimize computational overhead.
+is formulated as:
+                                            Ground Truth Annotation: Due to the scarcity of stan-
+                                                           dardized adaptive CoT datasets for Bench2Drive, we devel-
+                                                    oped an automated high-fidelity labeling pipeline based on  F, Tcot, Pt = Muni(It, It−τ, Ttarget, Tego, Qworld)   (1)
+                                                 Qwen3-VL-235B. This pipeline comprises three core com-
+                                                           ponents: (1) scene complexity assessment, (2) complexity-3.2. Driving-World Model
+                                                         based external knowledge retrieval, and (3) driving behavior
+To endow the VLM with long-horizon spatial perception and    determination. Using this pipeline, we synthesized approxi-
+future-state anticipation, we train the model to predict latent    mately 1.3M high-precision structured annotations for the
+semantic features F = [f0, f1, f2, f3, f4] for consecutive    Bench2Drive dataset, which will be open-sourced.
+future frames in the BEV space. Specifically, the model
+extracts entity motion dynamics by processing historical     3.4. Unified Training Strategy
+frames It−τ and ego-motion states Tego, while concurrent
+                                                  To ensure the model better understands trajectory generation,multi-view images It provide the basis for spatial modeling.
+                                            we encode trajectory waypoints into action tokens based onTo achieve human-like efficiency in predictive modeling,
+                                                                     their pixel-space coordinates in the BEV grid. Specifically,we introduce Qworld as a set of learnable queries to the
+                                                      each waypoint pi = (xi, yi) is quantized and mapped to amodel. This enables the parallel inference of motion states
+                                                                 discrete token index ti ∈{1, 2, . . . , K}, where K is the to-across multiple future time steps within a single forward
+                                                                              tal number of grid cells. This encoding allows us to computepass. This modeling of long-term temporal dynamics in the
+                                                        a Cross-Entropy (CE) loss between predicted and ground-BEV perspective is expressed as:
+                                                                   truth tokens, as both are represented in the same tokenized
+                                                              space.
+     F = Muni(It, It−τ, Ttarget, Tego, Qworld)       (2)
+                                                The model, adopting a unified generative-understanding
+Ground Truth Construction: To ensure the acquisition of    framework, is trained end-to-end by minimizing a com-
+robust semantic representations, we employ DINOv3 ϕdino     posite loss function L, which is a weighted sum of three
+as a semantic feature extractor to construct the ground truth    components: trajectory loss Ltraj, CoT loss Lcot, and world
+F′. DINOv3’s potent self-supervised representation capabil-    state prediction loss Lworld:
+ities allow it to capture nuanced semantic information. The
+                                           L = λtrajLtraj + λcotLcot + λworldLworld        (5)target features are defined as:
+
+                                                        where:
+                      fi = ϕdino(Ibevi  )                   (3)
+                                                                            •  Ltraj = CE(Ttraj, Tgttraj) denotes the cross-entropy loss
+where Ibevi   represents either BEV-rendered images or se-        over predicted and ground-truth trajectory tokens (as
+mantic segmentation maps, both satisfy the model’s require-                                                                described above),
+ments, as the model focuses on accurately characterizing
+the semantic and spatial distribution of the environment.           • Lcot = CE(Tcot, Tgtcot) represents the cross-entropy
+                                                                      loss for token-level CoT text generation,
+3.3. Adaptive CoT Method
+                                                                            • Lworld = MSE(F, Fgt) signifies the mean squared
+When encountering intricate traffic participants or long-tail          error loss between predicted latent features F and
+scenarios (e.g., complex traffic light logic, directional sig-        DINOv3-extracted ground-truth world state features
+nage analysis, Out-of-Distribution construction zones, or          Fgt.
+
+                                                4
+
+=== PDF PAGE 5 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+Table 1. Closed-loop Results of E2E-AD Methods in Bench2Drive under base set. * denote expert feature distillation. DS: Driving Score,
+SR: Success Rate. Red values denote the performance gains over the latest SOTA method under the same Think2Drive protocol. Methods
+in gray utilize different expert distributions (PDM-Lite) and are provided for reference only.
+
+                                                                                     Closed-loop
+     Method                          Paradigm     Expert
+                                                   DS↑     SR(%)↑     Efficiency↑   Comfortness↑
+
+    TCP*(Wu et al., 2022)             E2E    Think2Drive    40.70       15.00        54.26         47.80
+      TCP-ctrl*                      E2E    Think2Drive    30.47        7.27         55.97         51.51
+      TCP-traj*                      E2E    Think2Drive    59.90       30.00        76.54         18.08
+      TCP-traj w/o distillation            E2E    Think2Drive    49.30       20.45        78.78         22.96
+      ThinkTwice*(Jia et al., 2023b)        E2E    Think2Drive    62.44       31.23        69.33         16.22
+      DriveAdapter*(Jia et al., 2023a)       E2E    Think2Drive    64.22       33.08        70.22         16.01
+     VAD(Jiang et al., 2023)             E2E    Think2Drive    42.35       15.00       157.94         46.01
+     GenAD(Zheng et al., 2024)          E2E    Think2Drive    44.81       15.90              -                  -
+    MomAD(Song et al., 2025)          E2E    Think2Drive    44.54       16.71       170.21         48.63
+      DriveTrans(Jia et al., 2025)          E2E    Think2Drive    63.46       35.01       100.64         20.78
+      ReasonPlan(Liu et al., 2025)       VLM    Think2Drive    64.01       34.55       180.64         25.63
+     ORION(Fu et al., 2025)         VLM    Think2Drive    77.74       54.62       151.48         17.38
+     AutoVLA(Zhou et al., 2025b)      VLM    Think2Drive    78.84       57.73       146.93         39.33
+      DiffusionDrive(Liao et al., 2024)      E2E     PDM-Lite      77.68       52.72              -                  -
+     SimLingo(Renz et al., 2025)       VLM    PDM-Lite      85.94       66.82       244.18         25.49
+
+      DeepSight w/o adaptive CoT (Ours)  VLM    Think2Drive  84.52 (+5.68)  65.91 (+8.81)  198.80 (+18.16)      14.25
+      DeepSight (Ours)            VLM    Think2Drive  86.23 (+7.39)  71.36 (+13.63)  201.71 (+21.07)      16.11
+
+
+Here, λtraj, λcot, and λworld are hyperparameters that bal-    4. Experiments
+ance the relative importance of trajectory prediction, CoT
+                                                                    4.1. Experiment Settingsreasoning, and world state modeling, respectively.
+                                                          Datasets. We trained and evaluated DeepSight on the
+3.5. Inference Pipeline                                 Bench2Drive dataset, a closed-loop evaluation protocol un-
+                                                             der CARLA V2 for E2E autonomous driving. Bench2Drive
+During inference, the input sequence X, comprising his-
+                                                           provides 10,000 sampled driving segments for training and
+torical images It−τ, surround-view images It, ego-vehicle
+                                                                 offers closed-loop evaluation environments with detailed
+states Tego, target waypoints Ttarget, and learnable queries
+                                                           simulator configurations (Jia et al., 2024). Each segment
+Qworld, are pre-filled as inputs to the model, where they
+                                                            captures approximately 150 meters of continuous driving
+interact and fuse through deep self-attention mechanisms.
+                                                             within a specific traffic scenario. We evaluated the proposed
+The model first performs parallel predict long-horizon future
+                                                  method on Bench2Drive’s official set of 220 short routes,
+features p(F | X) for the coming seconds, then adaptively
+                                                   which span 44 distinct interactive scenarios, with 5 routes
+activates the CoT process p(Tcot | X based on scene demand,
+                                                            per scenario.
+and finally output the future trajectory p(Pt | X, F, Tcot).
+Notably, these three outputs are generated within a single    Metrics. Bench2drive includes five metrics for closed-loop
+unified forward pass, which can be formally expressed as:     evaluation: Driving Score (DS), Success Rate(SR), Effi-
+                                                               ciency, Comfortness, and Multi-Ability. The Success Rate
+                                                                quantifies the proportion of routes successfully completed
+                                                             within the allotted time. The Driving Score follows CARLA,
+                                                            incorporating both route completion status and violation
+  p(Pt, Tcot, F | X) =                                         penalties, where infractions reduce the score via discount
+                                                                 factors (Dosovitskiy et al., 2017). Efficiency and Comfort-
+      p(F | X) · p(Tcot | X, F) · p(Pt | X, F, Tcot)  (6)
+                                                            ness are used to measure the speed performance and comfort
+                                                            of the autonomous driving system during the driving pro-
+                                                                   cess, respectively. Multi-Ability measures 5 advanced skills
+                                                         independently for urban driving. For ablation studies, weOwing to our unified generative-understanding architecture,
+                                                         focus on three key metrics: Route Completion (RC), In-the entire inference pipeline requires no additional external
+                                                                 fraction Score (IS), and Driving Score (DS), to analyze thegenerative models. Moreover, the design of parallel latent
+                                                                contribution of different world modeling methods to overallfeature decoding combined with adaptive CoT ensures that
+                                                              driving performance.our model incurs negligible additional time overhead com-
+pared to a native VLM architecture.
+
+                                                5
+
+=== PDF PAGE 6 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+Implementation. We employ Qwen2.5-VL-3B (Bai et al.,    Short-horizon vs. Long-horizon  Furthermore, our anal-
+2025) as our base VLM. All experiments are conducted on    ysis of different temporal modeling settings (ID 1 and ID
+64 NVIDIA H20 GPUs with 96 GB of memory. During    3) reveals that when the VAE is used to encode five con-
+training, we use 2 × 10−5 learning rate and batch size 128,    secutive frames before predicting a trajectory, the driving
+for 2 epochs in Bench2Drive. Additional detailed informa-    score drops significantly (−13.09 DS). This indicates that
+tion is listed in the Appendix.                                 the VAE is fundamentally inadequate for modeling long-
+                                                         horizon world relationships. In contrast, our latent world
+4.2. Main Results                                     modeling approach (ID 2 and ID 4) already demonstrates
+                                                            strong performance under the single-frame trajectory pre-
+As shown in Table 1, DeepSight achieves the best closed-                                                                 diction paradigm. Moreover, when extended to multi-frame
+loop performance, significantly outperforming all existing                                                               prediction, it further boosts the driving score by (+11.78
+E2E and VLM methods on Bench2Drive. Our approach sub-                                                       DS). This clearly demonstrates that our model has a signifi-
+stantially improves both SR and DS. In open-loop evalua-                                                            cant advantage in capturing long-horizon world dynamics,
+tion, our L2 error is reduced to 0.58, demonstrating superior                                                            enabling it to effectively model temporal relationships span-
+future trajectory prediction accuracy. Specifically, Deep-                                                         ning extended time periods.
+Sight surpasses the latest SOTA method AutoVLA(Zhou
+et al., 2025b) by +7.39 DS and +13.63% SR. DeepSight
+                                                Forward-View vs. Bird’s-Eye-View  As we mentioned,also achieves the highest efficiency score of 201.71 among
+                                                     an ideal world model should be capable of precisely per-all evaluated methods, demonstrating an effective and proac-
+                                                             ceiving spatial structure. To validate the advantage of BEVtive driving policy. The comfort score of 16.11 reflects a
+                                                                   spatial prediction, we evaluated our model under differ-common trade-off between trajectory agility and smooth-
+                                                               ent observational perspectives, specifically, by applying theness. Nonetheless, the comfort margin remains within ac-
+                                                  same processing pipeline to front-view inputs. As shown inceptable bounds and could be further optimized via post-
+                                                          Table 4, the results show that even in the front-view setting,smoothing or low-level controller tuning. Moreover, even
+                                                        our paradigm remains effective, achieving strong perfor-without incorporating textual reasoning, our method, relying
+                                                mance on the 10-route benchmark (DS: 77.77, IS: 0.87).merely on the world modeling, outperforms the latest SOTA
+                                                     However, the front-view perspective inherently lacks com-method.
+                                                          prehensive modeling of surrounding vehicles and agents,
+Additionally, multi-ability results are reported in Table 2.   which constrains the model’s ability to perform safe, long-
+Our model excels in scenarios such as overtaking (91.11%)    horizon planning. In contrast, when we adopt BEV-based
+and emergency braking (78.33%), indicating that in tasks     spatial modeling, the driving score improves significantly
+predominantly requiring intuitive reasoning, our strong long-   (+8.8 DS). This outcome not only confirms the effective-
+horizon BEV spatial modeling enables smooth and robust    ness of BEV-centric spatial reasoning but also demonstrates
+handling. Moreover, in challenging multi-vehicle interac-    the strong generalizability of our proposed paradigm across
+tion scenarios, our model shows significant improvements    diverse observational viewpoints.
+over conventional methods, demonstrating its powerful capa-
+bility to model causal relationships among the ego vehicle,                                                                    4.4. Analysis of Adaptive COT
+dynamic agents, and static elements in complex driving
+environments.                                             Effectiveness of Adaptive COT   Table 5 provides a de-
+                                                                   tailed ablation study of the adaptive CoT mechanism. By
+4.3. Analysis of Different World Modeling               comparing ID 1, ID 2, and ID 3, we show that while the
+                                                             adaptive CoT does improve SR, this gain is less significant
+Explicit Reconstruction vs. Latent Semantic  Table 3    than the improvement achieved through driving world model
+presents the closed-loop evaluation results of different world    (ID 3), revealing the inherent limitations of adaptive CoT
+modeling approaches. We believe that an ideal world model    alone in autonomous driving scenarios. Compared to ID 3,
+should possess precise semantic understanding, accurate   ID 4 achieves the best overall performance, confirming the
+spatial localization, and long-horizon motion modeling.   complementary nature of driving world model and adaptive
+Therefore, we first compare VAE-based world modeling     textual reasoning.
+approaches (Zeng et al., 2025) that use codebooks to focus
+on texture features with latent-feature-based methods such
+                                                          Qualitative Visualization  We validate the effectiveness
+as DeepSight (ID 1 and ID 2). The results demonstrate that
+                                                              of Adaptive CoT in long-tail driving scenarios through three
+our world modeling approach, exemplified by DeepSight,
+                                                             canonical closed-loop evaluation settings. Figure 3 presents
+achieves a significant improvement in DS (+47.04), validate
+                                                         our model’s outputs for driving behavior reasoning and tra-
+that our world modeling method effectively captures and
+                                                               jectory prediction, along with corresponding ego-vehicle
+interprets the semantic structure of driving environments.
+                                                                      states. We observe that, in these three complex scenarios,
+
+                                                6
+
+=== PDF PAGE 7 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+               Table 2. Multi-Ability Results of E2E-AD Methods under base set. * denote expert feature distillation.
+
+                                                                             Ability (%) ↑
+   Method                       Paradigm
+                                         Merging  Overtaking  Emergency Brake  Give Way  Traffic Sign   Mean
+
+   TCP* (Wu et al., 2022)          E2E     16.18     20.00          20.00         10.00       6.99        14.63
+    TCP-ctrl*                   E2E     10.29      4.44          10.00         10.00       6.45         8.23
+    TCP-traj*                   E2E      8.89      24.29          51.67         40.00      46.28       34.22
+    TCP-traj w/o distillation         E2E     17.14      6.67          40.00         50.00      28.72       28.51
+    ThinkTwice* (Jia et al., 2023b)    E2E     27.38     18.42          35.82         50.00      54.23       37.17
+    DriveAdapter* (Jia et al., 2023a)   E2E     28.82     26.38          48.76         50.00      56.43       42.08
+   AD-MLP (Zhai et al., 2023)      E2E      0.00       0.00           0.00          0.00        4.35         0.87
+    UniAD-Tiny (Hu et al., 2023)     E2E      8.89       9.33          20.00         20.00      15.43       14.73
+   UniAD-Base (Hu et al., 2023)     E2E     14.10     17.78          21.67         10.00      14.21       15.55
+   VAD (Jiang et al., 2023)         E2E      8.11      24.44          18.64         20.00      19.15       18.07
+    ReasonPlan (Liu et al., 2025)    VLM     37.50     26.67          33.30         40.00      45.76       36.66
+    DriveTrans (Jia et al., 2025)     VLM     17.57     35.00          48.36         40.00      52.10       38.60
+   ORION (Fu et al., 2025)       VLM     25.00     71.11          78.33         30.00      69.15       54.72
+
+    DeepSight (Ours)          VLM     60.00     91.11          78.33         50.00      71.58    70.20 (+15.48)
+
+
+
+Table 3. Closed-loop evaluation results in Dev 10 routes for differ-    Table 5. Ablation results of CoT type in Bench2drive 220 routes.
+ent world modeling methods.                          DS and SR denote Driving Score and Success Rate.
+
+                                                    ID  WM   ADA-COT   DS↑    SR↑     Eff↑
+  ID   TYPE     FRAME   RC↑    IS↑    DS↑
+                                                           1     ✗        ✗         58.16    28.18    190.76
+  1    VAE       ONE     47.56    0.64    27.75                                                           2     ✗      ✓        69.87    42.27    187.39
+  2    DINOV3    ONE     90.49    0.83    74.79                                                           3    ✓        ✗         84.52    65.91    198.80
+  3    VAE        FIVE     27.02    0.66    14.66                                                           4    ✓      ✓        86.23    71.36    201.71
+  4    DINOV3     FIVE     95.95    0.89    86.57
+                                                                Table 6. Comparison of inference speeds among different end-to-
+Table 4. Closed-loop evaluation results in Dev 10 routes for differ-    end methods
+ent view alignment.
+
+                                            METHOD    WM   COT   ADD. TIME%↓
+  ID    TYPE         RC↑      IS↑     DS↑                                                   QWEN2.5-VL     ✗      ✗           0
+   1      FRONT VIEW     89.47     0.87     77.77         FSDRIVE      ✓      ✗         +60.71
+   2     BEV VIEW       95.95     0.89     86.57         DEEPSIGHT    ✓      ✗         +3.57
+                                                      DEEPSIGHT    ✓    ✓      +7.69 (+4.12)
+
+
+DeepSight dynamically assesses scene complexity and de-
+                                                             inputs and directly outputs trajectories. As illustrated intermines whether to activate social knowledge reasoning,
+                                                        Table 6, we compare the inference overhead of differentthe resulting text reasoning outputs are shown on the right.
+                                                     world model designs. DeepSight introduces only a 3.57%DeepSight effectively recognizes critical environmental el-
+                                                               additional latency compared to the native VLM, validatingements such as STOP signs, fire trucks, and traffic cones
+                                                             the efficiency of our parallel latent future state predictionthat are essential for rational decision-making. Then it in-
+                                                         paradigm. Moreover, thanks to the conditional activation offers appropriate responses, including deceleration or other
+                                                               the CoT module, triggered only when necessary, the averagesafety-oriented maneuvers. This demonstrates that incorpo-
+                                                            inference latency increases by only 4.12%. These resultsrating contextually relevant social knowledge significantly
+                                                        demonstrate the high efficiency of both the driving-worldenhances the robustness and safety of autonomous driving
+                                                   model and the adaptive CoT within DeepSight.systems in highly dynamic and complex real-world environ-
+ments. Additional qualitative results and visual examples
+are provided in the Appendix.                              5. Conclusion
+
+                                                        This paper presents DeepSight, an autonomous driving
+4.5. Analysis of Additional Time Overhead
+                                                   framework based on latent feature prediction, enabling
+We also conducted ablation studies to evaluate the addi-  VLMs to effectively model the world. Through world mod-
+tional inference latency introduced by the world model and     eling, our DeepSight captures long-term world states in
+the adaptive CoT mechanism. We selected a fine-tuned    dynamic driving scenarios. In addition, by introducing adap-
+Qwen2.5-VL model as our baseline, which takes the same     tive CoT, DeepSight efficiently integrates social knowledge
+
+                                                7
+
+=== PDF PAGE 8 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+
+                       Frame1                       Frame2                       Frame3                   Key Elements                  Thinking
+                                                                   … Hard. Due to
+                                                                                                                                                        construction warning
+    1                                                                                                                                                  signs and traffic cones
+                      Scene                                                                                                                                              ahead,lane beingand occupiedthe right by
+                                                                                                                                                   temporary
+                                                                                                                                                              facilities..……
+
+    2                                                             … Hard. An emergency
+                                                                                                                                                                  vehicle (fire truck) has
+                                                                                                                                                        appeared on the                      Scene                                                                                                                               right……yield to
+                                                                                                                         it……slow down.……
+
+
+
+    3                                                              … Hard. Due to the
+                      Scene                                                                                                                                           presenceahead, carefullyof a STOPobservesign
+                                                                                                                                                                            potential hazards at the
+                                                                                                                                                    intersection.……
+
+                                                     Timestamp
+
+Figure 3. Qualitative results of DeepSight on the Bench2Drive closed-loop evaluation set. The three rows of the figure depict three distinct
+driving scenarios. The first three columns present temporally consecutive BEV frames, with red bounding boxes indicating the ego
+vehicle’s position. The fourth column displays corresponding PV images that highlight critical frame for safe driving. The final column
+presents the model-generated CoT output, which analyzes scene-specific information, including construction zones, emergency vehicles,
+and traffic signs, thereby effectively enhancing the safety of trajectory planning.
+
+
+into driving decisions in long-tail scenarios. Extensive ex-       vision and pattern recognition, pp. 11621–11631, 2020.
+perimental results demonstrate the effectiveness of the pro-
+posed DeepSight approach, advancing autonomous driving    Dosovitskiy, A., Ros, G., Codevilla, F., Lopez, A., and
+toward world modeling.                                        Koltun, V. Carla: An open urban driving simulator, 2017.
+                                        URL https://arxiv.org/abs/1711.03938.
+Limitations and Future Work Although DeepSight per-
+forms well in the Bench2Drive closed-loop simulation en-
+                                                         Fu, H., Zhang, D., Zhao, Z., Cui, J., Liang, D., Zhang, C.,
+vironment (Jia et al., 2024), it is constrained by the high
+                                                          Zhang, D., Xie, H., Wang, B., and Bai, X. Orion: A holis-
+computational complexity of scaling VLMs to real-time
+                                                                               tic end-to-end autonomous driving framework by vision-
+driving scenarios. In the future, We plan to explore more ef-
+                                                         language instructed action generation.  arXiv preprint
+ficient driving world models, further enhancing the model’s
+                                                           arXiv:2503.19755, 2025.
+generalization capability and reasoning speed.
+
+                                                   Hu, Y., Yang, J., Chen, L., Li, K., Sima, C., Zhu, X., Chai,
+Impact Statement                                                S., Du, S., Lin, T., Wang, W., et al. Planning-oriented
+                                                     autonomous driving. In Proceedings of the IEEE/CVF
+This paper presents work whose goal is to advance the field                                                           conference on computer vision and pattern recognition,
+of Machine Learning. There are many potential societal                                                               pp. 17853–17862, 2023.
+consequences of our work, none which we feel must be
+specifically highlighted here.                                                   Hu, Y., Li, Q., Zhang, D., Yan, J., and Chen, Y. Context-
+                                                             alignment: Activating and enhancing llm capabilities in
+References                                                time series, 2026. URL https://arxiv.org/abs/
+                                              2501.03747.
+Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang,
+   K., Wang, P., Wang, S., Tang, J., Zhong, H., Zhu, Y.,
+                                                Hwang, J.-J., Xu, R., Lin, H., Hung, W.-C., Ji, J., Choi, K.,
+  Yang, M., Li, Z., Wan, J., Wang, P., Ding, W., Fu, Z., Xu,
+                                                      Huang, D., He, T., Covington, P., Sapp, B., et al. Emma:
+   Y., Ye, J., Zhang, X., Xie, T., Cheng, Z., Zhang, H., Yang,
+                                                         End-to-end multimodal model for autonomous driving.
+   Z., Xu, H., and Lin, J. Qwen2.5-vl technical report. arXiv
+                                                           arXiv preprint arXiv:2410.23262, 2024.
+   preprint arXiv:2502.13923, 2025.
+
+                                                Hwang, J.-J., Xu, R., Lin, H., Hung, W.-C., Ji, J., Choi,
+Caesar, H., Bankiti, V., Lang, A. H., Vora, S., Liong, V. E.,       K., Huang, D., He, T., Covington, P., Sapp, B., Zhou, Y.,
+  Xu, Q., Krishnan, A., Pan, Y., Baldan, G., and Beijbom, O.     Guo, J., Anguelov, D., and Tan, M. Emma: End-to-end
+  nuscenes: A multimodal dataset for autonomous driving.      multimodal model for autonomous driving, 2025. URL
+   In Proceedings of the IEEE/CVF conference on computer     https://arxiv.org/abs/2410.23262.
+
+                                                8
+
+=== PDF PAGE 9 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+Jia, X., Gao, Y., Chen, L., Yan, J., Liu, P. L., and Li, H.    Li, Z., Li, K., Wang, S., Lan, S., Yu, Z., Ji, Y., Li, Z., Zhu,
+  Driveadapter: Breaking the coupling barrier of percep-       Z., Kautz, J., Wu, Z., et al. Hydra-mdp: End-to-end
+   tion and planning in end-to-end autonomous driving. In      multimodal planning with multi-target hydra-distillation.
+  Proceedings of the IEEE/CVF International Conference      arXiv preprint arXiv:2406.06978, 2024b.
+  on Computer Vision, pp. 7953–7963, 2023a.
+                                                            Liao, B., Chen, S., Yin, H., Jiang, B., Wang, C., Yan, S.,
+Jia, X., Wu, P., Chen, L., Xie, J., He, C., Yan, J., and Li, H.      Zhang, X., Li, X., Zhang, Y., Zhang, Q., et al.  Dif-
+  Think twice before driving: Towards scalable decoders       fusiondrive: Truncated diffusion model for end-to-end
+   for end-to-end autonomous driving. In Proceedings of the      autonomous driving. arXiv preprint arXiv:2411.15139,
+  IEEE/CVF Conference on Computer Vision and Pattern      2024.
+  Recognition, pp. 21983–21994, 2023b.
+                                                             Liu, X., Zhong, Z., Guo, Y., Liu, Y.-F., Su, Z., Zhang,
+Jia, X., Yang, Z., Li, Q., Zhang, Z., and Yan, J. Bench2drive:      Q., Wang, J., Gao, Y., Zheng, Y., Lin, Q., et al. Rea-
+  Towards multi-ability benchmarking of closed-loop end-      sonplan: Unified scene prediction and decision reason-
+  to-end autonomous driving, 2024. URL https://      ing for closed-loop autonomous driving. arXiv preprint
+  arxiv.org/abs/2406.03877.                        arXiv:2505.20024, 2025.
+
+                                                     Luo, Y., Li, F., Xu, S., Lai, Z., Yang, L., Chen, Q., Luo,Jia, X., You, J., Zhang, Z., and Yan, J. Drivetransformer:
+                                                                      Z., Xie, Z., Jiang, S., Liu, J., Chen, L., Wang, B., and  Unified transformer for scalable end-to-end autonomous
+                                                             xin Yang, Z. Adathinkdrive: Adaptive thinking via rein-   driving, 2025. URL https://arxiv.org/abs/
+                                                          forcement learning for autonomous driving, 2025. URL  2503.07656.
+                                             https://arxiv.org/abs/2509.13769.
+Jiang, B., Chen, S., Xu, Q., Liao, B., Chen, J., Zhou, H.,
+                                                      Renz, K., Chen, L., Arani, E., and Sinavski, O.  Sim-  Zhang, Q., Liu, W., Huang, C., and Wang, X. Vad: Vector-
+                                                                    lingo: Vision-only closed-loop autonomous driving with  ized scene representation for efficient autonomous driv-
+                                                             language-action alignment, 2025.  URL https://   ing. ICCV, 2023.
+                                             arxiv.org/abs/2503.09594.
+Jiang, B., Chen, S., Liao, B., Zhang, X., Yin, W., Zhang, Q.,
+                                                       Sima, C., Chitta, K., Yu, Z., Lan, S., Luo, P., Geiger, A., Li,
+  Huang, C., Liu, W., and Wang, X. Senna: Bridging large
+                                                               H., and Alvarez, J. M. Centaur: Robust end-to-end au-
+  vision-language models and end-to-end autonomous driv-
+                                                     tonomous driving with test-time training. arXiv preprint
+   ing, 2024. URL https://arxiv.org/abs/2410.
+                                                           arXiv:2503.11650, 2025.
+  22313.
+                                                      Song, Z., Jia, C., Liu, L., Pan, H., Zhang, Y., Wang, J.,
+Kim, M. J., Pertsch, K., Karamcheti, S., Xiao, T., Balakr-                                                       Zhang, X., Xu, S., Yang, L., and Luo, Y. Don’t shake
+   ishna, A., Nair, S., Rafailov, R., Foster, E., Lam, G., San-                                                               the wheel: Momentum-aware planning in end-to-end
+   keti, P., et al. Openvla: An open-source vision-language-                                                     autonomous driving, 2025. URL https://arxiv.
+  action model. arXiv preprint arXiv:2406.09246, 2024.                                             org/abs/2503.03125.
+Li, P. and Cui, D. Navigation-guided sparse scene repre-                                                        Tang, Y., Xu, Z., Meng, Z., and Cheng, E. Hip-ad: Hierar-
+   sentation for end-to-end autonomous driving, 2025. URL                                                                   chical and multi-granularity planning with deformable at-
+  https://arxiv.org/abs/2409.18341.                                                                   tention for autonomous driving in a single decoder, 2025.
+                                       URL https://arxiv.org/abs/2503.08612.Li, Y., Zhao, S. Z., Xu, C., Tang, C., Li, C., Ding, M.,
+  Tomizuka, M., and Zhan, W. Pre-training on synthetic     Tian, X., Zhao, S., Wang, H., Chen, S., Ji, Y., Peng, Y., Zhao,
+  driving data for trajectory prediction. In 2024 IEEE/RSJ       H., and Li, X. Think twice: Enhancing llm reasoning
+  International Conference on Intelligent Robots and Sys-     by scaling multi-round test-time thinking, 2025. URL
+  tems (IROS), pp. 5910–5917, 2024a.  doi:  10.1109/     https://arxiv.org/abs/2503.19855.
+  IROS58592.2024.10802492.
+                                                Wang, S., Yu, Z., Jiang, X., Lan, S., Shi, M., Chang,
+Li, Y., Fan, L., He, J., Wang, Y., Chen, Y., Zhang, Z., and       N., Kautz, J., Li, Y., and Alvarez, J. M.  Omnidrive:
+  Tan, T. Enhancing end-to-end autonomous driving with    A holistic vision-language dataset for autonomous driv-
+   latent world model, 2025a. URL https://arxiv.     ing with counterfactual reasoning, 2025. URL https:
+  org/abs/2406.08481.                        //arxiv.org/abs/2405.01533.
+
+Li, Y., Wang, Y., Liu, Y., He, J., Fan, L., and Zhang, Z. End-   Wu, P., Jia, X., Chen, L., Yan, J., Li, H., and Qiao, Y.
+  to-end driving with online trajectory evaluation via bev      Trajectory-guided control prediction for end-to-end au-
+  world model, 2025b. URL https://arxiv.org/     tonomous driving: A simple yet strong baseline, 2022.
+  abs/2504.01941.                         URL https://arxiv.org/abs/2206.08129.
+
+                                                9
+
+=== PDF PAGE 10 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+Xing, S., Qian, C., Wang, Y., Hua, H., Tian, K., Zhou, Y.,   Zhou, X., Liang, D., Tu, S., Chen, X., Ding, Y., Zhang,
+  and Tu, Z. Openemma: Open-source multimodal model       D., Tan, F., Zhao, H., and Bai, X.  Hermes: A uni-
+   for end-to-end autonomous driving. In Proceedings of the       fied self-driving world model for simultaneous 3d scene
+  Winter Conference on Applications of Computer Vision,      understanding and generation, 2025a. URL https:
+  pp. 1001–1009, 2025a.                           //arxiv.org/abs/2501.14729.
+
+Xing, Z., Zhang, X., Hu, Y., Jiang, B., He, T., Zhang,    Zhou, Z., Cai, T., Zhao, S. Z., Zhang, Y., Huang, Z., Zhou,
+  Q., Long, X., and Yin, W.  Goalflow:  Goal-driven       B., and Ma, J. Autovla: A vision-language-action model
+  flow matching for multimodal trajectories generation in       for end-to-end autonomous driving with adaptive rea-
+  end-to-end autonomous driving, 2025b. URL https:      soning and reinforcement fine-tuning.  arXiv preprint
+  //arxiv.org/abs/2503.05689.                     arXiv:2506.13757, 2025b.
+
+Xiong, Z., Ye, X., Yaman, B., Cheng, S., Lu, Y., Luo,
+   J., Jacobs, N., and Ren, L. Unidrive-wm: Unified un-
+  derstanding, planning and generation world model for
+  autonomous driving, 2026. URL https://arxiv.
+  org/abs/2601.04453.
+
+Zeng, S., Chang, X., Xie, M., Liu, X., Bai, Y., Pan, Z., Xu,
+  M., Wei, X., and Guo, N. Futuresightdrive: Thinking
+  visually with spatio-temporal cot for autonomous driv-
+   ing, 2025. URL https://arxiv.org/abs/2505.
+  17685.
+
+Zhai, J.-T., Feng, Z., Du, J., Mao, Y., Liu, J.-J., Tan, Z.,
+  Zhang, Y., Ye, X., and Wang, J. Rethinking the open-loop
+  evaluation of end-to-end autonomous driving in nuscenes.
+  arXiv preprint arXiv:2305.10430, 2023.
+
+Zhang, J., Xu, C., and Li, B.  Chatscene: Knowledge-
+  enabled  safety-critical  scenario  generation  for  au-
+  tonomous vehicles, 2024.  URL https://arxiv.
+  org/abs/2405.14062.
+
+Zhao, G., Ni, C., Wang, X., Zhu, Z., Zhang, X., Wang, Y.,
+  Huang, G., Chen, X., Wang, B., Zhang, Y., Mei, W., and
+  Wang, X. Drivedreamer4d: World models are effective
+  data machines for 4d driving scene representation.  In
+  CVPR, 2025a.
+
+Zhao, Q., Lu, Y., Kim, M. J., Fu, Z., Zhang, Z., Wu, Y.,
+   Li, Z., Ma, Q., Han, S., Finn, C., Handa, A., Liu, M.-Y.,
+  Xiang, D., Wetzstein, G., and Lin, T.-Y. Cot-vla: Visual
+  chain-of-thought reasoning for vision-language-action
+  models, 2025b. URL https://arxiv.org/abs/
+  2503.22020.
+
+Zheng, W., Song, R., Guo, X., Zhang, C., and Chen, L.
+  Genad: Generative end-to-end autonomous driving, 2024.
+  URL https://arxiv.org/abs/2402.11502.
+
+Zheng, Y., Yang,  P., Xing, Z., Zhang, Q., Zheng, Y.,
+  Gao, Y., Li, P., Zhang, T., Xia, Z., Jia, P., and Zhao,
+  D.  World4drive: End-to-end autonomous driving via
+  intention-aware physical latent world model, 2025. URL
+  https://arxiv.org/abs/2507.00603.
+
+                                                10
+
+=== PDF PAGE 11 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+A. Reasoning Annotation Pipeline
+
+To provide high-quality, adaptive reasoning data for the SFT phase, we developed an automated data construction pipeline
+consisting of a two-stage workflow. Given inputs with the current camera, history video, driving command, and instruction,
+the powerful MLLM Qwen3-VL-235B first generates a raw text CoT. Figure 4 illustrates a complete sample of the annotation
+dataset, detailing the reasoning steps. The prompt for Qwen3-VL-235B is shown in Figure 5. The text CoT then passes
+through two-stage. This pipeline systematically processes raw datasets that contain only multimodal inputs and converts
+them into comprehensive reasoning datasets, effectively integrating the model’s understanding of scene complexity and
+distilling Qwen3vl-235B’s scene-understanding capability.
+
+                                                                                   Filter       Classify
+            History video         Instruction                    Annotate  Raw                                    Reasoning
+                             1.Objective:……                     CoT                                        data
+                         You are controlling    Qwen3VL-235B
+                              an autonomous
+                                   vehicle in a comp-
+                                   lex urban traffic
+                           environment……                                                                                 <think>easy.</think></
+                                      2. Use the following                                                                     answer>
+                                  standard ……a.         1. Infer                                                         These are the future
+                              Scene Analysis……                                                                             waypoints:
+                                               The current vehicle behavior is in the car-following phase.  simple     [(0.79,0.00),(3.13,0.00),(
+                                                                                                                                                        6.89,0.00),(11.04,0.00)].
+                            Driving Command                                                                        </answer>                                                   2. Determine
+                             LaneFollow
+                                                       This is a complex scenario.                                           <think>Hard.</think><
+            Surround-view Camera Images                                                                              /answer> Due to the
+                                                                                                                                presence of an
+                                                   3. Summarize                                      “ACCIDENT AHEAD”
+                                                                                                                      warning sign ahead,
+                                            Due to the presence of an “ACCIDENT AHEAD”     complex   indicating potential
+                                                    warning sign ahead, indicating potential accident risk,                  accident risk, cautious
+                                                           cautious driving is required. Maintain the current lane                   driving is required.
+                                                   and reduce speed.                                                  Maintain the current
+                                                                                                                                       lane and reduce speed.
+
+
+                                     Figure 4. A complete sample of the annotation dataset.
+
+
+
+   • Format Filter: This rule-based filter checks whether the text reasoning is composed of the three parts: (1) Infer current
+     action based on historical information, (2) Determine whether complex decision-making is required based on road
+     conditions, and (3) Summarize inference results. Furthermore, we examined and filtered two types of errors: when the
+    model judged a scenario to be simple but still provided some reasoning, and when it judged a scenario to be complex
+     but did not provide any reasoning. This is crucial for our next step of assembly.
+
+   • Classify: In this process, we primarily categorize the annotated data. We carefully designed how the model produces
+       its final answers. First, we require the model to make a judgment about the current vehicle’s motion state, which helps it
+     better understand whether to accelerate or decelerate when making the final decision. In our prompt, we ask the model
+     to determine the vehicle’s motion state solely from changes in surrounding pixels. We also provide multiple conditions
+     for determining when external knowledge is needed, to assist the model in making precise judgments. However, we
+     believe these two steps do not need to be fully distilled into our DeepSight; we only aim to retain the key reasoning part.
+     Therefore, we classified Qwen3-VL-235B’s answers: if “simple” appears during the assessment of scene complexity,
+   we regard it as a simple scene and directly assemble the real trajectory values; if “complex” appears, we regard it as a
+    complex scene and extract only the third part—the reasoning in the summary—to help the model provide decision
+     information.
+
+
+B. Implementation Details
+
+All experiments are conducted on 64 NVIDIA H20 GPUs (96 GB each). We employ Qwen2.5-VL-3B (Bai et al., 2025) as
+our base VLM. During SFT, we use 2 × 10−4 learning rate and batch size of 64, for 2 epochs in Bench2Drive. The vision
+encoder of DeepSight is frozen, and the LLM is fully fine-tuned in the SFT stage. We observe that DINOv3-ViT-L/16
+is a vision model based on the Vision Transformer (ViT) architecture within the DINOv3 series, specifically designed
+
+                                                11
+
+=== PDF PAGE 12 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+
+                                1.   Objective:
+                             You are controlling an autonomous vehicle in a complex urban traffic environment. Currently available inputs
+                                         include: images from six camera views (front, rear, left, right, front-left, front-right), the ego vehicle’s trajecto
+                                        ry over the past 2 seconds, and historical images from the CAM_FRONT camera over the past 2 seconds. Yo
+                                        ur task is to combine driving command and plan safe and reasonable driving behavior for the ego vehicle over
+                                         the next 2 seconds. Please perform reasoning and output in Chinese.
+                                2.   Process Overview:
+                                       Please strictly follow the two steps below sequentially for reasoning:
+                                                a. [Infer current action based on historical information]: Based on pixel features, pay attention to lane mar
+                                         kings, reference objects, etc., and determine which of the following stages the current vehicle behavior is in:
+                                       [Following, Lane changing, Turning left, Turning right, Stopping and waiting, Other]. Output requirement: St
+                                               rictly select from the provided options; format: “Current vehicle behavior is in [stage].” (Example: “Current v
+                                          ehicle behavior is in lane changing stage.”). If no match is found in the list, choose “Other”.
+                                            b. [Determine whether complex decision-making is required based on road conditions]: If the current en
+                                    vironment involves multi-object interaction (e.g., intersection passage, overtaking obstacle vehicles, merging
+                                           into main road, yielding to emergency vehicles, etc.), determine whether it qualifies as a “complex decision sc
+                                          enario.” Judgment criteria:
+                                                •    If at an intersection with green light in the ego vehicle’s direction and no vehicle ahead →prioritize accel
+                                                eration;
+                                                •    If the preceding vehicle’s tail lights flash continuously (not turn signals) without other anomalies → likel
+                                     y a malfunctioning vehicle, treat as complex scenario;
+                                                •    If at an uncontrolled intersection requiring turning or crossing →treat as complex scenario;
+                                                •    If a “STOP” sign is present ahead with potential risks nearby (e.g., pedestrians, cross traffic) →treat as c
+                                     omplex scenario;
+                                                •   For other cases, apply driving common sense: if no interaction risk, classify as simple scenario; otherwise,
+                                        complex.
+                                        Output requirement : Output only “Complex scenario” or “Simple scenario”. (Example: “Complex scenar
+                                               io”)
+                                                c. [Summarize inference results]: Based on the above reasoning, select a safe and reasonable future driving
+                                         action from the candidate action set:
+                                                •   Direction control (choose one of five): [Maintain current lane, Change lane left, Change lane right, Turn l
+                                                        eft, Turn right]
+                                                •   Speed control (choose one of five): [Stop and wait, Decelerate, Maintain current speed, Accelerate, Overt
+                                        ake via adjacent lane]
+                                        Output requirement:
+                                                •    If simple scenario: directly output action combination, format: “Direction control, Speed control” (Examp
+                                                       le: “Maintain current lane, Decelerate”)
+                                                •    If complex scenario: first state the reason, then output action combination, format: “Due to [reason], [Dire
+                                              ction control, Speed control]” (Example: “Due to STOP sign ahead and pedestrian crossing, Stop”)
+                                3.   Output Format Example:
+                                            [Infer current action based on historical information]:
+                                      Current vehicle behavior is in following stage.
+                                     [Determine whether complex decision-making is required based on road conditions]:
+                                   Simple scenario.
+                                  [Summarize inference results]:
+                                     Maintain current lane, Maintain current speed
+
+
+                                   Figure 5. Prompt for CoT annotation by Qwen3-VL-235B
+
+
+for image feature extraction and downstream vision tasks. Trained on the large-scale LVD-1689M dataset, this model
+demonstrates robust global modeling capabilities, making it highly suitable for dense prediction tasks such as classification
+and object detection. Its performance compares favorably to the much larger ViT-7B/16 model, achieving superior results
+across various benchmarks and significantly outperforming competing models, particularly in dense prediction tasks. As
+an efficient and widely adopted variant, ViT-L/16 strikes a balance between computational resources and performance,
+rendering it an effective choice for feature extraction in our long-term spatiotemporal modeling.
+
+                            Table 7. Model parameters of image encoder model (Vision Transformer).
+
+
+                MODEL       LAYERS  HIDDEN SIZE  NUM HEADS  PATCH SIZE
+
+                   QWEN2.5-VL     32        1280          16           14
+
+
+C. More Visualization
+
+In the simulation dataset, numerous scenarios require world reasoning, such as pedestrians crossing the road, narrow roads,
+and other extreme conditions. DeepSight successfully handles all these challenges, as illustrated in Figure 6.
+
+As shown in the visualizations, our extensive closed-loop testing on the simulation dataset exposes the model to highly
+challenging environments. The dataset includes substantial out-of-distribution data, ranging from adverse weather conditions
+
+
+                                                12
+
+=== PDF PAGE 13 ===
+         DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+                                              Table 8. Model parameters of LLM.
+
+
+                 MODEL       LAYERS  HIDDEN SIZE  KV HEADS  HEAD SIZE
+
+                    QWEN2.5-VL     36        2048           2          128
+
+
+                                        Table 9. Model parameters of DINOv3-ViT-L/16.
+
+
+         MODEL           PARAMETERS  HIDDEN SIZE  PRETRAINING DATASET  PATCH SIZE
+
+          DINOV3VITMODEL     300M         1024         LVD-1689M            16
+
+
+
+with wet-road reflections (top row) to drastic lighting variations. The model demonstrates remarkable robustness in safety-
+ critical situations. For instance, it effectively anticipates and reacts to dynamic agents — such as pedestrians jaywalking
+across the street. Notably, in complex narrow-road scenarios (bottom row), the model accurately predicts the speed of
+oncoming vehicles and preceding traffic participants, strictly adheres to traffic rules, and makes socially compliant decisions
+— such as swiftly overtaking by borrowing the opposite lane when safe to do so. This behavior significantly enhances the
+ rationality and safety of the planning logic. Although the Adaptive CoT module contributes a marginal gain to the DS,
+ it plays a disproportionately critical role in specific long-tail scenarios. Crucially, we did not blindly stack CoT modules.
+Instead, recognizing the limitations of world modeling in certain contexts and carefully weighing the logical reasoning
+strengths of CoT against its computational latency, we devised an efficient adaptive mechanism to holistically refine our
+algorithmic framework. Statistical analysis of our closed-loop evaluation across 220 routes reveals that this reasoning
+mechanism was triggered in less than 30% of frames, ensuring efficiency.
+
+As shown in Figure 7, we visualize DeepSight’s predicted future features, revealing that essential environmental cues
+are successfully preserved across multiple frames. The quality of our world prediction is further validated through the
+visualization of DINO features. Unlike standard methods that often suffer from feature blurring over time, DeepSight
+generates high-fidelity future states where the road geometry remains stable and well-defined. Notably, the model tracks
+the motion trajectories of other vehicles and the ego-vehicle with high precision. The clear spatial localization of these
+agents in the feature space confirms that DeepSight not only understands the static environment but also possesses a robust
+understanding of agent-centric motion, providing a solid foundation for downstream autonomous driving tasks.
+
+
+                        Frame1                            Frame2                             Frame3
+
+
+
+
+
+   1
+                 Scene
+
+
+
+
+
+   2
+                 Scene
+
+
+
+                                                        Timestamp
+
+
+                     Figure 6. Qualitative results of DeepSight on the Bench2Drive closed-loop evaluation set.
+
+
+D. Sensitive Analysis
+
+Since both trajectory waypoints and CoT reasoning are encoded as text tokens, they exhibit similar gradient magnitudes
+and convergence behaviors. We calibrate both terms using a shared hyperparameter λcot = λtraj = 1.0. To evaluate
+
+                                                13
+
+=== PDF PAGE 14 ===
+        DeepSight: Long-Horizon World Modeling via Latent States Prediction for End-to-End Autonomous Driving
+
+
+                                                DeepSight
+
+
+
+
+
+       World
+       Dream
+
+
+
+
+
+                   T = ts         T = t+0.5s        T = t+1s        T = t+1.5s        T = t+2s
+
+                                  Figure 7. Qualitative results of DeepSight’s world prediction.
+
+
+hyperparameter sensitivity on Dev 10 set, as shown in Table 10, we varied λworld ∈{0.5, 1.0, 2.0}.
+
+             Table 10. Sensitivity analysis of the hyperparameter λworld. The bold values indicate the best performance.
+
+                                         λworld  RC↑   IS↑   DS↑
+
+                                            0.5      88.23   0.89   78.93
+                                            1.0      95.95   0.89   86.57
+                                            2.0      89.12   0.89   79.82
+
+
+Interestingly, our experiments demonstrate a non-monotonic relationship where performance peaks and then drops as λ
+increases. We attribute this phenomenon to the inherent ambiguity of world modeling. While an excessively high weight
+can degrade final performance, it still outperforms scenarios with minimal world modeling.
+
+E. Evaluation on Real Data
+
+Following (Jiang et al., 2023; Zeng et al., 2025), we evaluate open-loop trajectory planning and future frames generation on
+the nuScenes (Caesar et al., 2020). The nuScenes contains 1,000 scenes of approximately 20 seconds each captured by six
+cameras providing 360-degree field of view. Specifically, the dataset provides 28,130 (train) and 6,019 (val) samples. As
+shown in Table 11, we have extended our evaluation to the nuScenes dataset, a widely adopted benchmark for real-world
+autonomous driving. We adhered to the standard evaluation protocols employed in recent works, utilizing metrics such as L2
+and Collision. For a fair comparison, FSDrive was reproduced using the same base model and experimental settings as ours.
+
+Table 11. Open-loop results on the nuScenes dataset. * denotes results using the same base model and experimental settings as ours. Best
+results are in bold.
+
+                                                 L2 (m) ↓          Collision Rate (%) ↓
+                    Method
+                                                        1s    2s    3s   Avg.   1s    2s    3s   Avg.
+
+                     VAD(Jiang et al., 2023)          0.41  0.70  1.05  0.72  0.07  0.18  0.43  0.23
+                  LAW(Li et al., 2025a)           0.26  0.57  1.01  0.61  0.14  0.21  0.54  0.30
+                      World4Drive(Zheng et al., 2025)  0.23  0.47  0.81  0.50  0.02  0.12  0.33  0.16
+                      FSDrive*(Zeng et al., 2025)      0.27  0.33  0.56  0.35  0.07  0.10  0.24  0.14
+
+                      DeepSight (Ours)               0.16  0.31  0.52  0.33  0.02  0.07  0.27  0.12
+
+
+
+
+
+                                                14

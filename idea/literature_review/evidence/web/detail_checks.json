@@ -1,0 +1,31 @@
+[
+  {
+    "name": "CarPlanner_candidate_README",
+    "url": "https://raw.githubusercontent.com/skr3178/CarPlanner/main/README.md",
+    "status": "ok",
+    "size": 47199
+  },
+  {
+    "name": "AutoVLA_rft_config",
+    "url": "https://raw.githubusercontent.com/ucla-mobility/AutoVLA/main/config/training/qwen2.5-vl-3B-mix-rft.yaml",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "name": "CoIRL_config",
+    "url": "https://raw.githubusercontent.com/SEU-zxj/CoIRL-AD/main/projects/configs/coirl/coirl.py",
+    "status": "ok",
+    "size": 8691
+  },
+  {
+    "name": "DeepSight_config",
+    "url": "https://raw.githubusercontent.com/hotdogcheesewhite/DeepSight/main/config/ad_bev_v3.yaml",
+    "status": "ok",
+    "size": 35315
+  },
+  {
+    "name": "SelfPlay_project",
+    "url": "https://gigaflow.ai/",
+    "status": "ok",
+    "size": 114
+  }
+]

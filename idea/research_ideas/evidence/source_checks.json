@@ -1,0 +1,70 @@
+[
+  {
+    "id": "R1",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2026/hash/28a80012e6f564c0cc8e7661e1db83fe-Abstract-Conference.html",
+    "title": "Plan-R1: Safe and Feasible Trajectory Planning as Language Modeling",
+    "snippets": []
+  },
+  {
+    "id": "R4",
+    "url": "https://ccf-a.com/ccf-a",
+    "title": "CCF A类会议与期刊完整名单（第七版）｜CCF-A",
+    "snippets": [
+      "rticle><h3>CCFA 是什么？</h3><p>CCF-A 是本站名称与域名，也有人连续输入为 CCFA。本站用于查询 CCF A类、B类、C类目录，并非中国计算机学会官方网站。</p></article><article><h3>人工智能方向有哪些A类会议？</h3><p>人工智能类别共有 AAAI、NeurIPS、ACL、CVPR、ICCV、IC",
+      ",\\\"p\\\",null,{\\\"children\\\":\\\"CCF-A 是本站名称与域名，也有人连续输入为 CCFA。本站用于查询 CCF A类、B类、C类目录，并非中国计算机学会官方网站。\\\"}]]}],[\\\"$\\\",\\\"article\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"h3\\\",null,{\\\"children\\\":\\\"人工智能方"
+    ]
+  },
+  {
+    "id": "R7",
+    "url": "https://arxiv.org/abs/2605.04470",
+    "title": "[2605.04470] CRAFT: Counterfactual-to-Interactive Reinforcement Fine-Tuning for Driving Policies",
+    "snippets": []
+  },
+  {
+    "id": "R8",
+    "url": "https://arxiv.org/abs/2204.13319",
+    "title": "[2204.13319] Control-Aware Prediction Objectives for Autonomous Driving",
+    "snippets": []
+  },
+  {
+    "id": "R9",
+    "url": "https://arxiv.org/abs/1611.02247",
+    "title": "[1611.02247] Q-Prop: Sample-Efficient Policy Gradient with An Off-Policy Critic",
+    "snippets": []
+  },
+  {
+    "id": "R10",
+    "url": "https://arxiv.org/abs/1910.09066",
+    "title": "[1910.09066] From Importance Sampling to Doubly Robust Policy Gradient",
+    "snippets": []
+  },
+  {
+    "id": "R11",
+    "url": "https://arxiv.org/abs/2608.10634",
+    "title": "[2608.10634] IADD-TR: Intervention-Aware Dynamics Decoupling with Targeted Regularization for Model-Based Reinforcement Learning",
+    "snippets": []
+  },
+  {
+    "id": "R12",
+    "url": "https://arxiv.org/abs/2605.15120",
+    "title": "[2605.15120] CLOVER: Closed-Loop Value Estimation and Ranking for End-to-End Autonomous Driving Planning",
+    "snippets": []
+  },
+  {
+    "id": "R13",
+    "url": "https://arxiv.org/abs/2608.04653",
+    "title": "[2608.04653] Overcoming Statistical Bias in Action-Controllable World Models",
+    "snippets": []
+  },
+  {
+    "id": "Bench2Drive",
+    "url": "https://raw.githubusercontent.com/Thinklab-SJTU/Bench2Drive/main/README.md",
+    "title": "",
+    "snippets": [
+      "  - Download and setup CARLA 0.9.15",
+      "        wget https://carla-releases.s3.us-east-005.backblazeb2.com/Linux/CARLA_0.9.15.tar.gz",
+      "        tar -xvf CARLA_0.9.15.tar.gz",
+      "wget https://carla-releases.s3.us-east-005.backblazeb2.com/Linux/AdditionalMaps_0.9.15.tar.gz"
+    ]
+  }
+]

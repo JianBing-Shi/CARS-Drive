@@ -1,0 +1,2709 @@
+{
+  "paper": "CarPlanner",
+  "source": "C:\\Users\\shi-jia-liang\\Desktop\\CarPlanner.pdf",
+  "pages": [
+    {
+      "page": 1,
+      "text": "                     This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.\n                                 Except for this watermark, it is identical to the accepted version;\n                                the final published version of the proceedings is available on IEEE Xplore.\n\n\n\n\n  CarPlanner: Consistent Auto-regressive Trajectory Planning for Large-scale\n              Reinforcement Learning in Autonomous Driving\n\n\n            Dongkun Zhang1,2  Jiaming Liang2  Ke Guo2  Sha Lu1  Qi Wang2\n                    Rong Xiong1,!  Zhenwei Miao2,†  Yue Wang1\n                            1Zhejiang University  2Cainiao Network\n                            1\n                       {zhangdongkun, lusha, rxiong, ywang24}@zju.edu.cn              2\n            {liangjiaming.ljm, muguo.gk, ruifeng.wq, zhenwei.mzw}@alibaba-inc.com\n\n                 Abstract\n\nTrajectory planning is vital for autonomous driving, ensur-\ning safe and efﬁcient navigation in complex environments.\nWhile recent learning-based methods, particularly rein-\nforcement learning (RL), have shown promise in speciﬁc\nscenarios, RL planners struggle with training inefﬁciencies\nand managing large-scale, real-world driving scenarios. In\nthis paper, we introduce CarPlanner, a Consistent auto-\nregressive Planner that uses RL to generate multi-modal\ntrajectories. The auto-regressive structure enables efﬁcient\nlarge-scale RL training, while the incorporation of consis-\ntency ensures stable policy learning by maintaining coher-\nent temporal consistency across time steps. Moreover, Car-\nPlanner employs a generation-selection framework with an\nexpert-guided reward function and an invariant-view mod-\nule, simplifying RL training and enhancing policy perfor-\nmance. Extensive analysis demonstrates that our proposed\nRL framework effectively addresses the challenges of train-\ning efﬁciency and performance enhancement, positioning      Figure  1.   Frameworks  for  multi-step  trajectory  generation.\nCarPlanner as a promising solution for trajectory planning       (a) Initialization-reﬁnement that generates an initial trajectory and\nin autonomous driving. To the best of our knowledge, we are      reﬁnes it iteratively. (b) Vanilla auto-regressive models that decode\nthe ﬁrst to demonstrate that the RL-based planner can sur-      subsequent poses sequentially. (c) Our consistent auto-regressive\npass both IL- and rule-based state-of-the-arts (SOTAs) on     model that integrates time-consistent mode information.\nthe challenging large-scale real-world dataset nuPlan. Our\n                                                                   potential to automate algorithm iteration, eliminate tediousproposed CarPlanner surpasses RL-, IL-, and rule-based\n                                                                   rule design, and ensure safety and comfort in diverse real-SOTA approaches within this demanding dataset.\n                                                        world scenarios [36].\n                                                     Most existing researches [11, 16, 29] employ imitation\n1. Introduction                                             learning (IL) to align planned trajectories with those of\n                                                human experts. However, this approach suffers from dis-\nTrajectory planning [36] is essential in autonomous driv-                                                                    tribution shift [28] and causal confusion [8].  Reinforce-\ning, utilizing outputs from perception and trajectory predic-                                                    ment learning (RL) offers a potential solution, addressing\ntion modules to generate future poses for the ego vehicle.                                                               these challenges and providing richer supervision through\nA controller tracks this planned trajectory, producing con-                                                         reward functions. Although RL shows effectiveness in do-\ntrol commands for closed-loop driving. Recently, learning-                                                      mains such as games [34], robotics [19], and language mod-\nbased trajectory planning has garnered attention due to its                                                                      els [25], it still struggles with training inefﬁciencies and per-\n   †Project lead. ! Corresponding author.                          formance issues in the large-scale driving task.  To the ex-\n\n\n\n                                                    17239",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p1-b1",
+          "bbox": [
+            147.6328125,
+            1.7956790924072266,
+            495.00421142578125,
+            13.05030345916748
+          ],
+          "text": "This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.\n"
+        },
+        {
+          "id": "CarPlanner-p1-b2",
+          "bbox": [
+            181.26171875,
+            13.467554092407227,
+            461.4134521484375,
+            36.3979606628418
+          ],
+          "text": "Except for this watermark, it is identical to the accepted version;\nthe final published version of the proceedings is available on IEEE Xplore.\n"
+        },
+        {
+          "id": "CarPlanner-p1-b3",
+          "bbox": [
+            72.03700256347656,
+            103.16062927246094,
+            539.967041015625,
+            121.82503509521484
+          ],
+          "text": "CarPlanner: Consistent Auto-regressive Trajectory Planning for Large-scale\n"
+        },
+        {
+          "id": "CarPlanner-p1-b4",
+          "bbox": [
+            157.41119384765625,
+            121.09342956542969,
+            454.5928955078125,
+            139.75784301757812
+          ],
+          "text": "Reinforcement Learning in Autonomous Driving\n"
+        },
+        {
+          "id": "CarPlanner-p1-b5",
+          "bbox": [
+            136.6009979248047,
+            161.67739868164062,
+            474.8981018066406,
+            176.08340454101562
+          ],
+          "text": "Dongkun Zhang1,2\nJiaming Liang2\nKe Guo2\nSha Lu1\nQi Wang2\n"
+        },
+        {
+          "id": "CarPlanner-p1-b6",
+          "bbox": [
+            190.19200134277344,
+            175.07064819335938,
+            421.30810546875,
+            190.14041137695312
+          ],
+          "text": "Rong Xiong1,!\nZhenwei Miao2,†\nYue Wang1\n"
+        },
+        {
+          "id": "CarPlanner-p1-b7",
+          "bbox": [
+            115.93800354003906,
+            189.03662109375,
+            493.0733337402344,
+            237.24581909179688
+          ],
+          "text": "1Zhejiang University\n2Cainiao Network\n1 {zhangdongkun, lusha, rxiong, ywang24}@zju.edu.cn\n2 {liangjiaming.ljm, muguo.gk, ruifeng.wq, zhenwei.mzw}@alibaba-inc.com\n"
+        },
+        {
+          "id": "CarPlanner-p1-b8",
+          "bbox": [
+            154.38299560546875,
+            258.22503662109375,
+            198.8682861328125,
+            273.77874755859375
+          ],
+          "text": "Abstract\n"
+        },
+        {
+          "id": "CarPlanner-p1-b9",
+          "bbox": [
+            317.25,
+            490.8470458984375,
+            553.5029296875,
+            545.4855346679688
+          ],
+          "text": "Figure 1.\nFrameworks for multi-step trajectory generation.\n(a) Initialization-reﬁnement that generates an initial trajectory and\nreﬁnes it iteratively. (b) Vanilla auto-regressive models that decode\nsubsequent poses sequentially. (c) Our consistent auto-regressive\nmodel that integrates time-consistent mode information.\n"
+        },
+        {
+          "id": "CarPlanner-p1-b10",
+          "bbox": [
+            58.500099182128906,
+            284.40655517578125,
+            294.76318359375,
+            583.228759765625
+          ],
+          "text": "Trajectory planning is vital for autonomous driving, ensur-\ning safe and efﬁcient navigation in complex environments.\nWhile recent learning-based methods, particularly rein-\nforcement learning (RL), have shown promise in speciﬁc\nscenarios, RL planners struggle with training inefﬁciencies\nand managing large-scale, real-world driving scenarios. In\nthis paper, we introduce CarPlanner, a Consistent auto-\nregressive Planner that uses RL to generate multi-modal\ntrajectories. The auto-regressive structure enables efﬁcient\nlarge-scale RL training, while the incorporation of consis-\ntency ensures stable policy learning by maintaining coher-\nent temporal consistency across time steps. Moreover, Car-\nPlanner employs a generation-selection framework with an\nexpert-guided reward function and an invariant-view mod-\nule, simplifying RL training and enhancing policy perfor-\nmance. Extensive analysis demonstrates that our proposed\nRL framework effectively addresses the challenges of train-\ning efﬁciency and performance enhancement, positioning\nCarPlanner as a promising solution for trajectory planning\nin autonomous driving. To the best of our knowledge, we are\nthe ﬁrst to demonstrate that the RL-based planner can sur-\npass both IL- and rule-based state-of-the-arts (SOTAs) on\nthe challenging large-scale real-world dataset nuPlan. Our\nproposed CarPlanner surpasses RL-, IL-, and rule-based\nSOTA approaches within this demanding dataset.\n"
+        },
+        {
+          "id": "CarPlanner-p1-b11",
+          "bbox": [
+            317.25,
+            555.5315551757812,
+            553.5128784179688,
+            591.4467163085938
+          ],
+          "text": "potential to automate algorithm iteration, eliminate tedious\nrule design, and ensure safety and comfort in diverse real-\nworld scenarios [36].\n"
+        },
+        {
+          "id": "CarPlanner-p1-b12",
+          "bbox": [
+            58.500099182128906,
+            603.9010009765625,
+            135.336181640625,
+            619.4547119140625
+          ],
+          "text": "1. Introduction\n"
+        },
+        {
+          "id": "CarPlanner-p1-b13",
+          "bbox": [
+            58.500099182128906,
+            625.1015625,
+            294.7532043457031,
+            696.882080078125
+          ],
+          "text": "Trajectory planning [36] is essential in autonomous driv-\ning, utilizing outputs from perception and trajectory predic-\ntion modules to generate future poses for the ego vehicle.\nA controller tracks this planned trajectory, producing con-\ntrol commands for closed-loop driving. Recently, learning-\nbased trajectory planning has garnered attention due to its\n"
+        },
+        {
+          "id": "CarPlanner-p1-b14",
+          "bbox": [
+            69.35900115966797,
+            700.8226318359375,
+            194.2025146484375,
+            713.2396240234375
+          ],
+          "text": "†Project lead. ! Corresponding author.\n"
+        },
+        {
+          "id": "CarPlanner-p1-b15",
+          "bbox": [
+            317.24798583984375,
+            594.1973876953125,
+            553.5109252929688,
+            713.8004150390625
+          ],
+          "text": "Most existing researches [11, 16, 29] employ imitation\nlearning (IL) to align planned trajectories with those of\nhuman experts. However, this approach suffers from dis-\ntribution shift [28] and causal confusion [8]. Reinforce-\nment learning (RL) offers a potential solution, addressing\nthese challenges and providing richer supervision through\nreward functions. Although RL shows effectiveness in do-\nmains such as games [34], robotics [19], and language mod-\nels [25], it still struggles with training inefﬁciencies and per-\nformance issues in the large-scale driving task. To the ex-\n"
+        },
+        {
+          "id": "CarPlanner-p1-b16",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17239\n"
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "text": "tent of our knowledge, no RL methods have yet achieved     age speeds, and the lateral mode encompasses all possible\ncompetitive results on large-scale open datasets such as nu-      routes derived from the current state of the ego vehicle along\nPlan [2], which features diverse real-world scenarios.           with map information. This mode remains constant across\n   Thus, this paper aims to tackle two key challenges in     time steps, providing stable and consistent guidance during\nRL for trajectory planning: 1) training inefﬁciency and 2)     policy sampling.\npoor performance. Training inefﬁciency arises from the fact        Furthermore, we propose a universal reward function\nthat RL typically operates in a model-free setting, necessi-      that suits large-scale and diverse scenarios, eliminating the\ntating an inefﬁcient simulator running on a CPU to repeat-     need for scenario-speciﬁc reward designs.  This function\nedly roll out a policy for data collection. To overcome this      consists of an expert-guided and task-oriented term. The\nchallenge, we propose an efﬁcient model-based approach      ﬁrst term quantiﬁes the displacement error between the ego-\nutilizing neural networks as transition models. Our method     planned trajectory and the expert’s trajectory, which, along\nis optimized for execution on hardware accelerators such as     with the consistent mode representation, narrows down the\nGPUs, rendering our time cost comparable to that of IL-      policy’s exploration space. The second term incorporates\nbased methods.                                  common senses in driving tasks including the avoidance of\n  To apply RL to solve the trajectory planning problem,      collision and adherence to the drivable area. Additionally,\nwe formulate it as a multi-step sequential decision-making    we introduce an Invariant-View Module (IVM) to supply\ntask utilizing a Markov Decision Process (MDP). Existing      invariant-view input for policy, with the aim of providing\nmethods that generate the trajectory† in multiple steps gen-     time-agnostic policy input, easing the feature learning and\nerally fall into two categories: initialization-reﬁnement [17,     embracing generalization.  To achieve this, IVM prepro-\n20, 33, 45] and auto-regressive models [27, 32, 41, 46].         cesses state and lateral mode by transforming agent, map,\n  The ﬁrst category, illustrated in Fig. 1 (a), involves gen-     and route information into the ego’s current coordinate and\nerating an initial trajectory estimate and subsequently reﬁn-     by clipping information that is distant from the ego.\ning it through iterative applications of RL. However, recent       To our knowledge, we are the ﬁrst to demonstrate that\nstudies, including Gen-Drive [18], suggest that it continues     RL-based planner outperforms state-of-the-art (SOTA) IL\nto lag behind SOTA IL and rule-based planners. One no-    and rule-based approaches on the challenging large-scale\ntable limitation of this approach is its neglect of the tempo-    nuPlan dataset. In summary, the key contributions of this\nral causality inherent in the trajectory planning task. Addi-     paper are highlighted as follows:\ntionally, the complexity of direct optimization over high-      • We present CarPlanner, a consistent auto-regressive\ndimensional trajectory space can hinder the performance       planner that trains an RL policy to generate consistent\nof RL algorithms. The second category consists of auto-       multi-modal trajectories.\nregressive models, shown in Fig. 1 (b), which generate      • We introduce an expert-guided universal reward function\nthe poses of the ego vehicle recurrently using a single-      and IVM to simplify RL training and improve policy\nstep policy within a transition model. In this category, ego        generalization, leading to enhanced closed-loop perfor-\nposes at all time steps are consolidated to form the overall       mance.\nplanned trajectory. As taking temporal causality into ac-      • We conduct a rigorous analysis on the characteristics of\ncount, current auto-regressive models allow for interactive       IL and RL training, providing insights into their strengths\nbehaviors. However, a common limitation is their reliance      and limitations, while highlighting the advantages of RL\non auto-regressively random sampling from action distri-        in tackling challenges such as distribution shift and causal\nbutions to generate multi-modal trajectories.  This vanilla       confusion.\nauto-regressive procedure may compromise long-term con-      • Our framework showcases exceptional performance, sur-\nsistency and unnecessarily expand the exploration space in       passing all RL-, IL-, and rule-based SOTAs on the nuPlan\nRL, leading to poor performance.                             benchmark. This underscores the potential of RL in nav-\n  To address the limitations of auto-regressive models, we        igating complex real-world driving scenarios.\nintroduce CarPlanner, a Consistent auto-regressive model\ndesigned for efﬁcient, large-scale RL-based Planner train-     2. Related Work\ning (see Fig. 1 (c)). The key insight of CarPlanner is its\nincorporation of consistent mode representation as condi-     2.1. Imitation-based Planning\ntions for the auto-regressive model. Speciﬁcally, we lever-                                                  The use of IL to train planners based on human demon-\nage a longitudinal-lateral decomposed mode representation,                                                                     strations has garnered signiﬁcant interest recently.  This\nwhere the longitudinal mode is a scalar that captures aver-                                                         approach leverages the driving expertise of experienced\n                                                                  drivers who can safely and comfortably navigate a wide   †In this paper, the term “trajectory” refers to the future poses of the\nego vehicle or trafﬁc agents. To avoid confusion, we use the term “state     range of real-world scenarios, along with the added advan-\n(action) sequence” to refer to the “trajectory” in the RL community.          tage of easily collectible driving data at scale [2, 9, 15]. Nu-\n\n\n\n                                                     17240",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p2-b1",
+          "bbox": [
+            58.5,
+            72.757568359375,
+            294.7621154785156,
+            108.67272186279297
+          ],
+          "text": "tent of our knowledge, no RL methods have yet achieved\ncompetitive results on large-scale open datasets such as nu-\nPlan [2], which features diverse real-world scenarios.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b2",
+          "bbox": [
+            317.25,
+            72.757568359375,
+            553.5021362304688,
+            132.58299255371094
+          ],
+          "text": "age speeds, and the lateral mode encompasses all possible\nroutes derived from the current state of the ego vehicle along\nwith map information. This mode remains constant across\ntime steps, providing stable and consistent guidance during\npolicy sampling.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b3",
+          "bbox": [
+            58.5,
+            109.4189453125,
+            294.7630310058594,
+            240.97508239746094
+          ],
+          "text": "Thus, this paper aims to tackle two key challenges in\nRL for trajectory planning: 1) training inefﬁciency and 2)\npoor performance. Training inefﬁciency arises from the fact\nthat RL typically operates in a model-free setting, necessi-\ntating an inefﬁcient simulator running on a CPU to repeat-\nedly roll out a policy for data collection. To overcome this\nchallenge, we propose an efﬁcient model-based approach\nutilizing neural networks as transition models. Our method\nis optimized for execution on hardware accelerators such as\nGPUs, rendering our time cost comparable to that of IL-\nbased methods.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b4",
+          "bbox": [
+            317.25,
+            133.45465087890625,
+            553.5031127929688,
+            336.7464904785156
+          ],
+          "text": "Furthermore, we propose a universal reward function\nthat suits large-scale and diverse scenarios, eliminating the\nneed for scenario-speciﬁc reward designs. This function\nconsists of an expert-guided and task-oriented term. The\nﬁrst term quantiﬁes the displacement error between the ego-\nplanned trajectory and the expert’s trajectory, which, along\nwith the consistent mode representation, narrows down the\npolicy’s exploration space. The second term incorporates\ncommon senses in driving tasks including the avoidance of\ncollision and adherence to the drivable area. Additionally,\nwe introduce an Invariant-View Module (IVM) to supply\ninvariant-view input for policy, with the aim of providing\ntime-agnostic policy input, easing the feature learning and\nembracing generalization.\nTo achieve this, IVM prepro-\ncesses state and lateral mode by transforming agent, map,\nand route information into the ego’s current coordinate and\nby clipping information that is distant from the ego.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b5",
+          "bbox": [
+            58.49647903442383,
+            241.72125244140625,
+            294.76202392578125,
+            577.3203735351562
+          ],
+          "text": "To apply RL to solve the trajectory planning problem,\nwe formulate it as a multi-step sequential decision-making\ntask utilizing a Markov Decision Process (MDP). Existing\nmethods that generate the trajectory† in multiple steps gen-\nerally fall into two categories: initialization-reﬁnement [17,\n20, 33, 45] and auto-regressive models [27, 32, 41, 46].\nThe ﬁrst category, illustrated in Fig. 1 (a), involves gen-\nerating an initial trajectory estimate and subsequently reﬁn-\ning it through iterative applications of RL. However, recent\nstudies, including Gen-Drive [18], suggest that it continues\nto lag behind SOTA IL and rule-based planners. One no-\ntable limitation of this approach is its neglect of the tempo-\nral causality inherent in the trajectory planning task. Addi-\ntionally, the complexity of direct optimization over high-\ndimensional trajectory space can hinder the performance\nof RL algorithms. The second category consists of auto-\nregressive models, shown in Fig. 1 (b), which generate\nthe poses of the ego vehicle recurrently using a single-\nstep policy within a transition model. In this category, ego\nposes at all time steps are consolidated to form the overall\nplanned trajectory. As taking temporal causality into ac-\ncount, current auto-regressive models allow for interactive\nbehaviors. However, a common limitation is their reliance\non auto-regressively random sampling from action distri-\nbutions to generate multi-modal trajectories. This vanilla\nauto-regressive procedure may compromise long-term con-\nsistency and unnecessarily expand the exploration space in\nRL, leading to poor performance.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b6",
+          "bbox": [
+            317.2489929199219,
+            337.2197570800781,
+            553.511962890625,
+            589.6481323242188
+          ],
+          "text": "To our knowledge, we are the ﬁrst to demonstrate that\nRL-based planner outperforms state-of-the-art (SOTA) IL\nand rule-based approaches on the challenging large-scale\nnuPlan dataset. In summary, the key contributions of this\npaper are highlighted as follows:\n• We present CarPlanner, a consistent auto-regressive\nplanner that trains an RL policy to generate consistent\nmulti-modal trajectories.\n• We introduce an expert-guided universal reward function\nand IVM to simplify RL training and improve policy\ngeneralization, leading to enhanced closed-loop perfor-\nmance.\n• We conduct a rigorous analysis on the characteristics of\nIL and RL training, providing insights into their strengths\nand limitations, while highlighting the advantages of RL\nin tackling challenges such as distribution shift and causal\nconfusion.\n• Our framework showcases exceptional performance, sur-\npassing all RL-, IL-, and rule-based SOTAs on the nuPlan\nbenchmark. This underscores the potential of RL in nav-\nigating complex real-world driving scenarios.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b7",
+          "bbox": [
+            317.25,
+            602.0399780273438,
+            400.362548828125,
+            617.5936889648438
+          ],
+          "text": "2. Related Work\n"
+        },
+        {
+          "id": "CarPlanner-p2-b8",
+          "bbox": [
+            317.25,
+            622.846435546875,
+            455.4745788574219,
+            637.10400390625
+          ],
+          "text": "2.1. Imitation-based Planning\n"
+        },
+        {
+          "id": "CarPlanner-p2-b9",
+          "bbox": [
+            58.49647903442383,
+            578.0665283203125,
+            294.7496337890625,
+            673.75830078125
+          ],
+          "text": "To address the limitations of auto-regressive models, we\nintroduce CarPlanner, a Consistent auto-regressive model\ndesigned for efﬁcient, large-scale RL-based Planner train-\ning (see Fig. 1 (c)). The key insight of CarPlanner is its\nincorporation of consistent mode representation as condi-\ntions for the auto-regressive model. Speciﬁcally, we lever-\nage a longitudinal-lateral decomposed mode representation,\nwhere the longitudinal mode is a scalar that captures aver-\n"
+        },
+        {
+          "id": "CarPlanner-p2-b10",
+          "bbox": [
+            58.499820709228516,
+            683.7346801757812,
+            294.74951171875,
+            713.2396240234375
+          ],
+          "text": "†In this paper, the term “trajectory” refers to the future poses of the\nego vehicle or trafﬁc agents. To avoid confusion, we use the term “state\n(action) sequence” to refer to the “trajectory” in the RL community.\n"
+        },
+        {
+          "id": "CarPlanner-p2-b11",
+          "bbox": [
+            317.25,
+            642.0185546875,
+            553.5084228515625,
+            713.8010864257812
+          ],
+          "text": "The use of IL to train planners based on human demon-\nstrations has garnered signiﬁcant interest recently.\nThis\napproach leverages the driving expertise of experienced\ndrivers who can safely and comfortably navigate a wide\nrange of real-world scenarios, along with the added advan-\ntage of easily collectible driving data at scale [2, 9, 15]. Nu-\n"
+        },
+        {
+          "id": "CarPlanner-p2-b12",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17240\n"
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "text": "           !\"#$%&'()*+&                               s1         s2                            +,%#-!'..)&\n          ,%'#-*)*\"# .\"/&0                                                                                                          2''()*2%'/                                       )'$*+$,$#-.\"'/#  s0   !\"#           !\"#              !!!\n\n                                        0\"1(+(2$12-!\"#$\n              c            3(-45$'6             14)\"$%&2%&--*+&13\"0*(5                 340&12&0&()\"%\n     s0\n                                           a0          a1           !!!\n                                                                                                                         !5!2\"#$%&'!          .\"/&12&0&()\"%                                                                                                                                                       2''()*2%'\")(\n                                 !\"#$ %&\"'$(\n     !71\"#$*08(8)*1.).&0   .).&1/&0&'()#              \"#$%&'()#516&*&#$()#           7+0&$$+,-&*(&.1/&0&'()#\n\nFigure 2. CarPlanner contains four parts.  (1) The non-reactive transition model takes initial state s0 as input and predicts the future\ntrajectories of trafﬁc agents. (2) The mode selector outputs scores based on the initial state and the modes c. (3) The trajectory generator\nobeys an auto-regressive structure condition on the consistent mode and produces mode-aligned multi-modal trajectories. (4) The rule-\naugmented selector compensates the mode scores by safety, comfort, and progress metrics.\n\nmerous studies [5, 17, 29] have focused on developing inno-     ing them difﬁcult to apply to the complex, diverse real-\nvative networks to enhance open-loop performance in this     world scenarios found in large-scale driving datasets.  In\ndomain. However, the ultimate challenge of autonomous      this paper, we propose adopting a model-based formulation\ndriving is achieving closed-loop operation, which is eval-      that can facilitate RL training on large-scale datasets. Under\nuated using driving-oriented metrics such as safety, adher-      this formulation, we aim to overcome the trajectory horizon\nence to trafﬁc rules, comfort, and progress. This reveals a      trade-off by using a transition model, which can provide a\nsigniﬁcant gap between the training and testing phases of     preview of the world in which our policy can make multi-\nplanners. Moreover, IL is particularly vulnerable to issues      step decisions during testing.\nsuch as distribution shift [28] and causal confusion [8]. The\nﬁrst issue results in suboptimal decisions when the system     3. Method\nencounters scenarios that are not represented in the train-\ning data distribution. The second issue arises when net-     3.1. Preliminaries\nworks inadvertently capture incorrect correlations and de-\n                                  MDP is used to model sequential decision problems, for-velop shortcuts based on input information, primarily due to\n                                                        mulated as a tuple       Pτ, R, ρ0, γ,          is the statethe reliance on imitation loss from expert demonstrations.                       ⟨S, A,            T⟩. S      †                                                               space.    is the action space. Pτ  :                        is theDespite efforts in several studies [1, 3, 4, 42] to address      A                 S × A →∆(S)                                                                       state transition probability. R  :              denotes thethese challenges, the gap between training and testing re-                          S × A →R                                                         reward function and is bounded. ρ0             is the initialmains substantial.                                                  ∈∆(S)                                                                       state distribution. T is the time horizon and γ is the dis-\n2.2. RL in Autonomous Driving                         count factor of future rewards. The state-action sequence is\n                                                     deﬁned as τ = (s0, a0, s1, a1, . . . , sT ), where st     andIn the ﬁeld of autonomous driving, RL has demonstrated its                            ∈S                                                               at      are the state and action at time step t. The objectiveeffectiveness in addressing speciﬁc scenarios such as high-    ∈A                                                              of RL is to maximize the expected return:\nway driving [22, 39], lane changes [14, 23], and unprotected                                T\nleft turns [22, 40].  Most methods directly learn policies           max                γtR(st, at)].         (1)                                                                   π  Est∼Pτ ,at∼π[over the control space, which includes throttle, brake, and                                 t=0                          !steering commands. Due to the high frequency of control\ncommand execution, the simulation process can be time-     Vectorized state representation.  State st contains map\nconsuming, and exploration can be inconsistent [40]. Sev-     and agent information in vectorized representation [10].\neral works [40, 44] have proposed learning trajectory plan-    Map information m includes the road network, trafﬁc lights,\nners with actions deﬁned as ego-planned trajectories, which      etc, which are represented by polylines and polygons.\ntemporally extend the exploration space and improve train-     Agent information includes the current and past poses of\ning efﬁciency.  However, a trade-off exists between the     ego vehicle and other trafﬁc agents, which are represented\ntrajectory horizon and training performance, as noted in     by polylines. The index of ego vehicle is 0 and the indices\nASAP-RL [40].  Increasing the trajectory horizon results     of trafﬁc agents range from 1 to N. For each agent i, its\nin less reactive behaviors and a reduced amount of data,      history is denoted as sit−H:t, i ∈{0, 1, . . . , N}, where H iswhile a smaller trajectory horizon leads to challenges sim-      the history time horizon.\nilar to those encountered in control space.  Additionally,\nthese methods typically employ a model-free setting, mak-       †∆(X) denotes the set of probability distribution over set X.\n\n\n                                                     17241",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p3-b1",
+          "bbox": [
+            321.70599365234375,
+            72.65322875976562,
+            331.5638122558594,
+            84.18359375
+          ],
+          "text": "s1\n"
+        },
+        {
+          "id": "CarPlanner-p3-b2",
+          "bbox": [
+            379.5830078125,
+            72.65322875976562,
+            390.2786865234375,
+            84.18359375
+          ],
+          "text": "s2\n"
+        },
+        {
+          "id": "CarPlanner-p3-b3",
+          "bbox": [
+            493.7430114746094,
+            78.36434936523438,
+            533.8177490234375,
+            88.94261169433594
+          ],
+          "text": "+,%#-!'..)&\n"
+        },
+        {
+          "id": "CarPlanner-p3-b4",
+          "bbox": [
+            498.848388671875,
+            87.78817749023438,
+            528.8869018554688,
+            98.36643981933594
+          ],
+          "text": "2''()*2%'/\n"
+        },
+        {
+          "id": "CarPlanner-p3-b5",
+          "bbox": [
+            104.0531997680664,
+            74.22418975830078,
+            179.5077362060547,
+            98.90986633300781
+          ],
+          "text": "!\"#$%&'()*+&\n,%'#-*)*\"# .\"/&0\n"
+        },
+        {
+          "id": "CarPlanner-p3-b6",
+          "bbox": [
+            394.82000732421875,
+            84.75838470458984,
+            406.6036376953125,
+            105.0008544921875
+          ],
+          "text": "!!!\n"
+        },
+        {
+          "id": "CarPlanner-p3-b7",
+          "bbox": [
+            268.4939880371094,
+            98.25607299804688,
+            338.8881530761719,
+            106.71873474121094
+          ],
+          "text": "!\"#\n!\"#\n"
+        },
+        {
+          "id": "CarPlanner-p3-b8",
+          "bbox": [
+            187.1658935546875,
+            95.27999877929688,
+            257.4460144042969,
+            107.29498291015625
+          ],
+          "text": ")'$*+$,$#-.\"'/#\ns0\n"
+        },
+        {
+          "id": "CarPlanner-p3-b9",
+          "bbox": [
+            154.9010009765625,
+            121.96562194824219,
+            161.6586456298828,
+            135.41282653808594
+          ],
+          "text": "c\n"
+        },
+        {
+          "id": "CarPlanner-p3-b10",
+          "bbox": [
+            283.447998046875,
+            122.71747589111328,
+            385.48797607421875,
+            136.2123565673828
+          ],
+          "text": "14)\"$%&2%&--*+&13\"0*(5\n"
+        },
+        {
+          "id": "CarPlanner-p3-b11",
+          "bbox": [
+            187.06700134277344,
+            118.83950805664062,
+            235.1612548828125,
+            136.8025360107422
+          ],
+          "text": "0\"1(+(2$12-!\"#$\n3(-45$'6\n"
+        },
+        {
+          "id": "CarPlanner-p3-b12",
+          "bbox": [
+            465.281005859375,
+            124.28845977783203,
+            525.6856689453125,
+            137.78334045410156
+          ],
+          "text": "340&12&0&()\"%\n"
+        },
+        {
+          "id": "CarPlanner-p3-b13",
+          "bbox": [
+            87.05709838867188,
+            139.55978393554688,
+            97.62821197509766,
+            150.73040771484375
+          ],
+          "text": "s0\n"
+        },
+        {
+          "id": "CarPlanner-p3-b14",
+          "bbox": [
+            284.1650085449219,
+            148.47344970703125,
+            352.3917541503906,
+            160.1928253173828
+          ],
+          "text": "a0\na1\n"
+        },
+        {
+          "id": "CarPlanner-p3-b15",
+          "bbox": [
+            394.8822021484375,
+            141.49807739257812,
+            406.66583251953125,
+            161.74053955078125
+          ],
+          "text": "!!!\n"
+        },
+        {
+          "id": "CarPlanner-p3-b16",
+          "bbox": [
+            493.9169921875,
+            160.03768920898438,
+            533.59912109375,
+            170.61595153808594
+          ],
+          "text": "!5!2\"#$%&'!\n"
+        },
+        {
+          "id": "CarPlanner-p3-b17",
+          "bbox": [
+            109.37000274658203,
+            163.16143798828125,
+            173.88162231445312,
+            176.6563262939453
+          ],
+          "text": ".\"/&12&0&()\"%\n"
+        },
+        {
+          "id": "CarPlanner-p3-b18",
+          "bbox": [
+            496.27301025390625,
+            169.46145629882812,
+            531.13330078125,
+            180.0397186279297
+          ],
+          "text": "2''()*2%'\")(\n"
+        },
+        {
+          "id": "CarPlanner-p3-b19",
+          "bbox": [
+            195.41200256347656,
+            177.73837280273438,
+            232.5177764892578,
+            187.2588348388672
+          ],
+          "text": "!\"#$ %&\"'$(\n"
+        },
+        {
+          "id": "CarPlanner-p3-b20",
+          "bbox": [
+            79.12677001953125,
+            189.3177490234375,
+            535.6619873046875,
+            201.68807983398438
+          ],
+          "text": "\"#$%&'()#516&*&#$()#\n7+0&$$+,-&*(&.1/&0&'()#\n!71\"#$*08(8)*1.).&0\n"
+        },
+        {
+          "id": "CarPlanner-p3-b21",
+          "bbox": [
+            176.3979949951172,
+            189.3177490234375,
+            235.146728515625,
+            201.68807983398438
+          ],
+          "text": ".).&1/&0&'()#\n"
+        },
+        {
+          "id": "CarPlanner-p3-b22",
+          "bbox": [
+            58.49964904785156,
+            208.0070343017578,
+            553.5166015625,
+            251.68777465820312
+          ],
+          "text": "Figure 2. CarPlanner contains four parts. (1) The non-reactive transition model takes initial state s0 as input and predicts the future\ntrajectories of trafﬁc agents. (2) The mode selector outputs scores based on the initial state and the modes c. (3) The trajectory generator\nobeys an auto-regressive structure condition on the consistent mode and produces mode-aligned multi-modal trajectories. (4) The rule-\naugmented selector compensates the mode scores by safety, comfort, and progress metrics.\n"
+        },
+        {
+          "id": "CarPlanner-p3-b23",
+          "bbox": [
+            317.2456970214844,
+            258.96697998046875,
+            553.5078125,
+            354.6607971191406
+          ],
+          "text": "ing them difﬁcult to apply to the complex, diverse real-\nworld scenarios found in large-scale driving datasets. In\nthis paper, we propose adopting a model-based formulation\nthat can facilitate RL training on large-scale datasets. Under\nthis formulation, we aim to overcome the trajectory horizon\ntrade-off by using a transition model, which can provide a\npreview of the world in which our policy can make multi-\nstep decisions during testing.\n"
+        },
+        {
+          "id": "CarPlanner-p3-b24",
+          "bbox": [
+            317.25,
+            367.8940124511719,
+            369.0518798828125,
+            383.4477233886719
+          ],
+          "text": "3. Method\n"
+        },
+        {
+          "id": "CarPlanner-p3-b25",
+          "bbox": [
+            317.25,
+            388.98046875,
+            399.54034423828125,
+            403.2380065917969
+          ],
+          "text": "3.1. Preliminaries\n"
+        },
+        {
+          "id": "CarPlanner-p3-b26",
+          "bbox": [
+            58.498008728027344,
+            258.965576171875,
+            294.7550048828125,
+            474.2074890136719
+          ],
+          "text": "merous studies [5, 17, 29] have focused on developing inno-\nvative networks to enhance open-loop performance in this\ndomain. However, the ultimate challenge of autonomous\ndriving is achieving closed-loop operation, which is eval-\nuated using driving-oriented metrics such as safety, adher-\nence to trafﬁc rules, comfort, and progress. This reveals a\nsigniﬁcant gap between the training and testing phases of\nplanners. Moreover, IL is particularly vulnerable to issues\nsuch as distribution shift [28] and causal confusion [8]. The\nﬁrst issue results in suboptimal decisions when the system\nencounters scenarios that are not represented in the train-\ning data distribution. The second issue arises when net-\nworks inadvertently capture incorrect correlations and de-\nvelop shortcuts based on input information, primarily due to\nthe reliance on imitation loss from expert demonstrations.\nDespite efforts in several studies [1, 3, 4, 42] to address\nthese challenges, the gap between training and testing re-\nmains substantial.\n"
+        },
+        {
+          "id": "CarPlanner-p3-b27",
+          "bbox": [
+            58.5,
+            480.3054504394531,
+            205.19583129882812,
+            494.56298828125
+          ],
+          "text": "2.2. RL in Autonomous Driving\n"
+        },
+        {
+          "id": "CarPlanner-p3-b28",
+          "bbox": [
+            317.2492980957031,
+            408.07391357421875,
+            553.5054321289062,
+            528.0336303710938
+          ],
+          "text": "MDP is used to model sequential decision problems, for-\nmulated as a tuple ⟨S, A, Pτ, R, ρ0, γ, T⟩. S is the state\nspace. A is the action space. Pτ : S × A →∆(S) † is the\nstate transition probability. R : S × A →R denotes the\nreward function and is bounded. ρ0 ∈∆(S) is the initial\nstate distribution. T is the time horizon and γ is the dis-\ncount factor of future rewards. The state-action sequence is\ndeﬁned as τ = (s0, a0, s1, a1, . . . , sT ), where st ∈S and\nat ∈A are the state and action at time step t. The objective\nof RL is to maximize the expected return:\n"
+        },
+        {
+          "id": "CarPlanner-p3-b29",
+          "bbox": [
+            364.0426940917969,
+            539.1309814453125,
+            382.5771484375,
+            549.0935668945312
+          ],
+          "text": "max\n"
+        },
+        {
+          "id": "CarPlanner-p3-b30",
+          "bbox": [
+            454.5610046386719,
+            537.0956420898438,
+            553.5000610351562,
+            549.8404541015625
+          ],
+          "text": "γtR(st, at)].\n(1)\n"
+        },
+        {
+          "id": "CarPlanner-p3-b31",
+          "bbox": [
+            370.8599853515625,
+            537.4374389648438,
+            438.50164794921875,
+            554.7290649414062
+          ],
+          "text": "π\nEst∼Pτ ,at∼π[\n"
+        },
+        {
+          "id": "CarPlanner-p3-b32",
+          "bbox": [
+            439.1570129394531,
+            553.0066528320312,
+            452.25030517578125,
+            559.98046875
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p3-b33",
+          "bbox": [
+            438.510009765625,
+            528.9186401367188,
+            452.89599609375,
+            566.6273193359375
+          ],
+          "text": "T\n!\n"
+        },
+        {
+          "id": "CarPlanner-p3-b34",
+          "bbox": [
+            317.24951171875,
+            571.0950927734375,
+            553.5074462890625,
+            679.1005249023438
+          ],
+          "text": "Vectorized state representation. State st contains map\nand agent information in vectorized representation [10].\nMap information m includes the road network, trafﬁc lights,\netc, which are represented by polylines and polygons.\nAgent information includes the current and past poses of\nego vehicle and other trafﬁc agents, which are represented\nby polylines. The index of ego vehicle is 0 and the indices\nof trafﬁc agents range from 1 to N. For each agent i, its\nhistory is denoted as si\n"
+        },
+        {
+          "id": "CarPlanner-p3-b35",
+          "bbox": [
+            317.2506103515625,
+            667.0945434570312,
+            553.5006103515625,
+            691.0546264648438
+          ],
+          "text": "t−H:t, i ∈{0, 1, . . . , N}, where H is\nthe history time horizon.\n"
+        },
+        {
+          "id": "CarPlanner-p3-b36",
+          "bbox": [
+            58.496009826660156,
+            498.5565490722656,
+            294.7590637207031,
+            713.801513671875
+          ],
+          "text": "In the ﬁeld of autonomous driving, RL has demonstrated its\neffectiveness in addressing speciﬁc scenarios such as high-\nway driving [22, 39], lane changes [14, 23], and unprotected\nleft turns [22, 40]. Most methods directly learn policies\nover the control space, which includes throttle, brake, and\nsteering commands. Due to the high frequency of control\ncommand execution, the simulation process can be time-\nconsuming, and exploration can be inconsistent [40]. Sev-\neral works [40, 44] have proposed learning trajectory plan-\nners with actions deﬁned as ego-planned trajectories, which\ntemporally extend the exploration space and improve train-\ning efﬁciency.\nHowever, a trade-off exists between the\ntrajectory horizon and training performance, as noted in\nASAP-RL [40]. Increasing the trajectory horizon results\nin less reactive behaviors and a reduced amount of data,\nwhile a smaller trajectory horizon leads to challenges sim-\nilar to those encountered in control space.\nAdditionally,\nthese methods typically employ a model-free setting, mak-\n"
+        },
+        {
+          "id": "CarPlanner-p3-b37",
+          "bbox": [
+            328.1090087890625,
+            702.6636962890625,
+            523.4945678710938,
+            718.6114501953125
+          ],
+          "text": "†∆(X) denotes the set of probability distribution over set X.\n"
+        },
+        {
+          "id": "CarPlanner-p3-b38",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17241\n"
+        }
+      ]
+    },
+    {
+      "page": 4,
+      "text": "3.2. Problem Formulation                                  since  it produces the poses of trafﬁc agents at time step\n                                                                        t + 1 based on current state st.  In practice, this processWe model the trajectory planning task as a sequential deci-\n                                                                              is time-consuming and we do not observe a performancesion process and decouple the auto-regressive models into\n                                                      improvement by using this transition model, therefore, wepolicy and transition models. The key to connect trajec-\n                                                          use trajectory predictors P(s1:N1:T     as non-reactive transi-tory planning and auto-regressive models is to deﬁne the                                     |s0)                                                                   tion model that produces all future poses of trafﬁc agents inaction as the next pose of ego vehicle,  i.e., at = s0t+1.                                                      one shot given initial state s0.Therefore, after forwarding the auto-regressive model, the\ndecoded pose is collected to be the ego-planned trajectory.     3.3. Planner Architecture\nSpeciﬁcally, we can reduce the state-action sequence to the\n                                                  The framework of our proposed CarPlanner is illustratedstate sequence under this deﬁnition and vectorized repre-\n                                                                   in Fig. 2, comprising four key components:  1) the non-sentation:\n                                                                  reactive transition model, 2) the mode selector, 3) the tra-  P(s0, a0, s1, a1, . . . , sT )\n                                                                 jectory generator, and 4) the rule-augmented selector.\n = P(m, s0:N−H:0, s01, m, s0:N1−H:1, s02, . . . , m, s0:NT −H:T )  (2)       Our  planner  operates  within  a  generation-selection\n                                                )               framework. Given an initial state s0 and all possible Nmode = P(m, s0:N−H:0, m, s0:N1−H:1, . . . , m, s0:N                                  T −H:T                                                      modes, the trajectory selector evaluates and assigns scores = P(s0, s1, . . . , sT ).\n                                                                   to each mode. The trajectory generator then produces Nmode\nThe state sequence can be further formulated in an auto-                                                                      trajectories that correspond to their respective modes. For\nregressive fashion and decomposed into policy and transi-                                                                    trajectory generator, the initial state s0 is replicated Nmode\ntion model:                               T                           times, each associated with one of the Nmode modes, effec-                             −1\n      P(s0, s1, . . . , sT ) = ρ0(s0)                               tively creating Nmode parallel worlds. The policy is executed                                   P(st+1|st)            within these previewed worlds. During the policy rollout, a                                 t=0           \"               T                                                trajectory predictor acts as the state transition model, gener-               −1\n    = ρ0(s0)    P(s0t+1, s1:Nt+1|st)                  (3)      ating future poses of trafﬁc agents across all time horizons.\n                 t=0      \"                                              3.3.1. Non-reactive Transition Model\n               T −1                                                          This module takes the initial state s0 as input and outputs\n    = ρ0(s0)     π(at|st) Pτ(s1:Nt+1|st) .                    the future trajectories of trafﬁc agents. The initial state is                 t=0      \"    Policy    Transition Model                    processed by agent and map encoders, followed by a self-\nFrom Eq. (3), we can                       clearly                               identify                                      the inherent                                           problem      attention Transformer encoder [38] to fuse the agent and                    #                       $%  &                            #   $%                                      &\nassociated with the typical auto-regressive approach: incon-    map features. The agent features are then decoded into fu-\nsistent behaviors across time steps arise from the policy dis-      ture trajectories.\ntribution, which depends on random sampling from the ac-    Agent and map encoders. The state s0 contains both map\ntion distribution.                                        and agent information. The map information m consists of\n  To solve the above problem, we introduce consistent    Nm,1 polylines and Nm,2 polygons. The polylines describe\nmode information c that remains unchanged across time     lane centers and lane boundaries, with each polyline con-\nsteps into the auto-regressive fashion:                            taining 3Np points, where 3 corresponds to the lane center,\n                                                                the left boundary, and the right boundary. Each point is withP(s0, s1, . . . , sT ) =   P(s0, s1, . . . , sT , c)dc\n                       c                                   dimension Dm = 9 and includes the following attributes: x,                '\n                                                                            y, heading, speed limit, and category. When concatenated,\n= ρ0(s0)                          . . . , sT            c P(c|s0)P(s1,       |c)dc                       the points of the left and right boundaries together with        '         T                         T                      the center point yield a dimension of Nm,1  Np  3Dm.         −1                      −1                                 ×  ×                                                                  leverage                                                                       a PointNet                                                                                       [26]                                                                                                  to extract                                                                                                            features from the                                                c)                                                    dc.   We= ρ0(s0)             Pτ(s1:N                   t+1|st)                           P(c|s0)                                            π(at|st,                            c          t=0                                      t=0                                                                points                                                                     of each                                                                                   polyline,                                                                                              resulting                                                                                                        in a dimensionality                                                                                                                     of\n                              Mode                                                 Selector                                                                  Policy                                                          (4)                     Transition                         Model '   \"             \"\n                                                Nm,1 × D, where D represents the feature dimension. TheSince we focus# on the$% ego& trajectory#  $% planning,&     # the$%consis-&       polygons represent intersections, crosswalks, stop lines, etc,\ntent mode c does not impact transition model.                 with each polygon containing Np points. We utilize another\n   This consistent auto-regressive formulation deﬁned in     PointNet to extract features from the points of each poly-\nEq. (4) reveals a generation-selection framework where the     gon, producing a dimension of Nm,2 × D. We then con-mode selector scores each mode based on the initial state s0      catenate the features from both polylines and polygons to\nand the trajectory generator generates multi-modal trajecto-     form the overall map features, resulting in a dimension of\nries via sampling from the mode-conditioned policy.       Nm × D. The agent information A consists of N agents,Non-reactive transition model. The transition model for-     where each agent maintains poses for the past H time steps.\nmulated in Eq. (4) needs to be employed in every time step     Each pose is with dimension Da = 10 and includes the\n\n\n\n                                                     17242",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p4-b1",
+          "bbox": [
+            58.5,
+            71.44246673583984,
+            179.1793975830078,
+            85.69999694824219
+          ],
+          "text": "3.2. Problem Formulation\n"
+        },
+        {
+          "id": "CarPlanner-p4-b2",
+          "bbox": [
+            317.25030517578125,
+            72.75738525390625,
+            553.5035400390625,
+            132.58287048339844
+          ],
+          "text": "since it produces the poses of trafﬁc agents at time step\nt + 1 based on current state st. In practice, this process\nis time-consuming and we do not observe a performance\nimprovement by using this transition model, therefore, we\nuse trajectory predictors P(s1:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b3",
+          "bbox": [
+            58.5,
+            89.69354248046875,
+            294.7530822753906,
+            150.7046356201172
+          ],
+          "text": "We model the trajectory planning task as a sequential deci-\nsion process and decouple the auto-regressive models into\npolicy and transition models. The key to connect trajec-\ntory planning and auto-regressive models is to deﬁne the\naction as the next pose of ego vehicle, i.e., at = s0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b4",
+          "bbox": [
+            317.24951171875,
+            120.57757568359375,
+            553.5026245117188,
+            156.9314422607422
+          ],
+          "text": "1:T |s0) as non-reactive transi-\ntion model that produces all future poses of trafﬁc agents in\none shot given initial state s0.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b5",
+          "bbox": [
+            317.25,
+            161.80148315429688,
+            435.5513000488281,
+            176.0590057373047
+          ],
+          "text": "3.3. Planner Architecture\n"
+        },
+        {
+          "id": "CarPlanner-p4-b6",
+          "bbox": [
+            58.49953842163086,
+            137.5145263671875,
+            294.7615661621094,
+            209.2950897216797
+          ],
+          "text": "t+1.\nTherefore, after forwarding the auto-regressive model, the\ndecoded pose is collected to be the ego-planned trajectory.\nSpeciﬁcally, we can reduce the state-action sequence to the\nstate sequence under this deﬁnition and vectorized repre-\nsentation:\n"
+        },
+        {
+          "id": "CarPlanner-p4-b7",
+          "bbox": [
+            66.9996337890625,
+            208.50302124023438,
+            168.5054931640625,
+            219.9596405029297
+          ],
+          "text": "P(s0, a0, s1, a1, . . . , sT )\n"
+        },
+        {
+          "id": "CarPlanner-p4-b8",
+          "bbox": [
+            317.25,
+            179.6938934326172,
+            553.5031127929688,
+            227.9238739013672
+          ],
+          "text": "The framework of our proposed CarPlanner is illustrated\nin Fig. 2, comprising four key components: 1) the non-\nreactive transition model, 2) the mode selector, 3) the tra-\njectory generator, and 4) the rule-augmented selector.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b9",
+          "bbox": [
+            69.76715850830078,
+            223.0816650390625,
+            122.31351470947266,
+            234.91685485839844
+          ],
+          "text": "= P(m, s0:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b10",
+          "bbox": [
+            283.13470458984375,
+            229.37432861328125,
+            294.7510681152344,
+            241.37925720214844
+          ],
+          "text": "(2)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b11",
+          "bbox": [
+            109.78299713134766,
+            223.0816650390625,
+            142.85809326171875,
+            241.52105712890625
+          ],
+          "text": "−H:0, s0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b12",
+          "bbox": [
+            138.88999938964844,
+            223.0816650390625,
+            274.6244812011719,
+            241.52105712890625
+          ],
+          "text": "1, m, s0:N\n1−H:1, s0\n2, . . . , m, s0:N\nT −H:T )\n"
+        },
+        {
+          "id": "CarPlanner-p4-b13",
+          "bbox": [
+            69.76653289794922,
+            239.53265380859375,
+            122.31351470947266,
+            251.3668670654297
+          ],
+          "text": "= P(m, s0:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b14",
+          "bbox": [
+            109.78299713134766,
+            239.53265380859375,
+            164.59622192382812,
+            257.97137451171875
+          ],
+          "text": "−H:0, m, s0:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b15",
+          "bbox": [
+            152.06500244140625,
+            239.53265380859375,
+            247.49049377441406,
+            257.97137451171875
+          ],
+          "text": "1−H:1, . . . , m, s0:N\nT −H:T )\n"
+        },
+        {
+          "id": "CarPlanner-p4-b16",
+          "bbox": [
+            69.76667022705078,
+            256.3479309082031,
+            156.23114013671875,
+            267.8056640625
+          ],
+          "text": "= P(s0, s1, . . . , sT ).\n"
+        },
+        {
+          "id": "CarPlanner-p4-b17",
+          "bbox": [
+            58.500980377197266,
+            270.74102783203125,
+            294.75396728515625,
+            306.65618896484375
+          ],
+          "text": "The state sequence can be further formulated in an auto-\nregressive fashion and decomposed into policy and transi-\ntion model:\n"
+        },
+        {
+          "id": "CarPlanner-p4-b18",
+          "bbox": [
+            87.1843032836914,
+            315.7110595703125,
+            200.77749633789062,
+            327.16766357421875
+          ],
+          "text": "P(s0, s1, . . . , sT ) = ρ0(s0)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b19",
+          "bbox": [
+            220.08299255371094,
+            315.4620056152344,
+            266.0574645996094,
+            332.7471008300781
+          ],
+          "text": "P(st+1|st)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b20",
+          "bbox": [
+            203.88600158691406,
+            329.5866394042969,
+            216.9793243408203,
+            336.5604248046875
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b21",
+          "bbox": [
+            202.4459991455078,
+            305.2754821777344,
+            218.41879272460938,
+            343.207275390625
+          ],
+          "text": "T −1\n\"\n"
+        },
+        {
+          "id": "CarPlanner-p4-b22",
+          "bbox": [
+            317.25,
+            227.87408447265625,
+            553.5030517578125,
+            359.430908203125
+          ],
+          "text": "Our planner operates within a generation-selection\nframework. Given an initial state s0 and all possible Nmode\nmodes, the trajectory selector evaluates and assigns scores\nto each mode. The trajectory generator then produces Nmode\ntrajectories that correspond to their respective modes. For\ntrajectory generator, the initial state s0 is replicated Nmode\ntimes, each associated with one of the Nmode modes, effec-\ntively creating Nmode parallel worlds. The policy is executed\nwithin these previewed worlds. During the policy rollout, a\ntrajectory predictor acts as the state transition model, gener-\nating future poses of trafﬁc agents across all time horizons.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b23",
+          "bbox": [
+            146.8939971923828,
+            348.6696472167969,
+            167.1870880126953,
+            360.503662109375
+          ],
+          "text": "P(s0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b24",
+          "bbox": [
+            89.95059967041016,
+            350.5410461425781,
+            127.58848571777344,
+            361.2514343261719
+          ],
+          "text": "= ρ0(s0)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b25",
+          "bbox": [
+            283.13360595703125,
+            349.3582458496094,
+            294.7499694824219,
+            361.3631896972656
+          ],
+          "text": "(3)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b26",
+          "bbox": [
+            163.218994140625,
+            348.6696472167969,
+            198.4422149658203,
+            362.2197265625
+          ],
+          "text": "t+1, s1:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b27",
+          "bbox": [
+            185.91099548339844,
+            350.2919921875,
+            215.1274871826172,
+            367.57708740234375
+          ],
+          "text": "t+1|st)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b28",
+          "bbox": [
+            130.697998046875,
+            364.41766357421875,
+            143.79132080078125,
+            371.3914489746094
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b29",
+          "bbox": [
+            129.25799560546875,
+            340.1064758300781,
+            145.2307891845703,
+            378.0382995605469
+          ],
+          "text": "T −1\n\"\n"
+        },
+        {
+          "id": "CarPlanner-p4-b30",
+          "bbox": [
+            233.48599243164062,
+            385.3720397949219,
+            236.24563598632812,
+            395.33465576171875
+          ],
+          "text": ".\n"
+        },
+        {
+          "id": "CarPlanner-p4-b31",
+          "bbox": [
+            89.95140075683594,
+            385.3720397949219,
+            127.58848571777344,
+            396.0814514160156
+          ],
+          "text": "= ρ0(s0)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b32",
+          "bbox": [
+            182.6820068359375,
+            383.4996643066406,
+            215.1312255859375,
+            396.0814514160156
+          ],
+          "text": "Pτ(s1:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b33",
+          "bbox": [
+            130.697998046875,
+            399.2476501464844,
+            143.79132080078125,
+            406.221435546875
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b34",
+          "bbox": [
+            129.25799560546875,
+            374.9374694824219,
+            145.2307891845703,
+            412.8682861328125
+          ],
+          "text": "T −1\n\"\n"
+        },
+        {
+          "id": "CarPlanner-p4-b35",
+          "bbox": [
+            146.8936004638672,
+            385.12298583984375,
+            181.0211639404297,
+            429.00830078125
+          ],
+          "text": "π(at|st)\n#\n$%\n&\nPolicy\n"
+        },
+        {
+          "id": "CarPlanner-p4-b36",
+          "bbox": [
+            182.68190002441406,
+            385.12298583984375,
+            231.82516479492188,
+            429.810302734375
+          ],
+          "text": "t+1|st)\n#\n$%\n&\nTransition Model\n"
+        },
+        {
+          "id": "CarPlanner-p4-b37",
+          "bbox": [
+            58.499900817871094,
+            413.3470458984375,
+            294.7619323730469,
+            473.1724853515625
+          ],
+          "text": "From Eq. (3), we can clearly identify the inherent problem\nassociated with the typical auto-regressive approach: incon-\nsistent behaviors across time steps arise from the policy dis-\ntribution, which depends on random sampling from the ac-\ntion distribution.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b38",
+          "bbox": [
+            58.50090026855469,
+            473.1226501464844,
+            294.7539978027344,
+            509.0378112792969
+          ],
+          "text": "To solve the above problem, we introduce consistent\nmode information c that remains unchanged across time\nsteps into the auto-regressive fashion:\n"
+        },
+        {
+          "id": "CarPlanner-p4-b39",
+          "bbox": [
+            58.50090026855469,
+            515.480712890625,
+            142.19900512695312,
+            526.9376831054688
+          ],
+          "text": "P(s0, s1, . . . , sT ) =\n"
+        },
+        {
+          "id": "CarPlanner-p4-b40",
+          "bbox": [
+            156.74000549316406,
+            515.4810791015625,
+            249.7670135498047,
+            526.9376831054688
+          ],
+          "text": "P(s0, s1, . . . , sT , c)dc\n"
+        },
+        {
+          "id": "CarPlanner-p4-b41",
+          "bbox": [
+            150.5070037841797,
+            526.7997436523438,
+            154.57969665527344,
+            533.7735595703125
+          ],
+          "text": "c\n"
+        },
+        {
+          "id": "CarPlanner-p4-b42",
+          "bbox": [
+            144.9716033935547,
+            501.7007751464844,
+            150.50083923339844,
+            538.8812255859375
+          ],
+          "text": "'\n"
+        },
+        {
+          "id": "CarPlanner-p4-b43",
+          "bbox": [
+            61.267608642578125,
+            542.1030883789062,
+            98.90548706054688,
+            552.8134765625
+          ],
+          "text": "= ρ0(s0)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b44",
+          "bbox": [
+            106.11000061035156,
+            553.421630859375,
+            110.18270111083984,
+            560.3954467773438
+          ],
+          "text": "c\n"
+        },
+        {
+          "id": "CarPlanner-p4-b45",
+          "bbox": [
+            112.34300231933594,
+            541.85400390625,
+            222.6922149658203,
+            560.6340942382812
+          ],
+          "text": "P(c|s0)P(s1, . . . , sT |c)dc\n"
+        },
+        {
+          "id": "CarPlanner-p4-b46",
+          "bbox": [
+            100.57520294189453,
+            528.3237915039062,
+            106.10444641113281,
+            565.5042114257812
+          ],
+          "text": "'\n"
+        },
+        {
+          "id": "CarPlanner-p4-b47",
+          "bbox": [
+            286.2760009765625,
+            573.3811645507812,
+            299.3359375,
+            583.34375
+          ],
+          "text": "dc.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b48",
+          "bbox": [
+            61.26620864868164,
+            573.3806762695312,
+            98.90548706054688,
+            584.0904541015625
+          ],
+          "text": "= ρ0(s0)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b49",
+          "bbox": [
+            118.21099853515625,
+            571.5086669921875,
+            150.6605224609375,
+            584.0904541015625
+          ],
+          "text": "Pτ(s1:N\n"
+        },
+        {
+          "id": "CarPlanner-p4-b50",
+          "bbox": [
+            174.5500030517578,
+            584.6996459960938,
+            178.62269592285156,
+            591.6734619140625
+          ],
+          "text": "c\n"
+        },
+        {
+          "id": "CarPlanner-p4-b51",
+          "bbox": [
+            102.01399993896484,
+            587.2566528320312,
+            115.10801696777344,
+            594.23046875
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b52",
+          "bbox": [
+            224.75,
+            587.2566528320312,
+            237.84332275390625,
+            594.23046875
+          ],
+          "text": "t=0\n"
+        },
+        {
+          "id": "CarPlanner-p4-b53",
+          "bbox": [
+            169.01499938964844,
+            559.6008911132812,
+            174.5442352294922,
+            596.7813110351562
+          ],
+          "text": "'\n"
+        },
+        {
+          "id": "CarPlanner-p4-b54",
+          "bbox": [
+            283.1337890625,
+            587.1912841796875,
+            294.7501525878906,
+            599.1962280273438
+          ],
+          "text": "(4)\n"
+        },
+        {
+          "id": "CarPlanner-p4-b55",
+          "bbox": [
+            100.57499694824219,
+            562.9454956054688,
+            116.5470962524414,
+            600.8773193359375
+          ],
+          "text": "T −1\n\"\n"
+        },
+        {
+          "id": "CarPlanner-p4-b56",
+          "bbox": [
+            223.30990600585938,
+            562.9454956054688,
+            239.28269958496094,
+            600.8773193359375
+          ],
+          "text": "T −1\n\"\n"
+        },
+        {
+          "id": "CarPlanner-p4-b57",
+          "bbox": [
+            180.7830047607422,
+            573.132080078125,
+            221.64808654785156,
+            617.017333984375
+          ],
+          "text": "P(c|s0)\n# $% &\nMode Selector\n"
+        },
+        {
+          "id": "CarPlanner-p4-b58",
+          "bbox": [
+            240.9459991455078,
+            573.132080078125,
+            284.6161804199219,
+            617.017333984375
+          ],
+          "text": "π(at|st, c)\n#\n$%\n&\nPolicy\n"
+        },
+        {
+          "id": "CarPlanner-p4-b59",
+          "bbox": [
+            118.21089935302734,
+            573.132080078125,
+            167.35516357421875,
+            617.8193359375
+          ],
+          "text": "t+1|st)\n#\n$%\n&\nTransition Model\n"
+        },
+        {
+          "id": "CarPlanner-p4-b60",
+          "bbox": [
+            58.50008010864258,
+            606.1531372070312,
+            294.7531433105469,
+            630.1132202148438
+          ],
+          "text": "Since we focus on the ego trajectory planning, the consis-\ntent mode c does not impact transition model.\n"
+        },
+        {
+          "id": "CarPlanner-p4-b61",
+          "bbox": [
+            58.5,
+            630.0633544921875,
+            294.7540588378906,
+            713.7998657226562
+          ],
+          "text": "This consistent auto-regressive formulation deﬁned in\nEq. (4) reveals a generation-selection framework where the\nmode selector scores each mode based on the initial state s0\nand the trajectory generator generates multi-modal trajecto-\nries via sampling from the mode-conditioned policy.\nNon-reactive transition model. The transition model for-\nmulated in Eq. (4) needs to be employed in every time step\n"
+        },
+        {
+          "id": "CarPlanner-p4-b62",
+          "bbox": [
+            317.24859619140625,
+            363.70281982421875,
+            553.5038452148438,
+            714.9856567382812
+          ],
+          "text": "3.3.1. Non-reactive Transition Model\nThis module takes the initial state s0 as input and outputs\nthe future trajectories of trafﬁc agents. The initial state is\nprocessed by agent and map encoders, followed by a self-\nattention Transformer encoder [38] to fuse the agent and\nmap features. The agent features are then decoded into fu-\nture trajectories.\nAgent and map encoders. The state s0 contains both map\nand agent information. The map information m consists of\nNm,1 polylines and Nm,2 polygons. The polylines describe\nlane centers and lane boundaries, with each polyline con-\ntaining 3Np points, where 3 corresponds to the lane center,\nthe left boundary, and the right boundary. Each point is with\ndimension Dm = 9 and includes the following attributes: x,\ny, heading, speed limit, and category. When concatenated,\nthe points of the left and right boundaries together with\nthe center point yield a dimension of Nm,1 × Np × 3Dm.\nWe leverage a PointNet [26] to extract features from the\npoints of each polyline, resulting in a dimensionality of\nNm,1 × D, where D represents the feature dimension. The\npolygons represent intersections, crosswalks, stop lines, etc,\nwith each polygon containing Np points. We utilize another\nPointNet to extract features from the points of each poly-\ngon, producing a dimension of Nm,2 × D. We then con-\ncatenate the features from both polylines and polygons to\nform the overall map features, resulting in a dimension of\nNm × D. The agent information A consists of N agents,\nwhere each agent maintains poses for the past H time steps.\nEach pose is with dimension Da = 10 and includes the\n"
+        },
+        {
+          "id": "CarPlanner-p4-b63",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17242\n"
+        }
+      ]
+    },
+    {
+      "page": 5,
+      "text": "following attributes: x, y, heading, velocity, bounding box,     Query-based Transformer decoder. We employ the same\ntime step, and category. Consequently, the agent informa-     backbone network architecture as the mode selector, but\ntion has a dimension of N × H × Da. We apply another     with different query dimensions. Due to the IVM and thePointNet to extract features from the poses of each agent,      fact that different modes yield distinct states, the map and\nyielding an agent feature dimension of N × D.                agent information cannot be shared among modes. As a re-                                                                             sult, we fuse information for each individual mode. Speciﬁ-\n3.3.2. Mode Selector                                                                         cally,                                                                      the                                                                 query                                                                      dimension                                                                                                              is                                                                                           while                                                                                                         the dimensions                                                                                                                     of                                                           1×D,This module takes s0 and longitudinal-lateral decomposed                                               +                                                                the keys                                                             and                                                                          values                                                                                   are (N                                                                          D. The                                                                                                        output feature                                                          Nm)                                                   ×mode information as input and outputs the probability of     dimension remains 1  D. Note that                                                                                           Transformer decoder                                             ×each mode. The number of modes Nmode = NlatNlon.          can process information                                                                           from multiple modes in parallel,\nRoute-speed decomposed mode. To capture the longitu-     eliminating the need to handle each mode sequentially.\ndinal behaviors, we generate Nlon modes that represent the     Policy output. The mode feature is processed by two dis-\naverage speed of the trajectory associated with each mode.      tinct heads: a policy head and a value head. Each head com-\nEach longitudinal mode clon,j is deﬁned as a scalar value of      prises its own MLP to produce the parameters for the action\n  j   , repeated across a dimension D. As a result, the dimen-      distribution and the corresponding value estimate. We em-Nlon\nsionality of the longitudinal modes is Nlon × D. For lateral     ploy a Gaussian distribution to model the action distribu-\nbehaviors, we identify Nlat possible routes from the map      tion, where actions are sampled from this distribution dur-\nusing a graph search algorithm. These routes correspond to     ing training.  In contrast, during inference, we utilize the\nthe lanes available for the ego vehicle. The dimensional-    mean of the distribution to determine the actions.\nity of these routes is Nlat × Nr × Dm. We employ another      3.3.4. Rule-augmented SelectorPointNet to aggregate the features of the Nr points along\neach route, producing a lateral mode with a dimension of     This module is only utilized during inference and takes as\nNlat  D. To create a comprehensive mode representation     input the initial state s0, the multi-modal ego-planned tra-  ×c, we combine the lateral and longitudinal modes, resulting      jectories, and the predicted future trajectories of agents.  It\nin a combined dimension of Nlat   Nlon  2D. To align this      calculates driving-oriented metrics such as safety, progress,                 ×   ×mode information with other feature dimensions, we pass it     comfort.  A comprehensive score  is obtained by  the\nthrough a linear layer, mapping it back to Nlat   Nlon  D.     weighted sum of rule-based scores and the mode scores pro-                        ×   ×Query-based Transformer decoder. This decoder is em-     vided by the mode selector. The ego-planned trajectory with\nployed to fuse the mode features with map and agent fea-      the highest score is selected as the output of the planner.\ntures derived from s0. In this framework, the mode serves                                                               3.4. Training\nas the query, while the map and agent information act as the\nkeys and values. The updated mode features are decoded   We ﬁrst train the non-reactive transition model and freeze\nthrough a multi-layer perceptron (MLP) to yield the scores      the weights during the training of the mode selector and tra-\nfor each mode, which are subsequently normalized using      jectory generator. Instead of feeding all modes to the gen-\nthe softmax operator.                                                erator, we apply a winner-takes-all strategy, wherein a posi-\n                                                                       tive mode is assigned based on the ego ground-truth trajec-\n3.3.3. Trajectory Generator                                   tory and serves as a condition for the trajectory generator.\nThis module operates in an auto-regressive manner, recur-    Mode assignment.  For the lateral mode, we assign the\nrently decoding the next pose of the ego vehicle at, given     route closest to the endpoint of ego ground-truth trajectory\nthe current state st, and consistent mode information c.         as the positive lateral mode. For the longitudinal mode, we\nInvariant-view module (IVM). Before feeding the mode      partition the longitudinal space into Nlon intervals and as-\nand state into the network, we preprocess them to eliminate     sign the interval containing the endpoint of the ground-truth\ntime information.  For the map and agent information in      trajectory as the positive longitudinal mode.\nstate st, we select the K-nearest neighbors (KNN) to the    Reward function. To handle diverse scenarios, we use the\nego current pose and only feed these into the policy. K      negative displacement error (DE) between the ego future\nis set to the half of map and agent elements respectively.     pose and the ground truth as a universal reward. We also in-\nRegarding the routes that capture lateral behaviors, we ﬁlter     troduce additional terms to improve trajectory quality: col-\nout the segments where the point closest to the current pose      lision rate and drivable area compliance. If the future pose\nof the ego vehicle is the starting point, retaining Kr points.      collides or falls outside the drivable area, the reward is set\nIn this case, Kr is set to a quarter of Nr points in one route.      to -1; otherwise, it is 0.\nFinally, we transform the routes, agent, and map poses into    Mode dropout. In some cases, there are no available routes\nthe coordinate frame of the ego vehicle at the current time      for ego to follow. However, since routes serve as queries in\nstep t. We subtract the historical time steps t −H : t from     Transformer, the absence of a route can lead to unstable or\nthe current time step t, yielding time steps in range −H : 0.     hazardous outputs. To mitigate this issue, we implement a\n\n\n                                                     17243",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p5-b1",
+          "bbox": [
+            58.5,
+            72.757568359375,
+            294.7619934082031,
+            139.34730529785156
+          ],
+          "text": "following attributes: x, y, heading, velocity, bounding box,\ntime step, and category. Consequently, the agent informa-\ntion has a dimension of N × H × Da. We apply another\nPointNet to extract features from the poses of each agent,\nyielding an agent feature dimension of N × D.\n"
+        },
+        {
+          "id": "CarPlanner-p5-b2",
+          "bbox": [
+            58.499210357666016,
+            138.5314178466797,
+            144.54617309570312,
+            151.49276733398438
+          ],
+          "text": "3.3.2. Mode Selector\n"
+        },
+        {
+          "id": "CarPlanner-p5-b3",
+          "bbox": [
+            58.499210357666016,
+            153.9605712890625,
+            294.7534484863281,
+            239.31748962402344
+          ],
+          "text": "This module takes s0 and longitudinal-lateral decomposed\nmode information as input and outputs the probability of\neach mode. The number of modes Nmode = NlatNlon.\nRoute-speed decomposed mode. To capture the longitu-\ndinal behaviors, we generate Nlon modes that represent the\naverage speed of the trajectory associated with each mode.\nEach longitudinal mode clon,j is deﬁned as a scalar value of\n"
+        },
+        {
+          "id": "CarPlanner-p5-b4",
+          "bbox": [
+            317.2493896484375,
+            72.39879608154297,
+            553.5225830078125,
+            299.9548034667969
+          ],
+          "text": "Query-based Transformer decoder. We employ the same\nbackbone network architecture as the mode selector, but\nwith different query dimensions. Due to the IVM and the\nfact that different modes yield distinct states, the map and\nagent information cannot be shared among modes. As a re-\nsult, we fuse information for each individual mode. Speciﬁ-\ncally, the query dimension is 1×D, while the dimensions of\nthe keys and values are (N + Nm) × D. The output feature\ndimension remains 1 × D. Note that Transformer decoder\ncan process information from multiple modes in parallel,\neliminating the need to handle each mode sequentially.\nPolicy output. The mode feature is processed by two dis-\ntinct heads: a policy head and a value head. Each head com-\nprises its own MLP to produce the parameters for the action\ndistribution and the corresponding value estimate. We em-\nploy a Gaussian distribution to model the action distribu-\ntion, where actions are sampled from this distribution dur-\ning training. In contrast, during inference, we utilize the\nmean of the distribution to determine the actions.\n"
+        },
+        {
+          "id": "CarPlanner-p5-b5",
+          "bbox": [
+            317.24969482421875,
+            304.2257995605469,
+            449.2322692871094,
+            317.1871337890625
+          ],
+          "text": "3.3.4. Rule-augmented Selector\n"
+        },
+        {
+          "id": "CarPlanner-p5-b6",
+          "bbox": [
+            317.24969482421875,
+            319.5283508300781,
+            553.5113525390625,
+            415.22119140625
+          ],
+          "text": "This module is only utilized during inference and takes as\ninput the initial state s0, the multi-modal ego-planned tra-\njectories, and the predicted future trajectories of agents. It\ncalculates driving-oriented metrics such as safety, progress,\ncomfort.\nA comprehensive score is obtained by the\nweighted sum of rule-based scores and the mode scores pro-\nvided by the mode selector. The ego-planned trajectory with\nthe highest score is selected as the output of the planner.\n"
+        },
+        {
+          "id": "CarPlanner-p5-b7",
+          "bbox": [
+            317.25,
+            420.5294494628906,
+            377.03082275390625,
+            434.7869873046875
+          ],
+          "text": "3.4. Training\n"
+        },
+        {
+          "id": "CarPlanner-p5-b8",
+          "bbox": [
+            58.49943161010742,
+            237.30364990234375,
+            294.7622375488281,
+            489.0101013183594
+          ],
+          "text": "j\nNlon , repeated across a dimension D. As a result, the dimen-\nsionality of the longitudinal modes is Nlon × D. For lateral\nbehaviors, we identify Nlat possible routes from the map\nusing a graph search algorithm. These routes correspond to\nthe lanes available for the ego vehicle. The dimensional-\nity of these routes is Nlat × Nr × Dm. We employ another\nPointNet to aggregate the features of the Nr points along\neach route, producing a lateral mode with a dimension of\nNlat × D. To create a comprehensive mode representation\nc, we combine the lateral and longitudinal modes, resulting\nin a combined dimension of Nlat × Nlon × 2D. To align this\nmode information with other feature dimensions, we pass it\nthrough a linear layer, mapping it back to Nlat × Nlon × D.\nQuery-based Transformer decoder. This decoder is em-\nployed to fuse the mode features with map and agent fea-\ntures derived from s0. In this framework, the mode serves\nas the query, while the map and agent information act as the\nkeys and values. The updated mode features are decoded\nthrough a multi-layer perceptron (MLP) to yield the scores\nfor each mode, which are subsequently normalized using\nthe softmax operator.\n"
+        },
+        {
+          "id": "CarPlanner-p5-b9",
+          "bbox": [
+            58.500240325927734,
+            494.9587097167969,
+            175.3415985107422,
+            507.9200439453125
+          ],
+          "text": "3.3.3. Trajectory Generator\n"
+        },
+        {
+          "id": "CarPlanner-p5-b10",
+          "bbox": [
+            317.25,
+            438.7805480957031,
+            553.517822265625,
+            713.8030395507812
+          ],
+          "text": "We ﬁrst train the non-reactive transition model and freeze\nthe weights during the training of the mode selector and tra-\njectory generator. Instead of feeding all modes to the gen-\nerator, we apply a winner-takes-all strategy, wherein a posi-\ntive mode is assigned based on the ego ground-truth trajec-\ntory and serves as a condition for the trajectory generator.\nMode assignment.\nFor the lateral mode, we assign the\nroute closest to the endpoint of ego ground-truth trajectory\nas the positive lateral mode. For the longitudinal mode, we\npartition the longitudinal space into Nlon intervals and as-\nsign the interval containing the endpoint of the ground-truth\ntrajectory as the positive longitudinal mode.\nReward function. To handle diverse scenarios, we use the\nnegative displacement error (DE) between the ego future\npose and the ground truth as a universal reward. We also in-\ntroduce additional terms to improve trajectory quality: col-\nlision rate and drivable area compliance. If the future pose\ncollides or falls outside the drivable area, the reward is set\nto -1; otherwise, it is 0.\nMode dropout. In some cases, there are no available routes\nfor ego to follow. However, since routes serve as queries in\nTransformer, the absence of a route can lead to unstable or\nhazardous outputs. To mitigate this issue, we implement a\n"
+        },
+        {
+          "id": "CarPlanner-p5-b11",
+          "bbox": [
+            58.498809814453125,
+            510.38885498046875,
+            294.7529602050781,
+            720.5645751953125
+          ],
+          "text": "This module operates in an auto-regressive manner, recur-\nrently decoding the next pose of the ego vehicle at, given\nthe current state st, and consistent mode information c.\nInvariant-view module (IVM). Before feeding the mode\nand state into the network, we preprocess them to eliminate\ntime information. For the map and agent information in\nstate st, we select the K-nearest neighbors (KNN) to the\nego current pose and only feed these into the policy. K\nis set to the half of map and agent elements respectively.\nRegarding the routes that capture lateral behaviors, we ﬁlter\nout the segments where the point closest to the current pose\nof the ego vehicle is the starting point, retaining Kr points.\nIn this case, Kr is set to a quarter of Nr points in one route.\nFinally, we transform the routes, agent, and map poses into\nthe coordinate frame of the ego vehicle at the current time\nstep t. We subtract the historical time steps t −H : t from\nthe current time step t, yielding time steps in range −H : 0.\n"
+        },
+        {
+          "id": "CarPlanner-p5-b12",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17243\n"
+        }
+      ]
+    },
+    {
+      "page": 6,
+      "text": "mode dropout module during training that randomly masks        Type       Planners           CLS-NR     CLS-R\nroutes to prevent over-reliance on this information.                 Rule     IDM [37]                70.39        72.42                                                                    PDM-Closed [7]         90.05        91.64Loss function. For the selector, we use cross-entropy loss\n                                                                            RasterModel [2]          69.66        67.54that is the negative log-likelihood of the positive mode and a                                                                              UrbanDriver [29]         63.27        61.02\nside task that regresses the ego ground-truth trajectory. For               GC-PGP [12]            55.99        51.39\nthe generator, we use PPO [31] loss that consists of three         IL      PDM-Open [7]           52.80        57.23                                                                   GameFormer [17]        80.80        79.31\nparts: policy improvement, value estimation, and entropy.                  PlanTF [4]               86.48        80.59\nFull description can be found in supplementary.                         PEP [42]                91.45        89.74\n                                                        PLUTO [3]              91.92        90.03\n4. Experiments                                   RL       CarPlanner (Ours)        94.07         91.1\n                                                                  Table 1. Comparison with SOTAs in Test14-Random. Based on\n4.1. Experimental Setup                                        the type of trajectory generator, all methods are categorized into\nDataset and simulator. We use nuPlan [2], a large-scale      Rule, IL, and RL. The best result is in bold and the second best\nclosed-loop platform for studying trajectory planning in au-       result is underlined.\ntonomous driving, to evaluate the efﬁcacy of our method.       Type    Planners               CLS-NR   S-CR   S-PR\nThe nuPlan dataset contains driving log data over 1,500        Rule   PDM-Closed [7]              91.21     97.01    92.68\nhours collected by human expert drivers across 4 diverse             GameFormer [17]             83.76     94.73    88.12\ncities.  It includes complex, diverse scenarios such as lane         IL    PlanTF [4]                   83.66     94.02    92.67\nfollow and change, left and right turn, traversing intersec-               Gen-Drive (Pretrain) [18]      85.12     93.65    86.64\ntions and bus stops, roundabouts, interaction with pedestri-               Gen-Drive (Finetune) [18]     87.53     95.72    89.94                                                   RL\nans, etc. As a closed-loop platform, nuPlan provides a sim-                CarPlanner (Ours)            91.45     96.38    95.37\nulator that uses scenarios from the dataset as initialization.      Table 2. Comparison with SOTAs in Reduced-Val14 with non-\nDuring the simulation, trafﬁc agents are taken over by log-      reactive trafﬁc agents.\nreplay (non-reactive) or an IDM [37] policy (reactive). The                                             we set the discount γ = 0.1 and the GAE parameter λ =\nego vehicle is taken over by user-provided planners. The                                                                    0.9. The weights of value, policy, and entropy loss are set to\nsimulator lasts for 15 seconds and runs at 10 Hz. At each                                                                     3, 100, and 0.001, respectively. The number of longitudinal\ntimestamp, the simulator queries the planner to plan a tra-                                                  modes is set to 12 and a maximum number of lateral modes\njectory, which is tracked by an LQR controller to generate                                                                are set to 5.\ncontrol commands to drive the ego vehicle.\nBenchmarks and metrics.  We use two benchmarks:     4.2. Comparison with SOTAs\nTest14-Random and Reduced-Val14 for comparing with\n                                                SOTAs. We categorize the methods into Rule, IL, and RLother methods and analyzing the design choices within\n                                                         based on the type of trajectory generator.  (1) PDM [7]our method. The Test14-Random provided by PlanTF [4]\n                                                       wins the nuPlan challenge 2023, its IL-based and rule-basedcontains 261 scenarios. The Reduced-Val14 provided by\n                                                                  variants are denoted as PDM-Open and PDM-Closed, re-PDM [7] contains 318 scenarios.\n                                                                    spectively. PDM-Closed follows the generation-selection  We use the closed-loop score (CLS) provided by the of-\n                                                      framework where IDM is used to generate multiple candi-ﬁcial nuPlan devkit† to assess the performance of all meth-\n                                                              date trajectories and rule-based selector considering safety,ods. The CLS score comprehends different aspects such as\n                                                                progress, and comfort is used to select the best trajectory.safety (S-CR, S-TTC), drivable area compliance (S-Area),\n                                                                   (2) PLUTO [3] also obeys the generation-selection frame-progress (S-PR), comfort, etc. Based on the different be-\n                                                   work and uses contrastive IL to incorporate various datahavior types of trafﬁc agents, CLS is detailed into CLS-NR\n                                                         augmentation techniques and trains the generator. (3) Gen-(non-reactive) and CLS-R (reactive).\n                                                          Drive [18] is a concurrent work that follows a pretrain-Implementation details. We follow PDM [7] to construct                                                        ﬁnetune pipeline where IL is used to pretrain a diffusion-our training and validation splits. The size of the training\n                                                         based planner and RL is used to ﬁnetune the denoising pro-set is 176,218 where all available scenario types are used,\n                                                              cess based on a reward model trained by AI preference.with a number of 4,000 scenarios per type. The size of the\n                                                              Results. We compare our method with SOTAs in Test14-validation set is 1,118 where 100 scenarios with 14 types are\n                                              Random and Reduced-Val14 benchmark as shown in Tab. 1selected. We train all models with 50 epochs in 2 NVIDIA\n                                                      and Tab. 2. Overall, our CarPlanner demonstrates superior3090 GPUs. The batch size is 64 per GPU. We use AdamW\n                                                           performance, particularly in non-reactive environments.optimizer with an initial learning rate of 1e-4 and reduce the\n                                                                 In the non-reactive setting, our method achieves thelearning rate when the validation loss stops decreasing with\n                                                               highest scores across all metrics, with an improvement ofa patience of 0 and decrease factor of 0.3. For RL training,\n                                                           4.02 and 2.15 compared to PDM-Closed and PLUTO, es-\n  †https://github.com/motional/nuplan-devkit            tablishing the potential of RL and the superior performance\n\n\n\n                                                     17244",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p6-b1",
+          "bbox": [
+            329.5329895019531,
+            72.4921646118164,
+            542.5787963867188,
+            83.0642318725586
+          ],
+          "text": "Type\nPlanners\nCLS-NR\nCLS-R\n"
+        },
+        {
+          "id": "CarPlanner-p6-b2",
+          "bbox": [
+            329.9100036621094,
+            84.2488784790039,
+            540.02734375,
+            104.119873046875
+          ],
+          "text": "Rule\nIDM [37]\n70.39\n72.42\nPDM-Closed [7]\n90.05\n91.64\n"
+        },
+        {
+          "id": "CarPlanner-p6-b3",
+          "bbox": [
+            334.0559997558594,
+            135.26626586914062,
+            342.3381652832031,
+            145.8383331298828
+          ],
+          "text": "IL\n"
+        },
+        {
+          "id": "CarPlanner-p6-b4",
+          "bbox": [
+            58.499000549316406,
+            72.757568359375,
+            294.7521667480469,
+            168.55686950683594
+          ],
+          "text": "mode dropout module during training that randomly masks\nroutes to prevent over-reliance on this information.\nLoss function. For the selector, we use cross-entropy loss\nthat is the negative log-likelihood of the positive mode and a\nside task that regresses the ego ground-truth trajectory. For\nthe generator, we use PPO [31] loss that consists of three\nparts: policy improvement, value estimation, and entropy.\nFull description can be found in supplementary.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b5",
+          "bbox": [
+            332.59100341796875,
+            104.7782974243164,
+            540.02734375,
+            189.04779052734375
+          ],
+          "text": "RasterModel [2]\n69.66\n67.54\nUrbanDriver [29]\n63.27\n61.02\nGC-PGP [12]\n55.99\n51.39\nPDM-Open [7]\n52.80\n57.23\nGameFormer [17]\n80.80\n79.31\nPlanTF [4]\n86.48\n80.59\nPEP [42]\n91.45\n89.74\nPLUTO [3]\n91.92\n90.03\nRL\nCarPlanner (Ours)\n94.07\n91.1\n"
+        },
+        {
+          "id": "CarPlanner-p6-b6",
+          "bbox": [
+            58.5,
+            178.50799560546875,
+            135.539306640625,
+            194.06170654296875
+          ],
+          "text": "4. Experiments\n"
+        },
+        {
+          "id": "CarPlanner-p6-b7",
+          "bbox": [
+            58.5,
+            198.49948120117188,
+            171.13558959960938,
+            212.7570037841797
+          ],
+          "text": "4.1. Experimental Setup\n"
+        },
+        {
+          "id": "CarPlanner-p6-b8",
+          "bbox": [
+            317.25,
+            192.9850616455078,
+            554.8587036132812,
+            236.66653442382812
+          ],
+          "text": "Table 1. Comparison with SOTAs in Test14-Random. Based on\nthe type of trajectory generator, all methods are categorized into\nRule, IL, and RL. The best result is in bold and the second best\nresult is underlined.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b9",
+          "bbox": [
+            323.8599853515625,
+            243.716552734375,
+            548.2587280273438,
+            266.5614929199219
+          ],
+          "text": "Type\nPlanners\nCLS-NR\nS-CR\nS-PR\nRule\nPDM-Closed [7]\n91.21\n97.01\n92.68\n"
+        },
+        {
+          "id": "CarPlanner-p6-b10",
+          "bbox": [
+            328.1189880371094,
+            278.3775329589844,
+            335.918701171875,
+            288.333740234375
+          ],
+          "text": "IL\n"
+        },
+        {
+          "id": "CarPlanner-p6-b11",
+          "bbox": [
+            354.05999755859375,
+            268.5035400390625,
+            548.2608642578125,
+            298.28973388671875
+          ],
+          "text": "GameFormer [17]\n83.76\n94.73\n88.12\nPlanTF [4]\n83.66\n94.02\n92.67\nGen-Drive (Pretrain) [18]\n85.12\n93.65\n86.64\n"
+        },
+        {
+          "id": "CarPlanner-p6-b12",
+          "bbox": [
+            326.739013671875,
+            300.7265319824219,
+            548.2608642578125,
+            321.094482421875
+          ],
+          "text": "RL\nGen-Drive (Finetune) [18]\n87.53\n95.72\n89.94\nCarPlanner (Ours)\n91.45\n96.38\n95.37\n"
+        },
+        {
+          "id": "CarPlanner-p6-b13",
+          "bbox": [
+            317.25,
+            325.2410583496094,
+            554.8507690429688,
+            347.0042724609375
+          ],
+          "text": "Table 2. Comparison with SOTAs in Reduced-Val14 with non-\nreactive trafﬁc agents.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b14",
+          "bbox": [
+            317.25,
+            354.1595458984375,
+            553.5108642578125,
+            413.9849853515625
+          ],
+          "text": "we set the discount γ = 0.1 and the GAE parameter λ =\n0.9. The weights of value, policy, and entropy loss are set to\n3, 100, and 0.001, respectively. The number of longitudinal\nmodes is set to 12 and a maximum number of lateral modes\nare set to 5.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b15",
+          "bbox": [
+            317.25,
+            420.5294494628906,
+            453.1293640136719,
+            434.7869873046875
+          ],
+          "text": "4.2. Comparison with SOTAs\n"
+        },
+        {
+          "id": "CarPlanner-p6-b16",
+          "bbox": [
+            58.499000549316406,
+            216.49888610839844,
+            294.7610168457031,
+            491.9826965332031
+          ],
+          "text": "Dataset and simulator. We use nuPlan [2], a large-scale\nclosed-loop platform for studying trajectory planning in au-\ntonomous driving, to evaluate the efﬁcacy of our method.\nThe nuPlan dataset contains driving log data over 1,500\nhours collected by human expert drivers across 4 diverse\ncities. It includes complex, diverse scenarios such as lane\nfollow and change, left and right turn, traversing intersec-\ntions and bus stops, roundabouts, interaction with pedestri-\nans, etc. As a closed-loop platform, nuPlan provides a sim-\nulator that uses scenarios from the dataset as initialization.\nDuring the simulation, trafﬁc agents are taken over by log-\nreplay (non-reactive) or an IDM [37] policy (reactive). The\nego vehicle is taken over by user-provided planners. The\nsimulator lasts for 15 seconds and runs at 10 Hz. At each\ntimestamp, the simulator queries the planner to plan a tra-\njectory, which is tracked by an LQR controller to generate\ncontrol commands to drive the ego vehicle.\nBenchmarks and metrics.\nWe use two benchmarks:\nTest14-Random and Reduced-Val14 for comparing with\nother methods and analyzing the design choices within\nour method. The Test14-Random provided by PlanTF [4]\ncontains 261 scenarios. The Reduced-Val14 provided by\nPDM [7] contains 318 scenarios.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b17",
+          "bbox": [
+            317.25,
+            438.4219055175781,
+            553.5110473632812,
+            665.9786987304688
+          ],
+          "text": "SOTAs. We categorize the methods into Rule, IL, and RL\nbased on the type of trajectory generator.\n(1) PDM [7]\nwins the nuPlan challenge 2023, its IL-based and rule-based\nvariants are denoted as PDM-Open and PDM-Closed, re-\nspectively. PDM-Closed follows the generation-selection\nframework where IDM is used to generate multiple candi-\ndate trajectories and rule-based selector considering safety,\nprogress, and comfort is used to select the best trajectory.\n(2) PLUTO [3] also obeys the generation-selection frame-\nwork and uses contrastive IL to incorporate various data\naugmentation techniques and trains the generator. (3) Gen-\nDrive [18] is a concurrent work that follows a pretrain-\nﬁnetune pipeline where IL is used to pretrain a diffusion-\nbased planner and RL is used to ﬁnetune the denoising pro-\ncess based on a reward model trained by AI preference.\nResults. We compare our method with SOTAs in Test14-\nRandom and Reduced-Val14 benchmark as shown in Tab. 1\nand Tab. 2. Overall, our CarPlanner demonstrates superior\nperformance, particularly in non-reactive environments.\n"
+        },
+        {
+          "id": "CarPlanner-p6-b18",
+          "bbox": [
+            58.499000549316406,
+            492.03955078125,
+            294.76416015625,
+            695.4359130859375
+          ],
+          "text": "We use the closed-loop score (CLS) provided by the of-\nﬁcial nuPlan devkit† to assess the performance of all meth-\nods. The CLS score comprehends different aspects such as\nsafety (S-CR, S-TTC), drivable area compliance (S-Area),\nprogress (S-PR), comfort, etc. Based on the different be-\nhavior types of trafﬁc agents, CLS is detailed into CLS-NR\n(non-reactive) and CLS-R (reactive).\nImplementation details. We follow PDM [7] to construct\nour training and validation splits. The size of the training\nset is 176,218 where all available scenario types are used,\nwith a number of 4,000 scenarios per type. The size of the\nvalidation set is 1,118 where 100 scenarios with 14 types are\nselected. We train all models with 50 epochs in 2 NVIDIA\n3090 GPUs. The batch size is 64 per GPU. We use AdamW\noptimizer with an initial learning rate of 1e-4 and reduce the\nlearning rate when the validation loss stops decreasing with\na patience of 0 and decrease factor of 0.3. For RL training,\n"
+        },
+        {
+          "id": "CarPlanner-p6-b19",
+          "bbox": [
+            69.35900115966797,
+            702.6636962890625,
+            269.40460205078125,
+            712.888916015625
+          ],
+          "text": "†https://github.com/motional/nuplan-devkit\n"
+        },
+        {
+          "id": "CarPlanner-p6-b20",
+          "bbox": [
+            317.2510070800781,
+            665.9298706054688,
+            553.5040893554688,
+            713.8001098632812
+          ],
+          "text": "In the non-reactive setting, our method achieves the\nhighest scores across all metrics, with an improvement of\n4.02 and 2.15 compared to PDM-Closed and PLUTO, es-\ntablishing the potential of RL and the superior performance\n"
+        },
+        {
+          "id": "CarPlanner-p6-b21",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17244\n"
+        }
+      ]
+    },
+    {
+      "page": 7,
+      "text": "             Design Choices                            Closed-loop metrics (↑)                Open-loop losses (↓)\n  Reward   Reward   Coord                                                              Loss       Loss\n                    KNN   CLS-NR   S-CR   S-Area   S-PR    S-Comfort   DE      Quality    Trans                                                                      Selector    Generator\n    ✗     ✓     ✓    ✓       31.79     95.74    98.45    33.10      48.84        1.03        30.3\n   ✓       ✗     ✓    ✓       90.44     97.49    96.91    93.33      90.73        0.99       1221.6\n   ✓     ✓       ✗    ✓       90.78     96.92    98.46    91.37      94.23        1.00       2130.7\n   ✓     ✓     ✓      ✗       92.73     98.07    98.46    94.69      93.44        1.03       2083.6\n   ✓     ✓     ✓    ✓       94.07     99.22    99.22    95.06      91.09        1.03       1624.5\n         Table 3. Ablation studies on the design choices in RL training. Results are in Test14-random non-reactive benchmark.\nof our proposed framework. Moreover, CarPlanner reveals    RL training, as summarized in Tab. 4. Our ﬁndings indicate\nsubstantial improvement in the progress metric S-PR com-      that while mode dropout and selector side task contribute to\npared to PDM-Closed in Tab. 2 and comparable collision     both IL and RL training, ego-history dropout and backbone\nmetric S-CR, indicating the ability of our method to im-      sharing, often effective in IL, are less suitable for RL.\nproving driving efﬁciency while maintaining safe driving.     Ego-history dropout.  Previous works [1, 3, 4, 11] sug-\nImportantly, we do not apply any techniques commonly      gest that planners trained via IL may rely too heavily on\nused in IL such as data augmentation [3, 4] and ego-history      past poses and neglect environmental state information. To\nmasking [11], underscoring the intrinsic capability of our     counter this, we combine techniques from ChauffeurNet [1]\napproach to solving the closed-loop task.                    and PlanTF [4] into an ego-history dropout module, ran-\n   In the reactive setting, while our method performs well,    domly masking ego history poses and current velocity to\nit falls slightly short of PDM-Closed.  This discrepancy      alleviate the causal confusion issue.\narises because our model was trained exclusively in non-       Our  experiments conﬁrm  that  ego-history  dropout\nreactive settings and has not interacted with the IDM policy     beniﬁts IL training, as  it improves performance across\nused by reactive settings; as a result, our model is less robust     closed-loop metrics like S-CR and S-Area. However, in RL\nto disturbances generated by reactive agents during testing.      training, we observe a negative impact on advantage esti-\n                                                        mation due to ego-history dropout, which signiﬁcantly af-\n4.3. Ablation Studies                                                                     fects the value part of generator loss, leading to closed-loop\nWe investigate the effects of different design choices in RL     performance degradation.  This suggests that RL training\ntraining. The results are shown in Tab. 3.                        naturally addresses the causal confusion problem inherent\nInﬂuence of reward items. When using the quality re-      in IL by uncovering causal relationships that align with the\nward only, the planner tends to generate static trajectories     reward signal, which explicitly encodes task-oriented pref-\nand achieves a low progress metric. This occurs because      erences. This capability highlights the potential of RL to\nthe ego vehicle begins in a safe, drivable state, but mov-     push the boundaries of learning-based planning.\ning forward is at risk of collisions or leaving the drivable    Backbone sharing.  This choice, often used in IL-based\narea. On the other hand, when the quality reward is incor-     multi-modal planners, promotes feature sharing across tasks\nporated alongside the DE reward, it leads to signiﬁcant im-      to improve generalization. While backbone sharing helps\nprovements in closed-loop metrics compared to using the     IL by balancing losses across trajectory generator and se-\nDE reward alone. For instance, the S-CR metric rises from      lector, we ﬁnd it adversely affects RL training. Speciﬁcally,\n97.49 to 99.22, and the S-Area metric rises from 96.91 to     backbone sharing leads to higher losses for both the trajec-\n99.22. These improvements indicate that the quality reward      tory generator and selector in RL, indicating that gradients\nencourages safe and comfortable behaviors.                 from each task interfere. The divergent objectives in RL\nEffectiveness of IVM. The results show that the coordi-      for trajectory generation and selection tasks seem to con-\nnate transformation and KNN techniques in IVM notably      ﬂict, reducing overall policy performance.  Consequently,\nimprove closed-loop metrics and generator loss.  For in-    we avoid backbone sharing in our RL framework to main-\nstance, with the coordinate transformation technique, the      tain task-speciﬁc gradient ﬂow and improve policy quality.\noverall closed-loop score increases from 90.78 to 94.07, and\n                                                               4.5. Qualitative ResultsS-PR rises from 91.37 to 95.06. These improvements are at-\ntributed to the enhanced accuracy of value estimation in RL,   We provide qualitative results as shown in Fig. 3.   In\nleading to generalized driving in closed-loop.                      this scenario, ego vehicle is required to execute a right\n                                                                turn while navigating around pedestrians.  In this case,\n4.4. Extention to IL                                                  Our method shows a smooth, efﬁcient performance. From\nIn addition to designing for RL training, we also extend the       tsim = 0s to tsim = 9s, all methods wait for the pedestrians\nCarPlanner to incorporate IL. We conduct rigorous analysis      to cross the road. At tsim = 10s, an unexpected pedestrian\nto compare the effects of various design choices in IL and     goes back and prepares to re-cross the road. PDM-Closed is\n\n\n\n                                                    17245",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p7-b1",
+          "bbox": [
+            70.41739654541016,
+            73.29348754882812,
+            538.879638671875,
+            98.25450897216797
+          ],
+          "text": "Design Choices\nClosed-loop metrics (↑)\nOpen-loop losses (↓)\nReward\n"
+        },
+        {
+          "id": "CarPlanner-p7-b2",
+          "bbox": [
+            159.32940673828125,
+            86.79580688476562,
+            183.1026611328125,
+            98.25450897216797
+          ],
+          "text": "Coord\n"
+        },
+        {
+          "id": "CarPlanner-p7-b3",
+          "bbox": [
+            78.7009506225586,
+            98.20791625976562,
+            91.37684631347656,
+            109.66661834716797
+          ],
+          "text": "DE\n"
+        },
+        {
+          "id": "CarPlanner-p7-b4",
+          "bbox": [
+            114.87429809570312,
+            86.79580688476562,
+            144.1154022216797,
+            109.66661834716797
+          ],
+          "text": "Reward\nQuality\n"
+        },
+        {
+          "id": "CarPlanner-p7-b5",
+          "bbox": [
+            160.5561065673828,
+            86.79580688476562,
+            487.1054992675781,
+            109.66661834716797
+          ],
+          "text": "Trans\nKNN\nCLS-NR\nS-CR\nS-Area\nS-PR\nS-Comfort\nLoss\nSelector\n"
+        },
+        {
+          "id": "CarPlanner-p7-b6",
+          "bbox": [
+            81.4471435546875,
+            86.79580688476562,
+            540.339599609375,
+            169.38568115234375
+          ],
+          "text": "Loss\nGenerator\n✗\n✓\n✓\n✓\n31.79\n95.74\n98.45\n33.10\n48.84\n1.03\n30.3\n✓\n✗\n✓\n✓\n90.44\n97.49\n96.91\n93.33\n90.73\n0.99\n1221.6\n✓\n✓\n✗\n✓\n90.78\n96.92\n98.46\n91.37\n94.23\n1.00\n2130.7\n✓\n✓\n✓\n✗\n92.73\n98.07\n98.46\n94.69\n93.44\n1.03\n2083.6\n✓\n✓\n✓\n✓\n94.07\n99.22\n99.22\n95.06\n91.09\n1.03\n1624.5\n"
+        },
+        {
+          "id": "CarPlanner-p7-b7",
+          "bbox": [
+            94.26599884033203,
+            172.50306701660156,
+            517.7401733398438,
+            183.30758666992188
+          ],
+          "text": "Table 3. Ablation studies on the design choices in RL training. Results are in Test14-random non-reactive benchmark.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b8",
+          "bbox": [
+            58.5,
+            187.74957275390625,
+            294.76104736328125,
+            295.396484375
+          ],
+          "text": "of our proposed framework. Moreover, CarPlanner reveals\nsubstantial improvement in the progress metric S-PR com-\npared to PDM-Closed in Tab. 2 and comparable collision\nmetric S-CR, indicating the ability of our method to im-\nproving driving efﬁciency while maintaining safe driving.\nImportantly, we do not apply any techniques commonly\nused in IL such as data augmentation [3, 4] and ego-history\nmasking [11], underscoring the intrinsic capability of our\napproach to solving the closed-loop task.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b9",
+          "bbox": [
+            317.2496032714844,
+            187.75054931640625,
+            553.5066528320312,
+            319.30670166015625
+          ],
+          "text": "RL training, as summarized in Tab. 4. Our ﬁndings indicate\nthat while mode dropout and selector side task contribute to\nboth IL and RL training, ego-history dropout and backbone\nsharing, often effective in IL, are less suitable for RL.\nEgo-history dropout. Previous works [1, 3, 4, 11] sug-\ngest that planners trained via IL may rely too heavily on\npast poses and neglect environmental state information. To\ncounter this, we combine techniques from ChauffeurNet [1]\nand PlanTF [4] into an ego-history dropout module, ran-\ndomly masking ego history poses and current velocity to\nalleviate the causal confusion issue.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b10",
+          "bbox": [
+            58.500999450683594,
+            295.3466491699219,
+            294.7541198730469,
+            367.12921142578125
+          ],
+          "text": "In the reactive setting, while our method performs well,\nit falls slightly short of PDM-Closed.\nThis discrepancy\narises because our model was trained exclusively in non-\nreactive settings and has not interacted with the IDM policy\nused by reactive settings; as a result, our model is less robust\nto disturbances generated by reactive agents during testing.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b11",
+          "bbox": [
+            58.5,
+            372.72247314453125,
+            155.32188415527344,
+            386.9800109863281
+          ],
+          "text": "4.3. Ablation Studies\n"
+        },
+        {
+          "id": "CarPlanner-p7-b12",
+          "bbox": [
+            317.25360107421875,
+            319.2568664550781,
+            553.5167236328125,
+            606.2344970703125
+          ],
+          "text": "Our experiments conﬁrm that ego-history dropout\nbeniﬁts IL training, as it improves performance across\nclosed-loop metrics like S-CR and S-Area. However, in RL\ntraining, we observe a negative impact on advantage esti-\nmation due to ego-history dropout, which signiﬁcantly af-\nfects the value part of generator loss, leading to closed-loop\nperformance degradation. This suggests that RL training\nnaturally addresses the causal confusion problem inherent\nin IL by uncovering causal relationships that align with the\nreward signal, which explicitly encodes task-oriented pref-\nerences. This capability highlights the potential of RL to\npush the boundaries of learning-based planning.\nBackbone sharing. This choice, often used in IL-based\nmulti-modal planners, promotes feature sharing across tasks\nto improve generalization. While backbone sharing helps\nIL by balancing losses across trajectory generator and se-\nlector, we ﬁnd it adversely affects RL training. Speciﬁcally,\nbackbone sharing leads to higher losses for both the trajec-\ntory generator and selector in RL, indicating that gradients\nfrom each task interfere. The divergent objectives in RL\nfor trajectory generation and selection tasks seem to con-\nﬂict, reducing overall policy performance. Consequently,\nwe avoid backbone sharing in our RL framework to main-\ntain task-speciﬁc gradient ﬂow and improve policy quality.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b13",
+          "bbox": [
+            317.25,
+            611.8125610351562,
+            425.40338134765625,
+            626.0701293945312
+          ],
+          "text": "4.5. Qualitative Results\n"
+        },
+        {
+          "id": "CarPlanner-p7-b14",
+          "bbox": [
+            58.5,
+            390.9735412597656,
+            294.802978515625,
+            654.0390014648438
+          ],
+          "text": "We investigate the effects of different design choices in RL\ntraining. The results are shown in Tab. 3.\nInﬂuence of reward items. When using the quality re-\nward only, the planner tends to generate static trajectories\nand achieves a low progress metric. This occurs because\nthe ego vehicle begins in a safe, drivable state, but mov-\ning forward is at risk of collisions or leaving the drivable\narea. On the other hand, when the quality reward is incor-\nporated alongside the DE reward, it leads to signiﬁcant im-\nprovements in closed-loop metrics compared to using the\nDE reward alone. For instance, the S-CR metric rises from\n97.49 to 99.22, and the S-Area metric rises from 96.91 to\n99.22. These improvements indicate that the quality reward\nencourages safe and comfortable behaviors.\nEffectiveness of IVM. The results show that the coordi-\nnate transformation and KNN techniques in IVM notably\nimprove closed-loop metrics and generator loss.\nFor in-\nstance, with the coordinate transformation technique, the\noverall closed-loop score increases from 90.78 to 94.07, and\nS-PR rises from 91.37 to 95.06. These improvements are at-\ntributed to the enhanced accuracy of value estimation in RL,\nleading to generalized driving in closed-loop.\n"
+        },
+        {
+          "id": "CarPlanner-p7-b15",
+          "bbox": [
+            58.5,
+            659.6324462890625,
+            149.5246124267578,
+            673.8900146484375
+          ],
+          "text": "4.4. Extention to IL\n"
+        },
+        {
+          "id": "CarPlanner-p7-b16",
+          "bbox": [
+            317.25,
+            630.0635375976562,
+            553.5075073242188,
+            713.7996215820312
+          ],
+          "text": "We provide qualitative results as shown in Fig. 3.\nIn\nthis scenario, ego vehicle is required to execute a right\nturn while navigating around pedestrians.\nIn this case,\nOur method shows a smooth, efﬁcient performance. From\ntsim = 0s to tsim = 9s, all methods wait for the pedestrians\nto cross the road. At tsim = 10s, an unexpected pedestrian\ngoes back and prepares to re-cross the road. PDM-Closed is\n"
+        },
+        {
+          "id": "CarPlanner-p7-b17",
+          "bbox": [
+            58.5,
+            677.884521484375,
+            294.7530822753906,
+            713.7997436523438
+          ],
+          "text": "In addition to designing for RL training, we also extend the\nCarPlanner to incorporate IL. We conduct rigorous analysis\nto compare the effects of various design choices in IL and\n"
+        },
+        {
+          "id": "CarPlanner-p7-b18",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17245\n"
+        }
+      ]
+    },
+    {
+      "page": 8,
+      "text": "                       Design Choices                             Closed-loop metrics (↑)             Open-loop losses (↓)\n  Loss   Mode     Selector    Ego-history  Backbone                                                 Loss      Loss\n                                          CLS-NR  S-CR   S-Area  S-PR   S-Comfort  Type   Dropout   Side Task    Dropout     Sharing                                                        Selector   Generator\n          ✗       ✗         ✗         ✗        90.82    97.29   98.45   92.15     94.57       1.04      147.5\n       ✓       ✗         ✗         ✗        91.21    96.54   98.46   91.44     96.92       1.07      153.0\n   IL    ✓     ✓        ✗         ✗        91.51    96.91   98.46   95.30     96.91       1.04      162.3\n       ✓     ✓      ✓         ✗        92.72    98.06   98.84   94.88     95.35       1.04      167.5\n       ✓     ✓      ✓      ✓        93.41    98.85   98.85   93.87     96.15       1.04      174.3\n          ✗       ✗         ✗         ✗        91.67    98.84   98.84   91.69     90.73       1.04      1812.6\n       ✓       ✗         ✗         ✗        93.46    98.07   99.61   94.26     92.28       1.09      2254.6\n  RL    ✓     ✓        ✗         ✗        94.07    99.22   99.22   95.06     91.09       1.03      1624.5\n       ✓     ✓      ✓         ✗        89.51    97.27   98.44   90.93     83.20       1.05      5424.3\n       ✓     ✓      ✓      ✓        88.66    95.54   98.84   92.82     86.05       1.21      1928.1\n Table 4. Effect of different components on IL and RL loss using our CarPlanner. Results are in Test14-random non-reactive benchmark.\n             tsim = 0s                 tsim = 9s                tsim = 10s                tsim = 11s                tsim = 12s\n\n\n\n                                                                                                                                                Metric   Score\n\n                                                                                                              CLS-NR   47.40\n\n                                                                                                                      S-CR    100.0\n                                                                                                                 S-TTC     0.0        $01(!%2.'3                                                                                                                                      S-Area    100.0\n                                                                                                                        S-PR    31.68\n\n\n\n\n\n                                                                                                                                                Metric   Score     +,-#./\n                                                                                                              CLS-NR   47.50\n\n                                                                                                                      S-CR    100.0\n                                                                                                                 S-TTC     0.0\n                                                                                                                                           S-Area    100.0          !\"#$%\"&&'#()*                                                                                                                    S-PR    31.98\n\n\n     +,-#./                                                                                                           CLS-NRMetric   Score95.14\n\n                                                                                                                      S-CR    100.0\n                                                                                                                 S-TTC   100.0\n                                                                                                                                           S-Area    100.0        !\"#$%\"&&'#                                                                                                                    S-PR    85.07\n\n\nFigure 3.   Qualitative comparison of PDM-Closed and our method in non-reactive environments.  The scenario  is annotated as\nwaiting for pedestrian to cross. In each frame shot, ego vehicle is marked as green. Trafﬁc agents are marked as sky blue.\nLineplot with blue is the ego planned trajectory.\n\nunaware of this situation and takes an emergency stop, but it      characteristics of IL and RL, highlighting the potential of\nstill intersects with this pedestrian. In contrast, our IL vari-    RL to take a further step toward learning-based planning.\nant displays an awareness of the pedestrian’s movements\nand consequently conducts a braking maneuver. However, it\n                                                          Limitations and future work. RL needs delicate designstill remains close to the pedestrian. Our RL method avoids\n                                                      and is prone to input representation. RL can overﬁt its train-\nthis hazard by starting up early up to tsim = 9s and achieves                                                             ing environment and suffer from performance drop in un-the highest progress and safety metrics.\n                                                          seen environments [21]. Our method leverages expert-aided\n5. Conclusion                                          reward design to guide exploration. However, this approach                                             may constrain the full potential of RL, as it inherently relies\nIn  this  paper, we  introduce  CarPlanner,  a  consistent     on expert demonstrations and may hinder the discovery of\nauto-regressive planner aiming at large-scale RL training.      solutions that surpass human expertise. Future work aims to\nThanks to the proposed framework, we train an RL-based     develop robust RL algorithms capable of overcoming these\nplanner that outperforms existing RL-, IL-, and rule-based      limitations, enabling autonomous exploration and general-\nSOTAs.  Furthermore, we provide analysis indicating the      ization across diverse environments.\n\n\n\n                                                    17246",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p8-b1",
+          "bbox": [
+            181.5146942138672,
+            85.70018005371094,
+            223.0918731689453,
+            96.3102035522461
+          ],
+          "text": "Ego-history\n"
+        },
+        {
+          "id": "CarPlanner-p8-b2",
+          "bbox": [
+            233.6571044921875,
+            85.70018005371094,
+            268.8683166503906,
+            96.3102035522461
+          ],
+          "text": "Backbone\n"
+        },
+        {
+          "id": "CarPlanner-p8-b3",
+          "bbox": [
+            68.10698699951172,
+            73.19615173339844,
+            542.6492919921875,
+            106.8770980834961
+          ],
+          "text": "Design Choices\nClosed-loop metrics (↑)\nOpen-loop losses (↓)\nLoss\nType\n"
+        },
+        {
+          "id": "CarPlanner-p8-b4",
+          "bbox": [
+            96.76750183105469,
+            85.70018005371094,
+            126.11455535888672,
+            106.8770980834961
+          ],
+          "text": "Mode\nDropout\n"
+        },
+        {
+          "id": "CarPlanner-p8-b5",
+          "bbox": [
+            136.67970275878906,
+            85.70018005371094,
+            170.94786071777344,
+            106.8770980834961
+          ],
+          "text": "Selector\nSide Task\n"
+        },
+        {
+          "id": "CarPlanner-p8-b6",
+          "bbox": [
+            187.62890625,
+            96.26707458496094,
+            216.9759521484375,
+            106.8770980834961
+          ],
+          "text": "Dropout\n"
+        },
+        {
+          "id": "CarPlanner-p8-b7",
+          "bbox": [
+            237.56739807128906,
+            85.70018005371094,
+            496.0622863769531,
+            106.8770980834961
+          ],
+          "text": "Sharing\nCLS-NR\nS-CR\nS-Area\nS-PR\nS-Comfort\nLoss\nSelector\n"
+        },
+        {
+          "id": "CarPlanner-p8-b8",
+          "bbox": [
+            507.0386047363281,
+            85.70018005371094,
+            542.2410888671875,
+            106.8770980834961
+          ],
+          "text": "Loss\nGenerator\n"
+        },
+        {
+          "id": "CarPlanner-p8-b9",
+          "bbox": [
+            72.64649963378906,
+            129.85630798339844,
+            80.95841979980469,
+            140.46633911132812
+          ],
+          "text": "IL\n"
+        },
+        {
+          "id": "CarPlanner-p8-b10",
+          "bbox": [
+            71.17323303222656,
+            108.45223236083984,
+            536.7447509765625,
+            195.8065185546875
+          ],
+          "text": "✗\n✗\n✗\n✗\n90.82\n97.29\n98.45\n92.15\n94.57\n1.04\n147.5\n✓\n✗\n✗\n✗\n91.21\n96.54\n98.46\n91.44\n96.92\n1.07\n153.0\n✓\n✓\n✗\n✗\n91.51\n96.91\n98.46\n95.30\n96.91\n1.04\n162.3\n✓\n✓\n✓\n✗\n92.72\n98.06\n98.84\n94.88\n95.35\n1.04\n167.5\n✓\n✓\n✓\n✓\n93.41\n98.85\n98.85\n93.87\n96.15\n1.04\n174.3\n✗\n✗\n✗\n✗\n91.67\n98.84\n98.84\n91.69\n90.73\n1.04\n1812.6\n✓\n✗\n✗\n✗\n93.46\n98.07\n99.61\n94.26\n92.28\n1.09\n2254.6\n✓\n✓\n✗\n✗\n94.07\n99.22\n99.22\n95.06\n91.09\n1.03\n1624.5\nRL\n"
+        },
+        {
+          "id": "CarPlanner-p8-b11",
+          "bbox": [
+            108.11699676513672,
+            195.2351531982422,
+            536.7442626953125,
+            216.41018676757812
+          ],
+          "text": "✓\n✓\n✓\n✗\n89.51\n97.27\n98.44\n90.93\n83.20\n1.05\n5424.3\n✓\n✓\n✓\n✓\n88.66\n95.54\n98.84\n92.82\n86.05\n1.21\n1928.1\n"
+        },
+        {
+          "id": "CarPlanner-p8-b12",
+          "bbox": [
+            62.250999450683594,
+            219.8880157470703,
+            549.7540893554688,
+            230.69253540039062
+          ],
+          "text": "Table 4. Effect of different components on IL and RL loss using our CarPlanner. Results are in Test14-random non-reactive benchmark.\n"
+        },
+        {
+          "id": "CarPlanner-p8-b13",
+          "bbox": [
+            99.31996154785156,
+            234.3689422607422,
+            468.55267333984375,
+            242.84202575683594
+          ],
+          "text": "tsim = 11s\ntsim = 12s\ntsim = 10s\ntsim = 9s\ntsim = 0s\n"
+        },
+        {
+          "id": "CarPlanner-p8-b14",
+          "bbox": [
+            500.7909851074219,
+            259.1263732910156,
+            544.6307373046875,
+            265.5513916015625
+          ],
+          "text": "Metric\nScore\n"
+        },
+        {
+          "id": "CarPlanner-p8-b15",
+          "bbox": [
+            498.03399658203125,
+            270.0622253417969,
+            544.4688720703125,
+            276.48724365234375
+          ],
+          "text": "CLS-NR\n47.40\n"
+        },
+        {
+          "id": "CarPlanner-p8-b16",
+          "bbox": [
+            500.1758117675781,
+            280.8702392578125,
+            544.4652709960938,
+            310.4252624511719
+          ],
+          "text": "S-CR\n100.0\nS-TTC\n0.0\nS-Area\n100.0\nS-PR\n31.68\n"
+        },
+        {
+          "id": "CarPlanner-p8-b17",
+          "bbox": [
+            500.802001953125,
+            345.5822448730469,
+            544.6173095703125,
+            352.00726318359375
+          ],
+          "text": "Metric\nScore\n"
+        },
+        {
+          "id": "CarPlanner-p8-b18",
+          "bbox": [
+            498.0469970703125,
+            356.51824951171875,
+            544.4559936523438,
+            362.9432678222656
+          ],
+          "text": "CLS-NR\n47.50\n"
+        },
+        {
+          "id": "CarPlanner-p8-b19",
+          "bbox": [
+            500.1881103515625,
+            367.32623291015625,
+            544.4523315429688,
+            396.88067626953125
+          ],
+          "text": "S-CR\n100.0\nS-TTC\n0.0\nS-Area\n100.0\nS-PR\n31.98\n"
+        },
+        {
+          "id": "CarPlanner-p8-b20",
+          "bbox": [
+            500.802001953125,
+            432.0382385253906,
+            544.6173095703125,
+            438.4632568359375
+          ],
+          "text": "Metric\nScore\n"
+        },
+        {
+          "id": "CarPlanner-p8-b21",
+          "bbox": [
+            498.0469970703125,
+            442.9742431640625,
+            544.4559936523438,
+            449.3992614746094
+          ],
+          "text": "CLS-NR\n95.14\n"
+        },
+        {
+          "id": "CarPlanner-p8-b22",
+          "bbox": [
+            64.97850036621094,
+            266.6630859375,
+            73.45842742919922,
+            482.8887939453125
+          ],
+          "text": "!\"#$%\"&&'#()* +,-#./\n!\"#$%\"&&'# +,-#./\n$01(!%2.'3\n"
+        },
+        {
+          "id": "CarPlanner-p8-b23",
+          "bbox": [
+            500.1881103515625,
+            453.7822570800781,
+            544.4523315429688,
+            483.3359680175781
+          ],
+          "text": "S-CR\n100.0\nS-TTC\n100.0\nS-Area\n100.0\nS-PR\n85.07\n"
+        },
+        {
+          "id": "CarPlanner-p8-b24",
+          "bbox": [
+            58.5,
+            500.21905517578125,
+            553.50732421875,
+            532.9412231445312
+          ],
+          "text": "Figure 3.\nQualitative comparison of PDM-Closed and our method in non-reactive environments.\nThe scenario is annotated as\nwaiting for pedestrian to cross. In each frame shot, ego vehicle is marked as green. Trafﬁc agents are marked as sky blue.\nLineplot with blue is the ego planned trajectory.\n"
+        },
+        {
+          "id": "CarPlanner-p8-b25",
+          "bbox": [
+            317.2496032714844,
+            540.2185668945312,
+            553.5015869140625,
+            564.1787109375
+          ],
+          "text": "characteristics of IL and RL, highlighting the potential of\nRL to take a further step toward learning-based planning.\n"
+        },
+        {
+          "id": "CarPlanner-p8-b26",
+          "bbox": [
+            58.5,
+            540.2185668945312,
+            294.76202392578125,
+            623.95458984375
+          ],
+          "text": "unaware of this situation and takes an emergency stop, but it\nstill intersects with this pedestrian. In contrast, our IL vari-\nant displays an awareness of the pedestrian’s movements\nand consequently conducts a braking maneuver. However, it\nstill remains close to the pedestrian. Our RL method avoids\nthis hazard by starting up early up to tsim = 9s and achieves\nthe highest progress and safety metrics.\n"
+        },
+        {
+          "id": "CarPlanner-p8-b27",
+          "bbox": [
+            58.5,
+            632.7730102539062,
+            127.589111328125,
+            648.3267211914062
+          ],
+          "text": "5. Conclusion\n"
+        },
+        {
+          "id": "CarPlanner-p8-b28",
+          "bbox": [
+            58.5,
+            653.9735717773438,
+            294.75311279296875,
+            713.7999877929688
+          ],
+          "text": "In this paper, we introduce CarPlanner, a consistent\nauto-regressive planner aiming at large-scale RL training.\nThanks to the proposed framework, we train an RL-based\nplanner that outperforms existing RL-, IL-, and rule-based\nSOTAs. Furthermore, we provide analysis indicating the\n"
+        },
+        {
+          "id": "CarPlanner-p8-b29",
+          "bbox": [
+            317.2496032714844,
+            581.8842163085938,
+            553.5106811523438,
+            713.802978515625
+          ],
+          "text": "Limitations and future work. RL needs delicate design\nand is prone to input representation. RL can overﬁt its train-\ning environment and suffer from performance drop in un-\nseen environments [21]. Our method leverages expert-aided\nreward design to guide exploration. However, this approach\nmay constrain the full potential of RL, as it inherently relies\non expert demonstrations and may hinder the discovery of\nsolutions that surpass human expertise. Future work aims to\ndevelop robust RL algorithms capable of overcoming these\nlimitations, enabling autonomous exploration and general-\nization across diverse environments.\n"
+        },
+        {
+          "id": "CarPlanner-p8-b30",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17246\n"
+        }
+      ]
+    },
+    {
+      "page": 9,
+      "text": "6. Acknowledgement                                         [11] Ke Guo, Wei Jing, Junbo Chen, and Jia Pan. CCIL: Context-\n                                                                        conditioned imitation learning for urban driving. In Proc. of\nMany thanks to Jingke Wang for helpful discussions and           Robotics: Science and Systems, 2023. 1, 7\nall reviewers for improving the paper. This work was sup-      [12] Marcel Hallgarten, Martin Stoll, and Andreas Zell. From\nported by Zhejiang Provincial Natural Science Foundation            prediction to planning with goal conditioned lane graph\nof China under Grant No. LD24F030001, and by the Na-             traversals. arXiv preprint arXiv:2302.07753, 2023. 6\ntional Nature Science Foundation of China under Grant      [13] Nicklas A Hansen, Hao Su, and Xiaolong Wang.  Tem-\n62373322.                                                                poral difference learning for model predictive control.  In\n                                                                        Proc. of the Intl. Conf. on Machine Learning, pages 8387–\nReferences                                                       8406. PMLR, 2022. 15\n                                                                     [14] Xiangkun He, Haohan Yang, Zhongxu Hu, and Chen Lv.\n [1] Mayank Bansal, Alex Krizhevsky, and Abhijit Ogale. Chauf-          Robust lane change decision making for autonomous vehi-\n      feurnet: Learning to drive by imitating the best and synthe-             cles: An observation adversarial reinforcement learning ap-\n      sizing the worst. In Proc. of Robotics: Science and Systems,           proach. IEEE Transactions on Intelligent Vehicles, 8(1):184–\n     2019. 3, 7                                                         193, 2022. 3\n [2] Holger Caesar, Juraj Kabzan, Kok Seang Tan, Whye Kit      [15] John Houston, Guido Zuidhof, Luca Bergamini, Yawei\n     Fong, Eric Wolff, Alex Lang, Luke Fletcher, Oscar Beijbom,           Ye, Long Chen, Ashesh Jain, Sammy Omari, Vladimir\n     and Sammy Omari. nuplan: A closed-loop ml-based plan-            Iglovikov, and Peter Ondruska.  One thousand and one\n     ning benchmark for autonomous vehicles.  arXiv preprint           hours: Self-driving motion prediction dataset.  In Proc. of\n     arXiv:2106.11810, 2021. 2, 6, 12                                      the Conf. on Robot Learning, pages 409–418, 2021. 2\n [3]  Jie Cheng, Yingbing Chen, and Qifeng Chen. Pluto: Push-      [16] Yihan Hu, Jiazhi Yang, Li Chen, Keyu Li, Chonghao Sima,\n     ing the limit of imitation learning-based planning for au-          Xizhou Zhu, Siqi Chai, Senyao Du, Tianwei Lin, Wenhai\n     tonomous driving. arXiv preprint arXiv:2404.14327, 2024.         Wang, et al.  Planning-oriented autonomous driving.  In\n      3, 6, 7, 12, 13                                                      Proc. of the IEEE/CVF Conf. on Computer Vision and Pat-\n [4]  Jie Cheng, Yingbing Chen, Xiaodong Mei, Bowen Yang, Bo            tern Recognition, pages 17853–17862, 2023. 1\n      Li, and Ming Liu. Rethinking imitation-based planners for      [17] Zhiyu Huang, Haochen Liu, and Chen Lv.  Gameformer:\n     autonomous driving.  In Proc. of the IEEE Intl. Conf. on           Game-theoretic modeling and learning of transformer-based\n     Robotics & Automation, pages 14123–14130. IEEE, 2024.            interactive prediction and planning for autonomous driving.\n      3, 6, 7                                                               In Proc. of the IEEE/CVF Intl. Conf. on Computer Vision,\n [5] Kashyap Chitta, Aditya Prakash, Bernhard Jaeger, Zehao Yu,          pages 3903–3913, 2023. 2, 3, 6, 13\n     Katrin Renz, and Andreas Geiger.  Transfuser:  Imitation      [18] Zhiyu Huang, Xinshuo Weng, Maximilian Igl, Yuxiao Chen,\n     with transformer-based sensor fusion for autonomous driv-          Yulong Cao, Boris Ivanovic, Marco Pavone, and Chen Lv.\n      ing. IEEE Trans. on Pattern Analysis and Machine Intelli-           Gen-drive:  Enhancing diffusion generative driving poli-\n     gence (TPAMI), 2022. 3                                                 cies with reward modeling and reinforcement learning ﬁne-\n [6] Ignasi  Clavera, Yao Fu,  and  Pieter Abbeel.   Model-            tuning. arXiv preprint arXiv:2410.05582, 2024. 2, 6, 12\n     augmented actor-critic: Backpropagating through paths. In      [19] Julian Ibarz, Jie Tan, Chelsea Finn, Mrinal Kalakrishnan,\n     Proc. of the Int. Conf. on Learning Representations, 2020.            Peter Pastor, and Sergey Levine. How to train your robot\n    15                                                               with deep reinforcement learning: lessons we have learned.\n [7] Daniel Dauner, Marcel Hallgarten, Andreas Geiger, and              Intl. Journal of Robotics Research, 40(4-5):698–721, 2021.\n    Kashyap Chitta. Parting with misconceptions about learning-         1\n     based vehicle motion planning.  In Proc. of the Conf. on      [20] Chiyu Jiang, Andre Cornman, Cheolho Park, Benjamin\n     Robot Learning, 2023. 6                                          Sapp, Yin Zhou, Dragomir Anguelov, et al. Motiondiffuser:\n [8] Pim De Haan, Dinesh Jayaraman, and Sergey Levine. Causal           Controllable multi-agent motion prediction using diffusion.\n     confusion in imitation learning.  Proc. of the Advances in           In Proc. of the IEEE/CVF Conf. on Computer Vision and Pat-\n     Neural Information Processing Systems, 32, 2019. 1, 3                 tern Recognition, pages 9644–9653, 2023. 2\n [9] Scott Ettinger, Shuyang Cheng, Benjamin Caine, Chenxi      [21] Robert Kirk, Amy Zhang, Edward Grefenstette, and Tim\n     Liu, Hang Zhao, Sabeek Pradhan, Yuning Chai, Ben Sapp,            Rockt¨aschel. A survey of zero-shot generalisation in deep\n     Charles R Qi, Yin Zhou, et al. Large scale interactive motion           reinforcement learning. Journal of Artiﬁcial Intelligence Re-\n      forecasting for autonomous driving: The waymo open mo-            search, 76:201–264, 2023. 8\n      tion dataset. In Proc. of the IEEE/CVF Intl. Conf. on Com-      [22] Edouard Leurent and Jean Mercat. Social attention for au-\n     puter Vision, pages 9710–9719, 2021. 2, 12                       tonomous decision-making in dense trafﬁc. arXiv preprint\n[10] Jiyang Gao, Chen Sun, Hang Zhao, Yi Shen, Dragomir           arXiv:1911.12250, 2019. 3\n     Anguelov, Congcong Li, and Cordelia Schmid.  Vectornet:      [23] Guofa Li, Yifan Yang, Shen Li, Xingda Qu, Nengchao Lyu,\n     Encoding hd maps and agent dynamics from vectorized rep-          and Shengbo Eben Li. Decision making of autonomous ve-\n      resentation.  In Proc. of the IEEE/CVF Conf. on Computer            hicles in lane change scenarios: Deep reinforcement learn-\n     Vision and Pattern Recognition, pages 11525–11533, 2020.           ing approaches with risk awareness. Transportation research\n    3                                                                    part C: emerging technologies, 134:103452, 2022. 3\n\n\n\n                                                     17247",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p9-b1",
+          "bbox": [
+            317.24859619140625,
+            73.67005920410156,
+            553.49462890625,
+            84.47457885742188
+          ],
+          "text": "[11] Ke Guo, Wei Jing, Junbo Chen, and Jia Pan. CCIL: Context-\n"
+        },
+        {
+          "id": "CarPlanner-p9-b2",
+          "bbox": [
+            58.5,
+            70.48602294921875,
+            164.6382598876953,
+            86.03973388671875
+          ],
+          "text": "6. Acknowledgement\n"
+        },
+        {
+          "id": "CarPlanner-p9-b3",
+          "bbox": [
+            317.24859619140625,
+            84.62873840332031,
+            553.50341796875,
+            118.63027954101562
+          ],
+          "text": "conditioned imitation learning for urban driving. In Proc. of\nRobotics: Science and Systems, 2023. 1, 7\n[12] Marcel Hallgarten, Martin Stoll, and Andreas Zell. From\n"
+        },
+        {
+          "id": "CarPlanner-p9-b4",
+          "bbox": [
+            58.5,
+            92.17657470703125,
+            294.7530517578125,
+            163.9570770263672
+          ],
+          "text": "Many thanks to Jingke Wang for helpful discussions and\nall reviewers for improving the paper. This work was sup-\nported by Zhejiang Provincial Natural Science Foundation\nof China under Grant No. LD24F030001, and by the Na-\ntional Nature Science Foundation of China under Grant\n62373322.\n"
+        },
+        {
+          "id": "CarPlanner-p9-b5",
+          "bbox": [
+            58.5,
+            175.06201171875,
+            114.04383850097656,
+            190.61572265625
+          ],
+          "text": "References\n"
+        },
+        {
+          "id": "CarPlanner-p9-b6",
+          "bbox": [
+            317.24951171875,
+            118.78443908691406,
+            553.5043334960938,
+            197.89865112304688
+          ],
+          "text": "prediction to planning with goal conditioned lane graph\ntraversals. arXiv preprint arXiv:2302.07753, 2023. 6\n[13] Nicklas A Hansen, Hao Su, and Xiaolong Wang.\nTem-\nporal difference learning for model predictive control.\nIn\nProc. of the Intl. Conf. on Machine Learning, pages 8387–\n8406. PMLR, 2022. 15\n[14] Xiangkun He, Haohan Yang, Zhongxu Hu, and Chen Lv.\n"
+        },
+        {
+          "id": "CarPlanner-p9-b7",
+          "bbox": [
+            62.983001708984375,
+            196.18605041503906,
+            294.7446594238281,
+            206.99057006835938
+          ],
+          "text": "[1] Mayank Bansal, Alex Krizhevsky, and Abhijit Ogale. Chauf-\n"
+        },
+        {
+          "id": "CarPlanner-p9-b8",
+          "bbox": [
+            62.983001708984375,
+            207.1447296142578,
+            294.7598876953125,
+            252.31216430664062
+          ],
+          "text": "feurnet: Learning to drive by imitating the best and synthe-\nsizing the worst. In Proc. of Robotics: Science and Systems,\n2019. 3, 7\n[2] Holger Caesar, Juraj Kabzan, Kok Seang Tan, Whye Kit\n"
+        },
+        {
+          "id": "CarPlanner-p9-b9",
+          "bbox": [
+            317.2500915527344,
+            198.05287170410156,
+            553.5006713867188,
+            253.97885131835938
+          ],
+          "text": "Robust lane change decision making for autonomous vehi-\ncles: An observation adversarial reinforcement learning ap-\nproach. IEEE Transactions on Intelligent Vehicles, 8(1):184–\n193, 2022. 3\n[15] John Houston, Guido Zuidhof, Luca Bergamini, Yawei\n"
+        },
+        {
+          "id": "CarPlanner-p9-b10",
+          "bbox": [
+            62.983001708984375,
+            252.46632385253906,
+            294.7590637207031,
+            308.59246826171875
+          ],
+          "text": "Fong, Eric Wolff, Alex Lang, Luke Fletcher, Oscar Beijbom,\nand Sammy Omari. nuplan: A closed-loop ml-based plan-\nning benchmark for autonomous vehicles.\narXiv preprint\narXiv:2106.11810, 2021. 2, 6, 12\n[3] Jie Cheng, Yingbing Chen, and Qifeng Chen. Pluto: Push-\n"
+        },
+        {
+          "id": "CarPlanner-p9-b11",
+          "bbox": [
+            317.2500915527344,
+            254.1331329345703,
+            553.5104370117188,
+            310.0511474609375
+          ],
+          "text": "Ye, Long Chen, Ashesh Jain, Sammy Omari, Vladimir\nIglovikov, and Peter Ondruska.\nOne thousand and one\nhours: Self-driving motion prediction dataset. In Proc. of\nthe Conf. on Robot Learning, pages 409–418, 2021. 2\n[16] Yihan Hu, Jiazhi Yang, Li Chen, Keyu Li, Chonghao Sima,\n"
+        },
+        {
+          "id": "CarPlanner-p9-b12",
+          "bbox": [
+            62.983001708984375,
+            308.74664306640625,
+            294.7599182128906,
+            353.9139709472656
+          ],
+          "text": "ing the limit of imitation learning-based planning for au-\ntonomous driving. arXiv preprint arXiv:2404.14327, 2024.\n3, 6, 7, 12, 13\n[4] Jie Cheng, Yingbing Chen, Xiaodong Mei, Bowen Yang, Bo\n"
+        },
+        {
+          "id": "CarPlanner-p9-b13",
+          "bbox": [
+            62.983001708984375,
+            354.0682678222656,
+            294.753662109375,
+            410.19427490234375
+          ],
+          "text": "Li, and Ming Liu. Rethinking imitation-based planners for\nautonomous driving.\nIn Proc. of the IEEE Intl. Conf. on\nRobotics & Automation, pages 14123–14130. IEEE, 2024.\n3, 6, 7\n[5] Kashyap Chitta, Aditya Prakash, Bernhard Jaeger, Zehao Yu,\n"
+        },
+        {
+          "id": "CarPlanner-p9-b14",
+          "bbox": [
+            317.24920654296875,
+            310.2045593261719,
+            553.50146484375,
+            422.1939697265625
+          ],
+          "text": "Xizhou Zhu, Siqi Chai, Senyao Du, Tianwei Lin, Wenhai\nWang, et al.\nPlanning-oriented autonomous driving.\nIn\nProc. of the IEEE/CVF Conf. on Computer Vision and Pat-\ntern Recognition, pages 17853–17862, 2023. 1\n[17] Zhiyu Huang, Haochen Liu, and Chen Lv.\nGameformer:\nGame-theoretic modeling and learning of transformer-based\ninteractive prediction and planning for autonomous driving.\nIn Proc. of the IEEE/CVF Intl. Conf. on Computer Vision,\npages 3903–3913, 2023. 2, 3, 6, 13\n[18] Zhiyu Huang, Xinshuo Weng, Maximilian Igl, Yuxiao Chen,\n"
+        },
+        {
+          "id": "CarPlanner-p9-b15",
+          "bbox": [
+            317.2500915527344,
+            422.34814453125,
+            553.5138549804688,
+            478.2662658691406
+          ],
+          "text": "Yulong Cao, Boris Ivanovic, Marco Pavone, and Chen Lv.\nGen-drive:\nEnhancing diffusion generative driving poli-\ncies with reward modeling and reinforcement learning ﬁne-\ntuning. arXiv preprint arXiv:2410.05582, 2024. 2, 6, 12\n[19] Julian Ibarz, Jie Tan, Chelsea Finn, Mrinal Kalakrishnan,\n"
+        },
+        {
+          "id": "CarPlanner-p9-b16",
+          "bbox": [
+            62.983001708984375,
+            410.34857177734375,
+            294.7598571777344,
+            511.7961730957031
+          ],
+          "text": "Katrin Renz, and Andreas Geiger.\nTransfuser: Imitation\nwith transformer-based sensor fusion for autonomous driv-\ning. IEEE Trans. on Pattern Analysis and Machine Intelli-\ngence (TPAMI), 2022. 3\n[6] Ignasi Clavera, Yao Fu, and Pieter Abbeel.\nModel-\naugmented actor-critic: Backpropagating through paths. In\nProc. of the Int. Conf. on Learning Representations, 2020.\n15\n[7] Daniel Dauner, Marcel Hallgarten, Andreas Geiger, and\n"
+        },
+        {
+          "id": "CarPlanner-p9-b17",
+          "bbox": [
+            317.2500915527344,
+            478.42047119140625,
+            553.5032958984375,
+            534.3375244140625
+          ],
+          "text": "Peter Pastor, and Sergey Levine. How to train your robot\nwith deep reinforcement learning: lessons we have learned.\nIntl. Journal of Robotics Research, 40(4-5):698–721, 2021.\n1\n[20] Chiyu Jiang, Andre Cornman, Cheolho Park, Benjamin\n"
+        },
+        {
+          "id": "CarPlanner-p9-b18",
+          "bbox": [
+            62.98210144042969,
+            511.9503479003906,
+            294.7491455078125,
+            557.1177368164062
+          ],
+          "text": "Kashyap Chitta. Parting with misconceptions about learning-\nbased vehicle motion planning.\nIn Proc. of the Conf. on\nRobot Learning, 2023. 6\n[8] Pim De Haan, Dinesh Jayaraman, and Sergey Levine. Causal\n"
+        },
+        {
+          "id": "CarPlanner-p9-b19",
+          "bbox": [
+            317.2500915527344,
+            534.4918212890625,
+            553.5006713867188,
+            590.4098510742188
+          ],
+          "text": "Sapp, Yin Zhou, Dragomir Anguelov, et al. Motiondiffuser:\nControllable multi-agent motion prediction using diffusion.\nIn Proc. of the IEEE/CVF Conf. on Computer Vision and Pat-\ntern Recognition, pages 9644–9653, 2023. 2\n[21] Robert Kirk, Amy Zhang, Edward Grefenstette, and Tim\n"
+        },
+        {
+          "id": "CarPlanner-p9-b20",
+          "bbox": [
+            62.98210144042969,
+            557.2719116210938,
+            294.7501220703125,
+            591.4805297851562
+          ],
+          "text": "confusion in imitation learning. Proc. of the Advances in\nNeural Information Processing Systems, 32, 2019. 1, 3\n[9] Scott Ettinger, Shuyang Cheng, Benjamin Caine, Chenxi\n"
+        },
+        {
+          "id": "CarPlanner-p9-b21",
+          "bbox": [
+            317.2510070800781,
+            590.5192260742188,
+            553.51025390625,
+            635.5234375
+          ],
+          "text": "Rockt¨aschel. A survey of zero-shot generalisation in deep\nreinforcement learning. Journal of Artiﬁcial Intelligence Re-\nsearch, 76:201–264, 2023. 8\n[22] Edouard Leurent and Jean Mercat. Social attention for au-\n"
+        },
+        {
+          "id": "CarPlanner-p9-b22",
+          "bbox": [
+            58.4989013671875,
+            591.6347045898438,
+            294.7537536621094,
+            658.7195434570312
+          ],
+          "text": "Liu, Hang Zhao, Sabeek Pradhan, Yuning Chai, Ben Sapp,\nCharles R Qi, Yin Zhou, et al. Large scale interactive motion\nforecasting for autonomous driving: The waymo open mo-\ntion dataset. In Proc. of the IEEE/CVF Intl. Conf. on Com-\nputer Vision, pages 9710–9719, 2021. 2, 12\n[10] Jiyang Gao, Chen Sun, Hang Zhao, Yi Shen, Dragomir\n"
+        },
+        {
+          "id": "CarPlanner-p9-b23",
+          "bbox": [
+            317.2500915527344,
+            635.6776123046875,
+            553.496826171875,
+            669.67822265625
+          ],
+          "text": "tonomous decision-making in dense trafﬁc. arXiv preprint\narXiv:1911.12250, 2019. 3\n[23] Guofa Li, Yifan Yang, Shen Li, Xingda Qu, Nengchao Lyu,\n"
+        },
+        {
+          "id": "CarPlanner-p9-b24",
+          "bbox": [
+            337.16900634765625,
+            669.8324584960938,
+            553.50390625,
+            713.51318359375
+          ],
+          "text": "and Shengbo Eben Li. Decision making of autonomous ve-\nhicles in lane change scenarios: Deep reinforcement learn-\ning approaches with risk awareness. Transportation research\npart C: emerging technologies, 134:103452, 2022. 3\n"
+        },
+        {
+          "id": "CarPlanner-p9-b25",
+          "bbox": [
+            78.41776275634766,
+            658.8738403320312,
+            294.7502136230469,
+            713.5132446289062
+          ],
+          "text": "Anguelov, Congcong Li, and Cordelia Schmid. Vectornet:\nEncoding hd maps and agent dynamics from vectorized rep-\nresentation. In Proc. of the IEEE/CVF Conf. on Computer\nVision and Pattern Recognition, pages 11525–11533, 2020.\n3\n"
+        },
+        {
+          "id": "CarPlanner-p9-b26",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17247\n"
+        }
+      ]
+    },
+    {
+      "page": 10,
+      "text": "[24] Quanyi Li, Zhenghao Mark Peng, Lan Feng, Zhizheng Liu,      [36] Ardi Tampuu, Tambet Matiisen, Maksym Semikin, Dmytro\n    Chenda Duan, Wenjie Mo, and Bolei Zhou.  Scenarionet:          Fishman, and Naveed Muhammad. A survey of end-to-end\n     Open-source platform for large-scale trafﬁc scenario simula-            driving: Architectures and training methods. IEEE Trans-\n      tion and modeling. Proc. of the Advances in Neural Infor-           actions on Neural Networks and Learning Systems, 33(4):\n     mation Processing Systems, 36:3894–3920, 2023. 12                1364–1384, 2020. 1\n[25] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Car-      [37] Martin Treiber, Ansgar Hennecke, and Dirk Helbing. Con-\n      roll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini           gested trafﬁc states in empirical observations and micro-\n     Agarwal, Katarina Slama, Alex Ray, et al. Training language           scopic simulations.  Physical review E, 62(2):1805, 2000.\n     models to follow instructions with human feedback. Proc. of         6\n     the Advances in Neural Information Processing Systems, 35:      [38] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-\n     27730–27744, 2022. 1                                                              reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia\n[26] Charles R Qi, Hao Su, Kaichun Mo, and Leonidas J Guibas.           Polosukhin. Attention is all you need. Proc. of the Advances\n      Pointnet: Deep learning on point sets for 3d classiﬁcation            in Neural Information Processing Systems, 30, 2017. 4\n     and segmentation. In Proc. of the IEEE/CVF Conf. on Com-      [39] Huanjie Wang, Shihua Yuan, Mengyu Guo, Xueyuan Li, and\n     puter Vision and Pattern Recognition, pages 652–660, 2017.         Wei Lan. A deep reinforcement learning-based approach\n    4                                                                         for autonomous driving in highway on-ramp merge.  Pro-\n[27] Nicholas Rhinehart, Rowan McAllister, Kris Kitani, and           ceedings of the Institution of Mechanical engineers, Part D:\n     Sergey Levine.  Precog:  Prediction conditioned on goals           Journal of Automobile engineering, 235(10-11):2726–2739,\n      in visual multi-agent settings.  In Proc. of the IEEE/CVF           2021. 3\n       Intl. Conf. on Computer Vision, pages 2821–2830, 2019. 2        [40] Letian Wang, Jie Liu, Hao Shao, Wenshuo Wang, Ruobing\n[28] St´ephane Ross, Geoffrey Gordon, and Drew Bagnell. A re-          Chen, Yu Liu, and Steven L Waslander. Efﬁcient Reinforce-\n     duction of imitation learning and structured prediction to no-         ment Learning for Autonomous Driving with Parameterized\n      regret online learning. In Proceedings of the fourteenth inter-            Skills and Priors. In Proc. of Robotics: Science and Systems,\n     national conference on artiﬁcial intelligence and statistics,          Daegu, Republic of Korea, 2023. 3\n     pages 627–635, 2011. 1, 3                                      [41] Wei Wu, Xiaoxin Feng, Ziyan Gao, and Yuheng Kan. Smart:\n[29] Oliver Scheel, Luca Bergamini, Maciej Wolczyk,  Bła˙zej           Scalable multi-agent real-time simulation via next-token pre-\n      Osi´nski, and Peter Ondruska.  Urban driver: Learning to            diction. arXiv preprint arXiv:2405.15677, 2024. 2\n      drive from real-world demonstrations using policy gradients.      [42] Dongkun Zhang, Jiaming Liang, Sha Lu, Ke Guo, Qi Wang,\n     In Proc. of the Conf. on Robot Learning, pages 718–728,         Rong Xiong, Zhenwei Miao, and Yue Wang. Pep: Policy-\n     2022. 1, 3, 6                                              embedded trajectory planning for autonomous driving. IEEE\n[30] John Schulman, Philipp Moritz, Sergey Levine, Michael Jor-           Robotics and Automation Letters, 2024. 3, 6\n     dan, and Pieter Abbeel. High-dimensional continuous con-      [43] Zhejun Zhang, Alexander Liniger, Christos Sakaridis, Fisher\n      trol using generalized advantage estimation. arXiv preprint          Yu, and Luc V Gool. Real-time motion prediction via het-\n     arXiv:1506.02438, 2015. 11, 12                                   erogeneous polyline transformer with relative pose encoding.\n[31] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Rad-           Proc. of the Advances in Neural Information Processing Sys-\n      ford, and Oleg Klimov. Proximal policy optimization algo-           tems, 36, 2024. 13\n      rithms. arXiv preprint arXiv:1707.06347, 2017. 6, 11            [44] Tong Zhou, Letian Wang, Ruobing Chen, Wenshuo Wang,\n                                                                 and Yu Liu.  Accelerating reinforcement learning for au-[32] Ari Seff, Brian Cera, Dian Chen, Mason Ng, Aurick Zhou,\n                                                               tonomous driving using task-agnostic and ego-centric mo-    Nigamaa Nayakanti, Khaled S Refaat, Rami Al-Rfou, and\n                                                                                tion skills. In Proc. of the IEEE/RSJ Intl. Conf. on Intelligent     Benjamin Sapp.  Motionlm: Multi-agent motion forecast-\n                                                                   Robots and Systems, pages 11289–11296. IEEE, 2023. 3     ing as language modeling.   In Proc. of the IEEE/CVF\n       Intl. Conf. on Computer Vision, pages 8579–8590, 2023. 2        [45] Yang Zhou, Hao Shao, Letian Wang, Steven L Waslander,\n                                                             Hongsheng Li, and Yu Liu. Smartreﬁne: A scenario-adaptive[33] Shaoshuai Shi, Li Jiang, Dengxin Dai, and Bernt Schiele.\n                                                                 reﬁnement framework for efﬁcient motion prediction.  In     Motion transformer with global intention localization and lo-\n                                                                        Proc. of the IEEE/CVF Conf. on Computer Vision and Pat-      cal movement reﬁnement. Proc. of the Advances in Neural\n                                                                             tern Recognition, pages 15281–15290, 2024. 2     Information Processing Systems, 35:6531–6543, 2022. 2\n                                                                     [46] Zikang Zhou, Haibo Hu, Xinhong Chen, Jianping Wang,[34] David Silver, Aja Huang, Chris J Maddison, Arthur Guez,\n                                                        Nan Guan, Kui Wu, Yung-Hui Li, Yu-Kai Huang, and     Laurent Sifre, George Van Den Driessche, Julian Schrit-\n                                                         Chun Jason Xue.   Behaviorgpt:  Smart agent simulation      twieser, Ioannis Antonoglou, Veda Panneershelvam, Marc\n                                                                                for autonomous driving with next-patch prediction.  arXiv     Lanctot, et al. Mastering the game of go with deep neural\n                                                                             preprint arXiv:2405.17372, 2024. 2     networks and tree search. nature, 529(7587):484–489, 2016.\n    1\n[35] Simon Suo, Sebastian Regalado, Sergio Casas, and Raquel\n     Urtasun.  Trafﬁcsim: Learning to simulate realistic multi-\n     agent behaviors. In Proc. of the IEEE/CVF Conf. on Com-\n     puter Vision and Pattern Recognition, pages 10400–10409,\n     2021. 13\n\n\n\n                                                     17248",
+      "links": [],
+      "blocks": [
+        {
+          "id": "CarPlanner-p10-b1",
+          "bbox": [
+            317.2524108886719,
+            73.66377258300781,
+            553.5064086914062,
+            84.46829223632812
+          ],
+          "text": "[36] Ardi Tampuu, Tambet Matiisen, Maksym Semikin, Dmytro\n"
+        },
+        {
+          "id": "CarPlanner-p10-b2",
+          "bbox": [
+            58.5,
+            73.67805480957031,
+            294.7449645996094,
+            84.48257446289062
+          ],
+          "text": "[24] Quanyi Li, Zhenghao Mark Peng, Lan Feng, Zhizheng Liu,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b3",
+          "bbox": [
+            317.2524108886719,
+            84.62245178222656,
+            553.50732421875,
+            140.25808715820312
+          ],
+          "text": "Fishman, and Naveed Muhammad. A survey of end-to-end\ndriving: Architectures and training methods. IEEE Trans-\nactions on Neural Networks and Learning Systems, 33(4):\n1364–1384, 2020. 1\n[37] Martin Treiber, Ansgar Hennecke, and Dirk Helbing. Con-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b4",
+          "bbox": [
+            58.49909973144531,
+            84.63673400878906,
+            294.75030517578125,
+            140.66958618164062
+          ],
+          "text": "Chenda Duan, Wenjie Mo, and Bolei Zhou.\nScenarionet:\nOpen-source platform for large-scale trafﬁc scenario simula-\ntion and modeling. Proc. of the Advances in Neural Infor-\nmation Processing Systems, 36:3894–3920, 2023. 12\n[25] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Car-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b5",
+          "bbox": [
+            317.2510070800781,
+            140.41224670410156,
+            553.5033569335938,
+            185.10415649414062
+          ],
+          "text": "gested trafﬁc states in empirical observations and micro-\nscopic simulations.\nPhysical review E, 62(2):1805, 2000.\n6\n[38] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b6",
+          "bbox": [
+            58.49909973144531,
+            140.8229522705078,
+            294.7618713378906,
+            207.81533813476562
+          ],
+          "text": "roll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini\nAgarwal, Katarina Slama, Alex Ray, et al. Training language\nmodels to follow instructions with human feedback. Proc. of\nthe Advances in Neural Information Processing Systems, 35:\n27730–27744, 2022. 1\n[26] Charles R Qi, Hao Su, Kaichun Mo, and Leonidas J Guibas.\n"
+        },
+        {
+          "id": "CarPlanner-p10-b7",
+          "bbox": [
+            317.2510070800781,
+            185.25843811035156,
+            553.5114135742188,
+            229.93527221679688
+          ],
+          "text": "reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia\nPolosukhin. Attention is all you need. Proc. of the Advances\nin Neural Information Processing Systems, 30, 2017. 4\n[39] Huanjie Wang, Shihua Yuan, Mengyu Guo, Xueyuan Li, and\n"
+        },
+        {
+          "id": "CarPlanner-p10-b8",
+          "bbox": [
+            58.49909973144531,
+            207.96961975097656,
+            294.7530212402344,
+            264.0033874511719
+          ],
+          "text": "Pointnet: Deep learning on point sets for 3d classiﬁcation\nand segmentation. In Proc. of the IEEE/CVF Conf. on Com-\nputer Vision and Pattern Recognition, pages 652–660, 2017.\n4\n[27] Nicholas Rhinehart, Rowan McAllister, Kris Kitani, and\n"
+        },
+        {
+          "id": "CarPlanner-p10-b9",
+          "bbox": [
+            317.2510070800781,
+            230.0895538330078,
+            553.5150146484375,
+            296.6838684082031
+          ],
+          "text": "Wei Lan.\nA deep reinforcement learning-based approach\nfor autonomous driving in highway on-ramp merge. Pro-\nceedings of the Institution of Mechanical engineers, Part D:\nJournal of Automobile engineering, 235(10-11):2726–2739,\n2021. 3\n[40] Letian Wang, Jie Liu, Hao Shao, Wenshuo Wang, Ruobing\n"
+        },
+        {
+          "id": "CarPlanner-p10-b10",
+          "bbox": [
+            58.49821090698242,
+            264.1575622558594,
+            294.7512512207031,
+            309.2325744628906
+          ],
+          "text": "Sergey Levine.\nPrecog: Prediction conditioned on goals\nin visual multi-agent settings.\nIn Proc. of the IEEE/CVF\nIntl. Conf. on Computer Vision, pages 2821–2830, 2019. 2\n[28] St´ephane Ross, Geoffrey Gordon, and Drew Bagnell. A re-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b11",
+          "bbox": [
+            317.2500915527344,
+            296.8380432128906,
+            553.5067138671875,
+            352.4736633300781
+          ],
+          "text": "Chen, Yu Liu, and Steven L Waslander. Efﬁcient Reinforce-\nment Learning for Autonomous Driving with Parameterized\nSkills and Priors. In Proc. of Robotics: Science and Systems,\nDaegu, Republic of Korea, 2023. 3\n[41] Wei Wu, Xiaoxin Feng, Ziyan Gao, and Yuheng Kan. Smart:\n"
+        },
+        {
+          "id": "CarPlanner-p10-b12",
+          "bbox": [
+            58.49909973144531,
+            309.3867492675781,
+            294.7529296875,
+            365.42047119140625
+          ],
+          "text": "duction of imitation learning and structured prediction to no-\nregret online learning. In Proceedings of the fourteenth inter-\nnational conference on artiﬁcial intelligence and statistics,\npages 627–635, 2011. 1, 3\n[29] Oliver Scheel, Luca Bergamini, Maciej Wolczyk, Bła˙zej\n"
+        },
+        {
+          "id": "CarPlanner-p10-b13",
+          "bbox": [
+            317.2500915527344,
+            352.6279602050781,
+            553.4986572265625,
+            386.34515380859375
+          ],
+          "text": "Scalable multi-agent real-time simulation via next-token pre-\ndiction. arXiv preprint arXiv:2405.15677, 2024. 2\n[42] Dongkun Zhang, Jiaming Liang, Sha Lu, Ke Guo, Qi Wang,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b14",
+          "bbox": [
+            58.50178909301758,
+            365.52984619140625,
+            294.7510986328125,
+            421.60845947265625
+          ],
+          "text": "Osi´nski, and Peter Ondruska.\nUrban driver: Learning to\ndrive from real-world demonstrations using policy gradients.\nIn Proc. of the Conf. on Robot Learning, pages 718–728,\n2022. 1, 3, 6\n[30] John Schulman, Philipp Moritz, Sergey Levine, Michael Jor-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b15",
+          "bbox": [
+            317.2500915527344,
+            386.5003662109375,
+            553.5004272460938,
+            431.17626953125
+          ],
+          "text": "Rong Xiong, Zhenwei Miao, and Yue Wang. Pep: Policy-\nembedded trajectory planning for autonomous driving. IEEE\nRobotics and Automation Letters, 2024. 3, 6\n[43] Zhejun Zhang, Alexander Liniger, Christos Sakaridis, Fisher\n"
+        },
+        {
+          "id": "CarPlanner-p10-b16",
+          "bbox": [
+            58.502689361572266,
+            421.7626647949219,
+            294.7511291503906,
+            466.8376770019531
+          ],
+          "text": "dan, and Pieter Abbeel. High-dimensional continuous con-\ntrol using generalized advantage estimation. arXiv preprint\narXiv:1506.02438, 2015. 11, 12\n[31] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Rad-\n"
+        },
+        {
+          "id": "CarPlanner-p10-b17",
+          "bbox": [
+            317.2500915527344,
+            431.33056640625,
+            553.50146484375,
+            486.9661560058594
+          ],
+          "text": "Yu, and Luc V Gool. Real-time motion prediction via het-\nerogeneous polyline transformer with relative pose encoding.\nProc. of the Advances in Neural Information Processing Sys-\ntems, 36, 2024. 13\n[44] Tong Zhou, Letian Wang, Ruobing Chen, Wenshuo Wang,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b18",
+          "bbox": [
+            58.50358963012695,
+            466.9918518066406,
+            294.7610778808594,
+            501.108154296875
+          ],
+          "text": "ford, and Oleg Klimov. Proximal policy optimization algo-\nrithms. arXiv preprint arXiv:1707.06347, 2017. 6, 11\n[32] Ari Seff, Brian Cera, Dian Chen, Mason Ng, Aurick Zhou,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b19",
+          "bbox": [
+            317.2510070800781,
+            487.120361328125,
+            553.5059814453125,
+            542.7559204101562
+          ],
+          "text": "and Yu Liu.\nAccelerating reinforcement learning for au-\ntonomous driving using task-agnostic and ego-centric mo-\ntion skills. In Proc. of the IEEE/RSJ Intl. Conf. on Intelligent\nRobots and Systems, pages 11289–11296. IEEE, 2023. 3\n[45] Yang Zhou, Hao Shao, Letian Wang, Steven L Waslander,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b20",
+          "bbox": [
+            58.502689361572266,
+            501.2623596191406,
+            294.75921630859375,
+            557.2960205078125
+          ],
+          "text": "Nigamaa Nayakanti, Khaled S Refaat, Rami Al-Rfou, and\nBenjamin Sapp.\nMotionlm: Multi-agent motion forecast-\ning as language modeling.\nIn Proc. of the IEEE/CVF\nIntl. Conf. on Computer Vision, pages 8579–8590, 2023. 2\n[33] Shaoshuai Shi, Li Jiang, Dengxin Dai, and Bernt Schiele.\n"
+        },
+        {
+          "id": "CarPlanner-p10-b21",
+          "bbox": [
+            317.2500915527344,
+            542.9100952148438,
+            553.5023193359375,
+            598.5457153320312
+          ],
+          "text": "Hongsheng Li, and Yu Liu. Smartreﬁne: A scenario-adaptive\nreﬁnement framework for efﬁcient motion prediction.\nIn\nProc. of the IEEE/CVF Conf. on Computer Vision and Pat-\ntern Recognition, pages 15281–15290, 2024. 2\n[46] Zikang Zhou, Haibo Hu, Xinhong Chen, Jianping Wang,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b22",
+          "bbox": [
+            58.50178909301758,
+            557.4502563476562,
+            294.7565612792969,
+            602.5252685546875
+          ],
+          "text": "Motion transformer with global intention localization and lo-\ncal movement reﬁnement. Proc. of the Advances in Neural\nInformation Processing Systems, 35:6531–6543, 2022. 2\n[34] David Silver, Aja Huang, Chris J Maddison, Arthur Guez,\n"
+        },
+        {
+          "id": "CarPlanner-p10-b23",
+          "bbox": [
+            337.16900634765625,
+            598.7000122070312,
+            553.5006103515625,
+            642.3798217773438
+          ],
+          "text": "Nan Guan, Kui Wu, Yung-Hui Li, Yu-Kai Huang, and\nChun Jason Xue.\nBehaviorgpt: Smart agent simulation\nfor autonomous driving with next-patch prediction. arXiv\npreprint arXiv:2405.17372, 2024. 2\n"
+        },
+        {
+          "id": "CarPlanner-p10-b24",
+          "bbox": [
+            58.50178909301758,
+            602.6795043945312,
+            294.7611083984375,
+            669.6719360351562
+          ],
+          "text": "Laurent Sifre, George Van Den Driessche, Julian Schrit-\ntwieser, Ioannis Antonoglou, Veda Panneershelvam, Marc\nLanctot, et al. Mastering the game of go with deep neural\nnetworks and tree search. nature, 529(7587):484–489, 2016.\n1\n[35] Simon Suo, Sebastian Regalado, Sergio Casas, and Raquel\n"
+        },
+        {
+          "id": "CarPlanner-p10-b25",
+          "bbox": [
+            78.42064666748047,
+            669.8261108398438,
+            294.751953125,
+            713.5068969726562
+          ],
+          "text": "Urtasun.\nTrafﬁcsim: Learning to simulate realistic multi-\nagent behaviors. In Proc. of the IEEE/CVF Conf. on Com-\nputer Vision and Pattern Recognition, pages 10400–10409,\n2021. 13\n"
+        },
+        {
+          "id": "CarPlanner-p10-b26",
+          "bbox": [
+            294.75,
+            747.5230102539062,
+            317.25,
+            759.5289916992188
+          ],
+          "text": "17248\n"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "format": "PDF 1.3",
+    "title": "CarPlanner: Consistent Auto-regressive Trajectory Planning for Large-Scale Reinforcement Learning in Autonomous Driving",
+    "author": "Dongkun Zhang; Jiaming Liang; Ke Guo; Sha Lu; Qi Wang; Rong Xiong; Zhenwei Miao; Yue Wang",
+    "subject": "IEEE Conference on Computer Vision and Pattern Recognition",
+    "keywords": "",
+    "creator": "",
+    "producer": "pikepdf 9.8.1",
+    "creationDate": "",
+    "modDate": "",
+    "trapped": "",
+    "encryption": null
+  }
+}

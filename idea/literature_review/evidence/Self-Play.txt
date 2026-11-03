@@ -1,0 +1,1932 @@
+=== PDF PAGE 1 ===
+                Robust Autonomy Emerges from Self-Play
+
+
+
+    Marco Cusumano-Towner * 1 David Hafner * 1 Alex Hertzberg * 1 Brody Huval * 1  Aleksei Petrenko * 1
+           Eugene Vinitsky * 1 Erik Wijmans * 1 Taylor Killian 1 Stuart Bowers 1 Ozan Sener 1
+                                    Philipp Kr¨ahenb¨uhl 1 Vladlen Koltun 1
+
+
+                 Abstract                       and robustness emerge when self-play training is taken to
+     Self-play has powered breakthroughs in two-        unprecedented scale – orders of magnitude beyond prior
+     player and multi-player games. Here we show        experiments (Feng et al., 2023; Zhang et al., 2023). This
+     that self-play is a surprisingly effective strategy         discovery is enabled by GIGAFLOW, a batched simulator
+     in another domain. We show that robust and nat-         architected from the ground up for self-play reinforcement
+      uralistic driving emerges entirely from self-play         learning on a massive scale. GIGAFLOW is capable of sim-
+     in simulation at unprecedented scale – 1.6 bil-         ulating and learning from 4.4 billion state transitions (7.2
+     lion km of driving. This is enabled by GIGAFLOW,         million km of driving, or 42 years of continuous driving
+     a batched simulator that can synthesize and train         experience) per hour on a single 8-GPU node. It simulates
+    on 42 years of subjective driving experience per        urban environments with up to 150 densely interacting traf-
+     hour on a single 8-GPU node. The resulting policy           fic participants 360 000 times faster than real time at a cost
+     achieves state-of-the-art performance on three in-         of under $5 per million km driven (based on public cloud
+     dependent autonomous driving benchmarks. The           rates). A full training run simulates over one trillion state
+     policy outperforms the prior state of the art when          transitions, 1.6 billion km driven, or 9500 years of subjec-
+     tested on recorded real-world scenarios, amidst          tive driving experience, and completes in under 10 days on
+    human drivers, without ever seeing human data        one 8-GPU node.
+     during training. The policy is realistic when as-                                       We use GIGAFLOW to train a parameterized family of driv-
+     sessed against human references and achieves un-                                                           ing policies. The parameters specify the type of traffic par-
+     precedented robustness, averaging 17.5 years of                                                                  ticipant controlled by the policy (passenger vehicle, large
+     continuous driving between incidents in simula-                                                                 truck, bicyclist, or even a pedestrian) and the driving style
+      tion.                                                                           (e.g., aggressive vs. cautious). These parameters can be
+                                                        modified at test time with no additional training (Dosovit-
+                                                            skiy & Koltun, 2017), such that a single trained policy can1. Introduction
+                                                       be used to control a variety of traffic participants, with a vari-
+Self-play has been an effective strategy for training policies     ety of behavioral styles. During training, this parameterized
+for board games, card games, 3D multiplayer games, real-    policy architecture enables all simulated traffic participants
+time strategy games, robotic manipulation, and even bio-    to be collecting experience in parallel, all flowing through a
+engineering (Silver et al., 2017; 2018; Jaderberg et al., 2019;    single neural network. This supports self-play simulations
+Berner et al., 2019; Brown & Sandholm, 2019; Vinyals et al.,   where more than a hundred agents are all controlled by a
+2019; Plappert et al., 2021; Perolat et al., 2022; Wang et al.,    single neural network, which is learning from all of their
+2023a). In this work, we demonstrate the effectiveness of    experiences, yet the agents exhibit diverse outward manifes-
+self-play in another domain. We show that simulated self-    tations (truck vs. bicycle), functional characteristics (turning
+play yields naturalistic and robust driving policies, while     radius), and behavioral styles (adherence to traffic laws).
+using only a minimalistic reward function and never seeing
+                                                The  result  is a robust and  naturalistic driving policy
+human data during training.
+                                                                  that achieves state-of-the-art performance when tested in
+We demonstrate that qualitatively new levels of realism    recorded real-world scenarios, amidst recorded human
+                                                                   drivers, without ever seeing human data during training.
+                                       We test the GIGAFLOW policy in three leading independent  *Equal contribution, alphabetical order. 1Apple. Correspon-
+dence to: Philipp Kr¨ahenb¨uhl <philkr@apple.com>.                third-party benchmarks: CARLA (Dosovitskiy et al., 2017),
+                                                       nuPlan (Caesar et al., 2022), and the Waymo Open Motion
+Proceedings of the 42 nd International Conference on Machine    Dataset (Ettinger et al., 2021) (through the Waymax sim-
+Learning, Vancouver, Canada. PMLR 267, 2025. Copyright 2025     ulator (Gulino et al., 2023)). State-of-the-art performance
+by the author(s).
+
+                                                1
+
+=== PDF PAGE 2 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+      a        CARLA Benchmark                              nuPlan Benchmark                        Waymax Benchmark
+                                                                                            (Waymo Open Motion Dataset)
+
+
+
+
+
+                                             94.7                                             93.8                                           99.16
+                                                                           92.1     92.2
+                                                 SOTA                                                                 94.3
+                                88.3                                                           SOTA      89.7
+            SOTA
+                                                          77
+
+                                                                                                               81.43
+                    15.0
+
+                      Prior state of the art                                    Prior state of the art                                    Prior state of the art
+                   (CARLA-specific)                                    (nuPlan-specific)                                 (Waymo-specific)
+
+                                                                             Gigaflow (zero-shot)
+                                                                 (One generalist policy for all benchmarks)
+
+
+      b
+             Argoverse                                                       🏆  Prior best
+            Waymo                                      nuPlan  CARLA    Waymax    CARLA      nuPlan    Waymax    📌 Plateau
+                 nuPlan
+                   Carla                    🏆   🏆     🏆     📌     📌     📌
+               Gigaflow
+
+                                 0.05           100             400                  800                  1200                  1600
+
+                                                                                                Million km
+
+
+Figure 1: Self-play reinforcement learning yields a generalist policy. a, A single GIGAFLOW agent outperforms the
+best dataset-specific specialists across leading benchmarks. GIGAFLOW is evaluated zero-shot without training on a single
+benchmark, while dataset-specific specialists train on benchmark-specific datasets. Each benchmark includes different maps,
+scenarios, and evaluation metrics. b, GIGAFLOW enables cost-effective training of policies via self-play on a massive scale.
+Our largest policies drive over 1.6 billion km during training, more than the distance from the Sun to Saturn and orders of
+magnitude farther than prior datasets or simulations. At this scale, self-play yields a generalist policy. Dashed lines indicate
+points at which the performance of our single generalist policy passes the prior state of the art on each benchmark (‘prior
+best’) and points at which the performance on each benchmark plateaus (‘plateau’).
+
+
+on each benchmark was previously achieved by specialist    2. GIGAFLOW
+agents that were trained specifically for that benchmark,
+                                                The goal of GIGAFLOW is to train a generalist policycommonly using benchmark-specific datasets. In contrast,
+                                                   π(a|W, S, A, C) in simulation (Fig. 2d). The policy ob-we outperform the prior state of the art on all benchmarks
+                                                            serves the static world W, its own state S, and other dy-with a single policy (Fig. 1) that was trained entirely via
+                                                   namic agents A to produce an action a (Fig. 2c). A condi-self-play, using none of the provided datasets for training.
+                                                                tioning parameter C modulates the policy’s behavior. Learn-
+The behaviors exhibited by the GIGAFLOW policy are natu-    ing this generalist policy requires careful modeling of two
+ralistic despite never seeing human data during training. The    core concepts: uncertainty and other-agent behaviors.
+trained policy exhibits long-horizon planning without any
+                                                     Uncertainty in driving stems from partial or incompletededicated planning or search modules, can deal with heavily
+                                                             observations. The driver is generally unaware of the goalscontentious traffic scenarios, is quantitatively realistic when
+                                                    and intentions of other agents, or even their exact location,assessed against human references (Montali et al., 2023),
+                                                           speed, or acceleration. Objects or parts of the static worldand exhibits unprecedented robustness, averaging over 3
+                                             may be hidden or occluded. Real-world sensors often intro-million km (or 17.5 years of continuous driving) between
+                                                       duce noise. GIGAFLOW models uncertainty directly throughincidents in simulation.
+                                                           noise on the state S, noise in the state transitions, stochas-
+                                                                        ticity in the dynamic agents, and partial observability on
+                                                  dynamic agents A and the static world W. GIGAFLOW
+                                                          agents observe the positions and speeds of nearby agents
+
+
+                                                2
+
+=== PDF PAGE 3 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+                         a Batched Gigaflow simulation                                     b Gigaflow world
+
+          4800                                                                                         Up to 150
+           worlds                                                                                                                    agents
+         per GPU                                                                                                                     per world
+
+
+
+
+
+             Road boundary  ￼Wboundary            MLP    MaxPool                                           one policy for all agents
+
+                 Lane points                                     ￼Wlane               MLP    MaxPool
+                    Stop lines  ￼Wstop               MLP    MaxPool                action
+                                                          MLP         or
+                    Vehicle state  ￼S                  MLP                            value
+                  Other agents  ￼A                  MLP    MaxPool
+         Conditioning and goals  ￼C                  MLP
+
+
+                            d Gigaflow policy                                              c Gigaflow agent
+Figure 2: Overview of GIGAFLOW. a, GIGAFLOW simulates tens of thousands of worlds with millions of agents in a
+massively parallel self-play reinforcement learning setup. b, Each world tasks agents to navigate to goals on a map without
+collisions. c, Each agent optimizes its own performance, given a set of local observations. d, All agents use a compact
+shared policy network.
+
+but not their acceleration, and crucially, neither their goals    formly over the map. This creates a world in which agents
+nor conditioning.                                             drive for long distances before reaching their destinations
+                                                                   (Fig. 2b). Agents are tasked with visiting a variable number
+Modeling agent behaviors is a particularly impactful and
+                                                            of intermediate waypoints, requiring the ability to follow
+complex aspect of driving. Prior work approached behav-
+                                                    complex routes (see Appendix B for details).
+ior models through hand-designed agents (Kesting et al.,
+2010; 2007; Gulino et al., 2023), recorded and replayed    Dense traffic flows with diverse interactions emerge as
+data (Gulino et al., 2023; Li et al., 2023; Vinitsky et al.,    agents navigate to their destinations. As training progresses,
+2022), or models of driving learned from data (Ivanovic &   we can observe agents executing zipper merges and tight
+Pavone, 2019; Nayakanti et al., 2023; Wang et al., 2023b;    maneuvers in traffic jams, managing congested roundabouts
+Suo et al., 2021; Shi et al., 2022; Xu et al., 2023; Zhong    and uncontrolled intersections, resolving occasional grid-
+et al., 2023). In contrast, in GIGAFLOW, realistic and gen-    locks, and performing multi-point turns to reroute around
+eral driving behaviors for all traffic participants emerge via    accidents or obstructions.
+self-play reinforcement learning on a massive scale.
+                                           GIGAFLOW agents train fully in self-play.  All dynamic
+                                                          agents – vehicles, pedestrians, and cyclists – use the same
+2.1. GIGAFLOW world                                                                single reactive parametric policy π; their behaviors are var-
+The GIGAFLOW world is simple: we do not script scenarios,    ied through conditioning C (Fig. 2d). The policy is aware
+use human driving traces, or design delicate reward terms.    of the dynamics of the agent it controls as part of the con-
+We show that simulation at massive scale makes up for much    ditioning Cdynamics. The agent reward is a mixture of incen-
+of this simplicity (Fig. 2).                                        tives to reach its goal, avoid collisions, drive centered and
+                                                            lane aligned, as well as penalties for running red lights or
+Agents train on one of eight maps, randomly perturbed with                                                             stop signs, and exceeding acceleration and jerk limits. The
+rescaling, shears, flips and reflections. Total drivable lanes                                                          weights on each of these reward components are randomized
+per map range from four to 40 km for a total of 136 km of                                                           per agent and provided as conditioning Creward to the agent
+road across the eight maps (Fig. 2a). In each map, we spawn                                                              (see Appendix B for details). This allows a single reactive
+one to Na agents at random locations and orientations on                                                            policy π to exhibit a wide range of behaviors. The result
+the road and ask them to reach goal points sampled uni-
+
+
+                                                3
+
+=== PDF PAGE 4 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+is a diverse training world where agents learn a continuum    during experience collection at a batch size of 2.6 million,
+of driving styles: some drive cautiously, others are likely    and eight gradient updates per second in the training phase
+to run traffic lights, while a rare few are willing to drive    with a batch size of 256 000. See Appendix D for more
+against the flow of traffic. Because the policy only observes     details.
+the conditioning C of the agent it controls, it must learn to
+                                        GIGAFLOW training. We train the GIGAFLOW policy us-
+be robust to the unpredictable behaviors of other drivers.
+                                                           ing Proximal Policy Optimization (PPO) (Schulman et al.,
+                                                          2017). One of the main challenges associated with au-
+2.2. GIGAFLOW simulation and training                                                  tonomous driving is the inherent imbalance in the data
+The GIGAFLOW simulation and training framework is de-    distribution. As training progresses, the on-policy data is
+signed to optimize driving data collection and training    dominated by ordinary traffic configurations, such as orderly
+throughput per unit of computation. We simulate and learn    driving in a straight line between intersections. The critic is
+from 4.4 billion state transitions per hour on a single 8-GPU    often able to accurately predict the returns for such trajecto-
+node, rolling out urban commute simulations 360 000 times     ries, resulting in a large portion of samples with near-zero
+faster than real time at the cost of under $5 per million kilo-    advantage (Greensmith et al., 2004) that consequently yield
+meters driven (based on public cloud rates). These training    vanishingly small gradients.
+rates require three core ingredients: a fast batched simula-                                      We use a variant of Prioritized Experience Replay (Schaul
+tor (Shacklett et al., 2021; Petrenko et al., 2021; Shacklett                                                                     et al., 2016) that filters samples that have minimal impact
+et al., 2023), a compact and expressive policy for fast infer-                                                  on learning. The filtering is based on the absolute value of
+ence and backpropagation, and a high-throughput training                                                             the estimated advantage. We filter up to 80% of samples
+algorithm.                                                         with low absolute advantage, which significantly increases
+GIGAFLOW simulation. GIGAFLOW simulates 38 400 en-    learning throughput without sacrificing sample efficiency.
+vironments in parallel across 8 GPUs with up to Na = 150   Our approach, which we refer to as advantage filtering,
+vehicles each (Fig. 2a). Basic operations, such as policy in-    focuses training on the most informative state transitions,
+ference and dynamics updates are batched across all agents.    prioritizing learning from the underexplored tails of the data
+Agent localization, collision checking, and observation con-    distribution where selected actions are measurably better or
+struction rely on dedicated optimized data structures. Due    worse, and makes more efficient use of the data we generate.
+to the large map sizes, we precompute and cache all map    See Appendix C for more details.
+observations in a spatial hash and perform fast, GPU-based
+runtime lookup and retrieval. Agents perceive the map by    3. Zero-shot evaluation on driving benchmarks
+observing sets of points sampled sparsely along drivable
+lanes Wlane, and densely along the nearby road edges for   We evaluate a trained GIGAFLOW policy on the leading
+precise maneuvering Wboundary (Fig. 2c).                     closed-loop driving benchmarks: CARLA (Dosovitskiy
+                                                                     et al., 2017), nuPlan (Caesar et al., 2022), and the Waymo
+Beyond map features, agents get observations of nearby                                              Open Motion Dataset (Ettinger et al., 2021) through the
+traffic participants A – containing nearby vehicles’ sizes,                                            Waymax simulator (Gulino et al., 2023). These benchmarks
+locations, orientations, and velocities – and nearby stop lines                                                    encompass a wide range of actor behaviors, driving scenar-
+and traffic lights Wstop. GIGAFLOW models static obstacles                                                                      ios, maps, traffic densities, durations, and scoring method-
+as immobile vehicles Astatic. To reduce memory, we do not                                                               ologies. The CARLA benchmark consists of routes with
+store these observations in the rollout buffer, but calculate                                                       hand-designed scenarios based on the NHTSA pre-crash
+them on demand from stored world states. See Appendix A                                                          topology (Najm et al., 2007). It evaluates long distance driv-
+for a detailed description of the simulator.                                                             ing (several minutes per 1–3 km route). nuPlan and Waymax
+GIGAFLOW policy. GIGAFLOW can simulate diverse actor    evaluate short distance driving (8–14 seconds per scenario,
+types, from pedestrians to heavy trucks, by parameterizing a  < 100 m) in scenarios derived from recorded real-world
+single unified feed-forward policy (Fig. 2d). The decision to    driving with the associated sensor data.
+use the same underlying neural network policy for all traffic                                    A generalist GIGAFLOW policy outperforms state-of-the-
+participants significantly impacts the overall throughput: we                                                          art specialists. For each benchmark, we compare to spe-
+need only a single (batched) forward pass per simulation                                                                            cialist state-of-the-art policies that are either trained (Gulino
+step to calculate actions for all agents. The policy resembles                                                                       et al., 2023) or carefully hand-designed (Chitta et al., 2023;
+a Deep Sets architecture (Zaheer et al., 2017) and is invariant                                                           Jaeger et al., 2023; Dauner et al., 2023) to perform well
+to permutation w.r.t. each observation type. Critically, the                                                  on that specific benchmark. In contrast, we use a single
+entire trainable artifact is relatively compact at six million                                                            policy across all benchmarks. Our policy is trained purely
+parameters. On an 8-GPU A100 node, the policy allows                                                                in self-play and is evaluated zero-shot in each benchmark
+inference throughput of 7.4 million decisions per second
+
+
+                                                4
+
+=== PDF PAGE 5 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+environment. Without any fine-tuning, our policy surpasses     variations, the single generalist GIGAFLOW driver outper-
+the state of the art in CARLA, nuPlan, and Waymax (Fig. 1    forms specialist policies optimized for individual benchmark
+with details in Tables A5 to A7 and Appendix E). This     scores.
+demonstrates robust driving with strong generalization. Our
+                                              The GIGAFLOW policy approaches the ceiling of bench-
+self-play policy outperforms the state of the art on real
+                                           mark performance. The vast majority of the infractions
+driving traces with human traffic participants, without ever
+                                                            sustained by the GIGAFLOW policy during testing on the
+seeing human data during training.
+                                                   benchmarks can be attributed to limitations of the bench-
+GIGAFLOW policy generalizes to diverse actor behaviors.    marks. For instance, 20% of the reported infractions in
+The benchmarks implement a diverse set of environment   CARLA are caused by pedestrians or cyclists darting from
+actors. CARLA uses reactive rules-based vehicles with lane-    the sidewalk into the roadway without reacting to the evasive
+changing capabilities, combined with events triggered by    maneuver of the driver or other traffic participants. Prevent-
+the driver’s behavior (e.g., a pedestrian that darts suddenly    ing such collisions would require drastic overfitting to this
+in front of the driver). The actors in nuPlan and Waymax    type of scenario (Jaeger et al., 2023). Other exemplary limi-
+are controlled by different variants of the Intelligent Driver     tations are gridlocks caused by CARLA-controlled traffic
+Model (Treiber et al., 2000).  Vehicles in nuPlan follow   (33% of all infractions) or fuzzy stop sign and red light
+the lane center line, whereas vehicles in Waymax follow    checks (16% of all infractions).
+the paths of logged human drivers. The GIGAFLOW policy
+                                                            In nuPlan our policy sustains 15 collisions in 1118 scenar-
+exhibits robust driving amongst all of these actor types.
+                                                                      ios. We analyzed each of them. Nine are unavoidable due
+GIGAFLOW policy generalizes to diverse maps and driv-    to invalid initialization or sensor noise (agents appearing
+ing situations. GIGAFLOW trains on variants of synthetic     inside the vehicle’s bounding box). Four are caused by non-
+maps with closed road networks (Dosovitskiy et al., 2017),    reactive pedestrian agents walking into the vehicle while
+but generalizes to the real-world maps in nuPlan (Cae-    the vehicle was stopped or in an evasive maneuver. Two
+sar et al., 2022) and in the Waymo Open Motion Dataset     collisions are due to traffic light violations of other agents.
+(WOMD) (Ettinger et al., 2021). The WOMD maps are
+                                                            In Waymax our policy sustains 187 collisions in 44 097
+small, with incomplete road networks constructed from logs
+                                                               scenarios. We again analyzed each of them. 55.6% were
+of instrumented vehicles in several US cities. The nuPlan
+                                                       caused by unavoidable IDM agent behavior (Treiber et al.,
+benchmark is based on driving logs of human drivers in
+                                                       2000) of the traffic participants controlled by the benchmark,
+locales with both right-handed and left-handed driving (Cae-
+                                                        such as swerving directly into the ego vehicle. 41.7% were
+sar et al., 2020); it contains larger maps that encompass the
+                                                         caused by initialization in a state of collision, typically with
+entire testing area of the vehicle. Both nuPlan and WOMD
+                                                        a pedestrian. 2.7% (i.e. five scenarios) were considered at-
+scenarios include merges, unprotected turns, and interac-
+                                                                       fault and avoidable by the GIGAFLOW policy. Of the at-fault
+tions with pedestrians and cyclists (Ettinger et al., 2021).
+                                                                      collisions, there were additional contributing factors such as
+The GIGAFLOW policy achieves state-of-the-art results in
+                                                             perception issues or aggressive and spurious IDM behaviors.
+these benchmarks without any training on recorded driving
+                                              One example is when the GIGAFLOW policy seeks to avoid
+logs or any human-designed scenarios.
+                                                        a rear-end collision with an IDM agent approaching from
+GIGAFLOW policy generalizes to real-world observation    behind at high speed.
+noise. Both Waymax and nuPlan construct observations,
+                                      We include videos of all reported infractions in the supple-
+maps, and other actors with auto-labeling tools from real-
+                                                      mentary material.
+world perception data. This brings occlusion, incorrect or
+missing traffic-light states, and obstacles revealed at the
+last moment. Despite the minimalistic noise modeling in    4. Analysis
+GIGAFLOW, the GIGAFLOW policy generalizes zero-shot to
+                                            GIGAFLOW training employs two neural networks: the pol-
+these conditions.
+                                                              icy (actor) that chooses actions and the value function ap-
+GIGAFLOW policy is state-of-the-art according to multi-    proximator (critic) that estimates the expected cost-to-go
+ple scoring methodologies. Each benchmark brings its own    from a given state. We examine how the policy’s driving be-
+definition of ‘good driving’. Those definitions are distinct    havior changes over the course of training (Fig. 3) and how
+and sometimes contradictory. For example, running a red    the policy and value networks respond to targeted changes
+light in CARLA incurs nearly the same penalty as colliding     to their inputs in various scenarios (Fig. 4).
+with another vehicle. Yet the same action can be advanta-
+                                                   Reinforcement learning at scale yields mastery of com-
+geous in nuPlan, where red light violations are ignored by
+                                                        plex skills. The scale of GIGAFLOW training enables the
+the scoring criteria, hard braking causes comfort penalties,
+                                                              policy to handle complex scenarios despite never seeing real-
+and forward progress is strongly rewarded. Despite such
+
+
+                                                5
+
+=== PDF PAGE 6 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+ a        CARLA                             nuPlan                       Waymax                   b                      Bottleneck                                           Vehicle
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Trial
+
+
+                                                                                                            K = 108
+
+
+
+ K = 1010                            K = 1010                            K = 1010
+
+
+
+                                                                                                            K = 109
+
+
+
+
+
+ K = 1011                            K = 1011                            K = 1011                                  K = 5 x 109
+
+
+
+
+
+                                                                                                            K = 1010
+
+
+
+
+ K = 1012                            K = 1012                            K = 1012
+
+
+ 0                                                                   Score                                                            100           K = 1011
+
+ c                                  RoadRoad closureclosure                                    Merge
+
+
+
+
+
+ K = 109                                    K = 1010                                   K = 1011                                   K = 1012
+
+                           Vehicle
+
+
+                                                Trial
+
+
+Figure 3: Evolution of the policy during training. a, Zero-shot performance on example benchmark scenarios with
+increasing number of state transitions (K) seen during training. From top to bottom: K = 1010 (3 million km), K = 1011
+(90 million km), and K = 1012 (1600 million km). The color of the controlled vehicle and its trajectories indicate the
+benchmark score. b, Performance of the GIGAFLOW policy on a diagnostic scenario where a static obstruction (red bounding
+boxes) forces a merge of several highway lanes into one. All agents are controlled by the same policy. Trajectories from 100
+independent rollouts are shown. Agent colors indicate probability of success (moving past the bottleneck). Binary matrices
+on the right indicate the success of each actor in each rollout (white indicates success). After K = 108 state transitions,
+the agents drive out of their lanes and crash. After K = 109, the agents drive forward, avoid collision, and sometimes
+successfully change lanes, but do not successfully merge across multiple lanes (only agents on the right succeed). After
+K = 5 × 109, merging ability emerges but agents in the leftmost lane usually fail. After K = 1010, agents sometimes
+merge from the left lane, but not reliably. After K = 1011, all agents reliably succeed with no incidents. c, Performance of
+the GIGAFLOW policy in a diagnostic scenario where road closures require three traffic flows to merge into one without the
+aid of traffic lights. As training progresses, the policy goes from only succeeding at the right turn to successfully completing
+unprotected left turns and u-turns. After K = 1012 steps of training, all agents reliably succeed. Binary matrices show the
+worst 100 samples from 1000.
+
+world or hand-designed driving scenarios during training.   Value network detects dangerous states. To examine
+The policy learns to execute unprotected left turns, drive    the value network’s ability to detect dangerous states, we
+in crowded roads used by both pedestrians and vehicles,    evaluate it on a set of observations generated by densely
+and handle vehicles dangerously merging into the driver’s    sampling all possible positions and orientations of the driver
+lane (Fig. 3a).  In diagnostic tests designed for analysis,   on a fixed region of the map. We find that the network
+GIGAFLOW vehicles are able to safely negotiate through a    appropriately assigns low value to states where the driver is
+narrow bottleneck into a single lane when the other lanes are    taking a corner too fast, and where collision with another
+blocked by an accident (Fig. 3b) and quickly merge three    vehicle is imminent due to high relative velocity (Fig. 4a).
+traffic flows into a single one due to road closures (Fig. 3c).
+                                                          Policy and value networks attend to salient scene fea-
+Many of these skills are mastered only after 1011 to 1012
+                                                                tures. Driving requires attending to the most consequential
+steps of training experience (90 to 1600 million km driven).
+                                                                          traffic participants at any given time, among hundreds of
+
+
+                                                6
+
+=== PDF PAGE 7 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+ a                                          Value Function                                          d                   Long-horizon decision-making
+
+                                                      Value estimate                                   At 0 km/h
+                                                                 at -36 km/h                                             (relative)
+                                                                       (relative)                                                                                                                    Obstruction (156m away) along the vehicle’s default route
+                                                                                                                                                                           Vehicle
+
+                                                        At 36 km/h                                      At 72 km/h
+                                                                     (relative)                                                 (relative)
+  Value       estimate
+    at 36        km/h                At 72 km/h                                                                                                                                                                  Vehicle trajectory in presence of obstruction
+
+
+
+ -3                                                      Value Estimate                                                0
+
+ b                                                  Attention
+
+
+
+
+                                                                                                                                                                                                                      -0.6       Change in value estimate          0
+                                                                                                                                                                              due to obstruction
+
+
+
+                                                                                                 e                  Goal and reward conditioning
+
+ 0.00                                         Policy Network Attention (Mutual Information)                                      0.70
+
+
+ 0.00                                         Value Network Attention (Delta Value)                                         0.30                                                                                          Fixed
+                                                                                                                                                                                                             reward
+                                                                                                                                                                                                                                  conditioning
+
+
+
+
+
+                                                                                                                                                                                       Randomized
+                                                                                                                                                                                                             reward
+                                                                                                                                                                                                                                  conditioning
+ c                                     Reacting to other actors
+
+                 Policy brieﬂy enters oncoming lane to avoid an accelerating tailgater
+
+                                                                                                                                                                  f                           Size conditioning
+
+                                                                                                          Policy makes left turn              Policy yields
+                                                 Policy makes 3-point turn when oncoming stops       when oncoming yields              otherwise                                                                                                                       sizeVehicle(m)
+
+                                                                                                                                                                                                                            2
+                Policy circles the block                                                                                                                                       Obstacle                                                        2
+
+                                                                                                                                                                                                                            4
+               Policy overtakes when the leading vehicle stops                                                                                                      Squeeze          3-pointturn               U-turn                         1
+                                                                                                                                                                                                                            5
+
+                                                                                                                                                                                                                        2
+                                                                                Policy avoids aggressive cut-in
+
+Figure 4: Analysis of the learned policy and value networks. a, Value network estimates danger at fine granularity over
+the surface of the road. Heatmaps show state-value estimates for a driver placed at every possible location, oriented in
+parallel to the nearest lane. Left: The network assigns lower value to rounding a sharp corner at higher speed. Right: Value
+estimates for driving at various speeds in the vicinity of a vehicle (gray) moving 36 km/h to the right. Being placed at rest
+(0 km/h) in front of the moving vehicle is likely to result in collision. As velocity increases, the danger zone shifts behind
+the other vehicle. The estimated danger becomes acute as the relative speed increases. b, Attention of the policy and value
+networks of the controlled vehicle (blue) to surrounding actors in two scenarios from the Waymo Open Motion Dataset.
+Top row: Mutual information between the policy network’s action distribution and actor presence. Bottom row: Decrease
+in the value network’s state-value estimate due to actor presence. c, Scenarios where a scripted nearby vehicle (orange)
+either continues moving forward at constant velocity (solid orange line) or executes a different behavior (dashed orange
+line). The policy (blue vehicle) executes maneuvers (solid blue line, dashed blue line) contingent on the other vehicle’s
+behavior. Final poses are translucent. d, Policy and value networks perform long-horizon prediction and decision-making.
+Top: Policy drives to its goal (20 second trajectory in blue) when the road is clear. When an obstruction (black) is placed
+156 m away, the policy re-routes (black trajectory). Bottom: Heatmap shows change in value estimate over the surface of the
+road due to introduction of the obstruction. e, Top: Diversity of trajectories due to goal conditioning (three goals shown with
+associated trajectories in matching color). Bottom: Additional variability due to randomized reward conditioning parameters.
+f, Changing vehicle dimensions with all else fixed yields different behaviors: A slender vehicle can squeeze around an
+obstacle; a compact vehicle with a tight turning radius can make a u-turn; a larger vehicle resorts to a three-point turn.
+
+
+actors who may be present in the environment. We assess    a line of vehicles queued at a red traffic light), whereas the
+the attention of our policy and value networks by analyzing     policy’s action might not change due to such an actor if there
+the change in action distribution (via mutual information)     is no way for the policy to mitigate the danger (Fig. 4b).
+and change in value estimate when each actor is individually
+                                                          Policy executes maneuvers contingent on nearby traf-
+removed (Fig. 4b). As expected, the networks sometimes
+                                                                           fic behavior. We evaluate the policy in scenarios where
+attend to different actors: For example, the value estimate is
+                                                        a nearby vehicle either behaves predictably (continuing to
+affected by all actors that make the scene more dangerous
+                                             move at constant velocity) or unpredictably, with all else
+over the long term (for example a speeding car approaching
+
+
+                                                7
+
+=== PDF PAGE 8 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+fixed. We find that the policy executes appropriate discrete   (WOSAC), which measures the ability to reproduce real-
+maneuvers contingent on the nearby vehicle behavior, like    world driving behaviors for simulation purposes (Montali
+changing lanes to avoid collision with a vehicle that is cut-    et al., 2023). Despite not using any human data for train-
+ting into its lane and passing a vehicle that unexpectedly     ing, the GIGAFLOW policy exhibits many characteristics of
+stops in the road. The policy executes contingent longer-   human driving, achieving a score of 0.62 in zero-shot eval-
+term routing maneuvers, like turning around by circling the    uation on the realism meta-metric, outperforming several
+block instead of making a three-point turn, depending on    approaches based on supervised autoregressive prediction.
+traffic (Fig. 4c).                                                (Details in Section E.4.)
+
+Policy reacts to potential events far in the future. Both
+networks are also able to react to salient scene features    5. Discussion
+even when they are distant, like an obstruction 150 m down
+                                           Many questions remain to fully understand the long-term
+the road (Fig. 4d), and can ignore actors that are near but
+                                                                 role of self-play in delivering broad-competence robust au-
+irrelevant (e.g., a car parked few meters from the driver in
+                                                      tonomy.  First, our work has been conducted entirely in
+a parking lot). While considering potential events beyond
+                                                               simulation. Techniques for transferring policies from simu-
+the planning horizon is often a challenge for trajectory-
+                                                                    lation to reality will have to be brought to bear before claims
+based planners (Casas et al., 2021), the GIGAFLOW policy
+                                                      can be made regarding the efficacy of self-play policies in
+optimizes long-term return directly without the limitations
+                                                             the physical world (M¨uller et al., 2018; Lee et al., 2020;
+of a short time horizon.
+                                                Kaufmann et al., 2023).
+One policy learns a continuum of driving styles. Reward
+                                                       Second, our work has focused on planning and decision-
+function coefficients Creward, vehicle dimensions, and vehi-
+                                                      making, largely abstracting the perception stack. To in-
+cle goals are all randomized during training. As a result,
+                                                                tegrate the presented findings into an operational system,
+the policy learns a parameterized family of driving styles
+                                                            sensing and perception will have to be modeled much more
+(Fig. 4e,f; Fig. A1); different styles can be elicited from
+                                                                  closely. An exciting possibility is to combine large-scale
+a single trained policy by setting the parameters accord-
+                                                                self-play training with data-driven simulation of the asso-
+ingly, without any retraining or fine-tuning. For example,
+                                                              ciated perceptual inputs (e.g., camera images) (Ost et al.,
+the policy squeezes through narrow passages or performs
+                                                       2021; Yang et al., 2023; Hu et al., 2023).  It is likely fea-
+tight turns if and only if the vehicle dimensions permit this
+                                                                  sible in the coming years due to ongoing improvements in
+(Fig. 4f). Likewise, reducing the conditioning parameter
+                                                           simulation methodology (Shacklett et al., 2021; Petrenko
+that controls sensitivity to red lights makes the policy more
+                                                                     et al., 2021; Shacklett et al., 2023), computing hardware,
+willing to run red lights in order to accomplish other goals.
+                                                    and system architectures. Combining self-play with pho-
+GIGAFLOW yields a highly efficient, capable, and re-    torealistic sensor simulation would substantially increase
+alistic simulation environment. The GIGAFLOW train-    the computational footprint of each experience, but the wall-
+ing configuration features substantial dynamics noise and    clock training time can be maintained by scaling out over
+diverse reward conditioning parameters Creward (see Sec-    a commensurate number of compute nodes (Dubey et al.,
+tion 2). We can configure the same simulation infrastructure    2024).
+for long-form evaluation of trained policies. In this config-
+                                                               Third, our work has demonstrated that training without real-
+uration, we reduce the injected dynamics noise, increase
+                                                      world driving traces can yield policies that are surprisingly
+control frequency, and set conditioning parameters Creward
+                                                       human-like (Montali et al., 2023) and highly robust when
+that prioritize safety for all actors. This yields a fast, cost-
+                                                                 tested in recorded real-world scenarios with human partici-
+effective, and highly robust traffic simulator. In this regime,
+                                                             pants (Caesar et al., 2022; Gulino et al., 2023). By contrast,
+a fully trained GIGAFLOW agent experiences on average
+                                           common perspectives on learning-based autonomous driv-
+17.5 years of driving and travels over 3 million km before
+                                                             ing hold that recorded datasets will play a key role in training
+encountering an incident. (For reference, human drivers
+                                                               driving policies (Jain et al., 2021; Hawke et al., 2021; Chen
+average approximately 829 000 vehicle kilometers traveled
+                                                                     et al., 2023). How do we reconcile our findings with these
+per police-reported traffic crash in the United States (Stew-
+                                                      views? One possibility is to combine large-scale self-play
+art, 2023), or as much as 1 crash per 24 800 km in narrower
+                                                                 training with training on recorded scenarios, perhaps via a
+domains such as San Francisco (Flannagan et al., 2023).)
+                                                        combination of reinforcement learning and imitation learn-
+To our knowledge this is the first demonstration of long-
+                                                          ing (Lu et al., 2023; Zhang et al., 2023). This can further
+term robust traffic simulation based on independent agents
+                                                              increase robustness and help bridge simulation and reality.
+traversing a diverse urban road network.
+
+We evaluate the realism of the driving behaviors learned
+via GIGAFLOW on the Waymo Open Sim Agents Challenge
+
+
+                                                8
+
+=== PDF PAGE 9 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Impact Statement                                  Chen, L., Wu, P., Chitta, K., Jaeger, B., Geiger, A., and Li,
+                                                       H. End-to-end autonomous driving: Challenges and fron-
+Our findings may inspire broader application of self-play                                                                               tiers, 2023. URL http://arxiv.org/abs/2306.
+in training agents that act in the presence of (and in close                                                 16927.
+coordination with) humans in physical and digital environ-
+ments. Such coordinated action may be called for in mobile     Chitta, K., Prakash, A., Jaeger, B., Yu, Z., Renz, K., and
+robotics, in both consumer and industrial settings, and in       Geiger, A. TransFuser: Imitation with transformer-based
+digital domains such as online games. We have shown that       sensor fusion for autonomous driving. IEEE Transactions
+policies that function effectively in the presence of human      on Pattern Analysis and Machine Intelligence, 45(11):
+actors in complex dynamic environments can be trained      12878–12895, 2023.
+without utilizing human data. Broader application of this
+                                                         Dauner, D., Hallgarten, M., Geiger, A., and Chitta, K. Part-methodology may substantially reduce the cost and com-
+                                                               ing with misconceptions about learning-based vehicle mo-plexity of training autonomous policies by meaningfully
+                                                                     tion planning. In Conference on Robot Learning (CoRL),reducing the need for human data collection.
+                                                           2023.
+
+References                                                   Dijkstra, E. W. A note on two problems in connexion with
+                                                               graphs. Numerische Mathematik, 1(1):269–271, 1959.
+Ansel, J., Yang, E., He, H., Gimelshein, N., Jain, A., Voz-
+  nesensky, M., Bao, B., Bell, P., Berard, D., Burovski,    Dosovitskiy, A. and Koltun, V. Learning to act by predict-
+   E., et al. PyTorch 2: Faster machine learning through      ing the future.  International Conference on Learning
+  dynamic python bytecode transformation and graph com-      Representations (ICLR), 2017.
+   pilation. In International Conference on Architectural
+                                                            Dosovitskiy, A., Ros, G., Codevilla, F., L´opez, A. M., and  Support for Programming Languages and Operating Sys-
+                                                            Koltun, V. CARLA: An open urban driving simulator.  tems, 2024.
+                                                          Conference on Robot Learning (CoRL), 78:1–16, 2017.
+Berner, C., Brockman, G., Chan, B., Cheung, V., Debiak, P.,
+                                                     Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle,  Dennison, C., Farhi, D., Fischer, Q., Hashme, S., Hesse,
+                                                                A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan,   C., J´ozefowicz, R., Gray, S., Olsson, C., Pachocki, J.,
+                                                               A., et al. The Llama 3 herd of models, 2024. URL   Petrov, M., de Oliveira Pinto, H. P., Raiman, J., Salimans,
+                                             https://arxiv.org/abs/2407.21783.   T., Schlatter, J., Schneider, J., Sidor, S., Sutskever, I.,
+  Tang, J., Wolski, F., and Zhang, S. Dota 2 with large                                                                 Ettinger, S., Cheng, S., Caine, B., Liu, C., Zhao, H., Prad-
+   scale deep reinforcement learning. arXiv:1912.06680,                                                             han, S., Chai, Y., Sapp, B., Qi, C. R., Zhou, Y., Yang,
+  2019.                                                                      Z., Chouard, A., Sun, P., Ngiam, J., Vasudevan, V., Mc-
+                                                            Cauley, A., Shlens, J., and Anguelov, D. Large scaleBrown, N. and Sandholm, T. Superhuman AI for multiplayer
+                                                                    interactive motion forecasting for autonomous driving:   poker. Science, 365(6456):885–890, 2019. doi: 10.1126/
+                                                  The Waymo open motion dataset. In International Con-  science.aay2400.
+                                                               ference on Computer Vision (ICCV), 2021.
+Caesar, H., Bankiti, V., Lang, A. H., Vora, S., Liong, V. E.,
+                                                       Feng, S., Sun, H., Yan, X., Zhu, H., Zou, Z., Shen, S., and  Xu, Q., Krishnan, A., Pan, Y., Baldan, G., and Beijbom,
+                                                                  Liu, H. X. Dense reinforcement learning for safety valida-  O.  nuScenes: A multimodal dataset for autonomous
+                                                                     tion of autonomous vehicles. Nature, 615(7953):620–627,   driving. In Conference on Computer Vision and Pattern
+                                                           2023. doi: https://doi.org/10.1038/s41586-023-05732-2.  Recognition (CVPR), 2020.
+
+                                                        Flannagan, C., Leslie, A., Kiefer, R., Bogard, S., Chi-Caesar, H., Kabzan, J., Tan, K. S., Fong, W. K., Wolff,
+                                                             Johnston, G., Freeman, L., Huang, R., Walsh, D., and   E., Lang, A., Fletcher, L., Beijbom, O., and Omari, S.
+                                                        Anthony, J.  Establishing a crash rate benchmark us-  nuPlan: A closed-loop ML-based planning benchmark for
+                                                             ing large-scale naturalistic human ridehail data. Tech-  autonomous vehicles, 2022. URL https://arxiv.
+                                                                  nical Report UMTRI-2023-18, University of Michigan  org/abs/2106.11810.
+                                                              Transportation Research Institute, 2023. URL https:
+Casas, S., Sadat, A., and Urtasun, R. MP3: A unified model     //dx.doi.org/10.7302/8636.
+   to map, perceive, predict and plan.  In Conference on
+                                                     Freeman, C. D., Frey, E., Raichuk, A., Girgin, S., Mor-  Computer Vision and Pattern Recognition (CVPR), 2021.
+                                                                   datch, I., and Bachem, O. Brax - A differentiable physics
+Chen, D. and Kr¨ahenb¨uhl, P. Learning from all vehicles. In      engine for large scale rigid body simulation. In Neural
+  Conference on Computer Vision and Pattern Recognition      Information Processing Systems Track on Datasets and
+  (CVPR), 2022.                                         Benchmarks, 2021.
+
+                                                9
+
+=== PDF PAGE 10 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Greensmith, E., Bartlett, P. L., and Baxter, J. Variance reduc-       T., Deason, L., Leibo, J. Z., Silver, D., Hassabis, D.,
+   tion techniques for gradient estimates in reinforcement      Kavukcuoglu, K., and Graepel, T. Human-level perfor-
+   learning. Journal of Machine Learning Research, 2004.      mance in 3D multiplayer games with population-based
+                                                            reinforcement learning.  Science, 364(6443):859–865,
+Gulino, C., Fu, J., Luo, W., Tucker, G., Bronstein, E., Lu,                                                          2019. doi: 10.1126/science.aau6249.
+   Y., Harb, J., Pan, X., Wang, Y., Chen, X., Co-Reyes, J. D.,
+  Agarwal, R., Roelofs, R., Lu, Y., Montali, N., Mougin, P.,    Jaeger, B., Chitta, K., and Geiger, A. Hidden biases of
+  Yang, Z., White, B., Faust, A., McAllister, R., Anguelov,      end-to-end driving models. In International Conference
+  D., and Sapp, B. Waymax: An accelerated, data-driven      on Computer Vision (ICCV), 2023.
+  simulator for large-scale autonomous driving research.
+                                                                     Jain, A., Pero, L. D., Grimmett, H., and Ondruska, P. Auton-
+  In Neural Information Processing Systems Datasets and
+                                             omy 2.0: Why is self-driving always 5 years away?, 2021.
+  Benchmarks Track, 2023.                                       URL https://arxiv.org/abs/2107.08142.
+Guo, Z., Gao, X., Zhou, J., Cai, X., and Shi, B. SceneDM:                                                  Kaufmann, E., Bauersfeld, L., Loquercio, A., M¨uller, M.,
+  Scene-level multi-agent trajectory generation with con-                                                            Koltun, V., and Scaramuzza, D. Champion-level drone
+   sistent diffusion models, 2023. URL https://arxiv.                                                              racing using deep reinforcement learning. Nature, 620
+  org/abs/2311.15736.                                                           (7976):982–987, 2023.
+Hallgarten, M., Stoll, M., and Zell, A. From prediction to    Kesting, A., Treiber, M., and Helbing, D. General lane-
+  planning with goal conditioned lane graph traversals. In      changing model mobil for car-following models. Trans-
+  International Conference on Intelligent Transportation       portation Research Record, 1999(1):86–94, 2007.
+  Systems, 2023. doi: 10.1109/ITSC57777.2023.10421854.
+                                                           Kesting, A., Treiber, M., and Helbing, D. Enhanced in-
+Hansen, E. A., Bernstein, D. S., and Zilberstein, S. Dynamic        telligent driver model to access the impact of driving
+  programming for partially observable stochastic games.       strategies on traffic capacity. Philosophical Transactions
+  In Conference on Artificial Intelligence. AAAI Press / The       of the Royal Society A, 2010.
+  MIT Press, 2004. URL http://www.aaai.org/
+                                                  Kingma, D. P. and Ba, J. Adam: A method for stochas-  Library/AAAI/2004/aaai04-112.php.
+                                                                             tic optimization.  In Bengio, Y. and LeCun, Y. (eds.),
+Hawke,  J., E, H., Badrinarayanan, V., and Kendall, A.      3rd International Conference on Learning Represen-
+  Reimagining an autonomous vehicle, 2021.  URL       tations, ICLR 2015, San Diego, CA, USA, May 7-9,
+  https://arxiv.org/abs/2108.05805.             2015, Conference Track Proceedings, 2015. URL http:
+                                             //arxiv.org/abs/1412.6980.
+Hu, A., Russell, L., Yeo, H., Murez, Z., Fedoseev, G.,
+  Kendall, A., Shotton, J., and Corrado, G. GAIA-1: A    Lee, J., Hwangbo, J., Wellhausen, L., Koltun, V., and Hutter,
+  generative world model for autonomous driving, 2023.     M. Learning quadrupedal locomotion over challenging
+  URL https://arxiv.org/abs/2309.17080.          terrain. Science Robotics, 5(47):5986, 2020.
+
+Huang, Z., Zhang, Z., Vaidya, A., Chen, Y., Lv, C., and     Li, Q., Peng, Z., Feng, L., Zhang, Q., Xue, Z., and Zhou, B.
+  Fisac, J. F.  Versatile scene-consistent traffic scenario       Metadrive: Composing diverse driving scenarios for gen-
+  generation as optimization with diffusion, 2024. URL       eralizable reinforcement learning. IEEE Transactions on
+  https://arxiv.org/abs/2404.02524.              Pattern Analysis and Machine Intelligence, 45(3):3461–
+                                                          3475, 2023. doi: 10.1109/TPAMI.2022.3190471.
+Ivanovic, B. and Pavone, M.  The trajectron:  Proba-
+   bilistic multi-agent trajectory modeling with dynamic    Lu, Y., Fu, J., Tucker, G., Pan, X., Bronstein, E., Roelofs, R.,
+  spatiotemporal graphs.  International Conference on      Sapp, B., White, B., Faust, A., Whiteson, S., Anguelov,
+  Computer Vision (ICCV), pp. 2375–2384, 2019.  doi:       D., and Levine, S. Imitation is not enough: Robustifying
+                                                                imitation with reinforcement learning for challenging  10.1109/ICCV.2019.00246.
+                                                                  driving scenarios. International Conference on Intelligent
+Jaderberg, M., Dalibard, V., Osindero, S., Czarnecki, W. M.,      Robots and Systems (IROS), pp. 7553–7560, 2023. doi:
+  Donahue, J., Razavi, A., Vinyals, O., Green, T., Dunning,      10.1109/IROS55552.2023.10342038.
+    I., Simonyan, K., Fernando, C., and Kavukcuoglu, K.
+                                                     Makoviychuk, V., Wawrzyniak, L., Guo, Y., Lu, M., Storey,  Population based training of neural networks, 2017. URL
+                                                               K., Macklin, M., Hoeller, D., Rudin, N., Allshire, A.,  http://arxiv.org/abs/1711.09846.
+                                                      Handa, A., and State, G. Isaac gym: High performance
+Jaderberg, M., Czarnecki, W. M., Dunning, I., Marris, L.,    GPU based physics simulation for robot learning. In Neu-
+  Lever, G., Casta˜neda, A. G., Beattie, C., Rabinowitz,       ral Information Processing Systems Track on Datasets
+  N. C., Morcos, A. S., Ruderman, A., Sonnerat, N., Green,     and Benchmarks, 2021.
+
+                                                10
+
+=== PDF PAGE 11 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Montali, N., Lambert, J., Mougin, P., Kuefler, A., Rhinehart,      Zaremba, W. Asymmetric self-play for automatic goal
+   N., Li, M., Gulino, C., Emrich, T., Yang, Z. Z., Whiteson,      discovery in robotic manipulation. arXiv:2101.04882,
+   S., White, B., and Anguelov, D. The Waymo open sim      2021.
+  agents challenge. Neural Information Processing Systems
+                                                         Qian, C., Xiu, D., and Tian, M. A simple yet effective
+  Datasets and Benchmarks Track, 2023.
+                                                    method for simulating realistic multi-agent behaviors.
+M¨uller, M., Dosovitskiy, A., Ghanem, B., and Koltun, V.      Technical report, 2023. URL https://storage.
+  Driving policy transfer via modularity and abstraction. In     googleapis.com/waymo-uploads/files/
+  Conference on Robot Learning (CoRL), pp. 1–15. PMLR,    research/2023%20Technical%20Reports/
+  2018.                                       SA_2nd_MTR%2B%2B%2B%20(1).pdf.
+
+                                                                Raffin, A., Hill, A., Gleave, A., Kanervisto, A., Ernestus,Najm, W., Smith, J. D., and Yanagisawa, M. Pre-crash sce-
+                                                        M., and Dormann, N. Stable-baselines3: Reliable rein-  nario typology for crash avoidance research. Technical re-
+                                                            forcement learning implementations. Journal of Machine   port, John A. Volpe National Transportation Systems Cen-
+                                                         Learning Research, 2021.   ter (U.S.), 2007. URL https://rosap.ntl.bts.
+  gov/view/dot/6281.                              Renz, K., Chitta, K., Mercea, O.-B., Koepke, A. S., Akata,
+                                                                      Z., and Geiger, A. PlanT: Explainable planning trans-
+Nayakanti, N., Al-Rfou, R., Zhou, A., Goel, K., Refaat,
+                                                          formers via object-level representations. In Conference
+  K. S., and Sapp, B.  Wayformer: Motion forecasting
+                                                     on Robot Learning (CoRL), 2022.
+  via simple & efficient attention networks.  In Interna-
+   tional Conference on Robotics and Automation (ICRA),    Rudin, N., Hoeller, D., Reist, P., and Hutter, M. Learn-
+  pp. 2980–2987, 2023.                                      ing to walk in minutes using massively parallel deep
+                                                            reinforcement learning. In Faust, A., Hsu, D., and Neu-
+Ost, J., Mannan, F., Thuerey, N., Knodt, J., and Heide, F.                                                    mann, G. (eds.), Conference on Robot Learning, 8-11
+  Neural scene graphs for dynamic scenes. In Conference                                                  November 2021, London, UK, volume 164 of Proceed-
+  on Computer Vision and Pattern Recognition (CVPR), pp.                                                               ings of Machine Learning Research, pp. 91–100. PMLR,
+  2856–2865, June 2021.                                                            2021. URL https://proceedings.mlr.press/
+                                             v164/rudin22a.html.Perolat, J., Vylder, B. D., Hennes, D., Tarassov, E., Strub,
+   F., de Boer, V., Muller, P., Connor, J. T., Burch, N., An-    Schaul, T., Quan, J., Antonoglou, I., and Silver, D. Priori-
+  thony, T., McAleer, S., Elie, R., Cen, S. H., Wang, Z.,       tized experience replay. In International Conference on
+  Gruslys, A., Malysheva, A., Khan, M., Ozair, S., Tim-      Learning Representations, 2016.
+   bers, F., Pohlen, T., Eccles, T., Rowland, M., Lanctot,
+                                                            Scheel, O., Bergamini, L., Wolczyk, M., Osinski, B., and  M., Lespiau, J.-B., Piot, B., Omidshafiei, S., Lockhart,
+                                                        Ondruska, P. Urban driver: Learning to drive from real-   E., Sifre, L., Beauguerlange, N., Munos, R., Silver, D.,
+                                                        world demonstrations using policy gradients. In Confer-  Singh, S., Hassabis, D., and Tuyls, K. Mastering the
+                                                         ence on Robot Learning (CoRL), 2021.  game of Stratego with model-free multiagent reinforce-
+  ment learning. Science, 378(6623):990–996, 2022. doi:   Schulman, J., Moritz, P., Levine, S., Jordan, M. I., and
+  10.1126/science.add4679.                                 Abbeel, P. High-dimensional continuous control using
+                                                              generalized advantage estimation. In International Con-
+Petrenko, A., Wijmans, E., Shacklett, B., and Koltun, V.
+                                                               ference on Learning Representations, 2016.
+  Megaverse: Simulating embodied agents at one million
+  experiences per second. In International Conference on    Schulman,  J., Wolski,  F., Dhariwal,  P., Radford,  A.,
+  Machine Learning, 2021.                               and Klimov, O.   Proximal policy optimization  al-
+                                                             gorithms, 2017. URL http://arxiv.org/abs/
+Petrenko, A., Allshire, A., State, G., Handa, A., and                                              1707.06347.
+  Makoviychuk, V. PDexPBT: Scaling up dexterous ma-
+  nipulation for hand-arm systems with population based     Shacklett, B., Wijmans, E., Petrenko, A., Savva, M., Batra,
+   training. In Robotics: Science and Systems, 2023.             D., Koltun, V., and Fatahalian, K. Large batch simula-
+                                                                  tion for deep reinforcement learning. In International
+Philion, J., Peng, X. B., and Fidler, S. Trajeglish: Learn-      Conference on Learning Representations, 2021.
+  ing the language of driving scenarios. In International
+                                                              Shacklett, B., Rosenzweig, L. G., Xie, Z., Sarkar, B.,  Conference on Learning Representations (ICLR), 2023.
+                                                                Szot, A., Wijmans, E., Koltun, V., Batra, D., and Fa-
+Plappert, M., Sampedro, R., Xu, T., Akkaya, I., Kosaraju, V.,       tahalian, K. An extensible, data-oriented architecture for
+  Welinder, P., D’Sa, R., Petron, A., de Oliveira Pinto, H. P.,      high-performance, many-world simulation. ACM Trans.
+  Paino, A., Noh, H., Weng, L., Yuan, Q., Chu, C., and      Graph., 42(4), 2023.
+
+                                                11
+
+=== PDF PAGE 12 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Shi, S., Jiang, L., Dai, D., and Schiele, B. Motion trans-   Wang, W. and Zhen, H. Joint-multipath++ for simulation
+  former with global intention localization and local move-      agents.   Technical report, 2023.  URL https://
+  ment refinement. Neural Information Processing Systems,    storage.googleapis.com/waymo-uploads/
+  pp. 6531–6543, 2022.                            files/research/2023%20Technical%
+                                             20Reports/SA_hm_jointMP.pdf.
+Silver, D., Schrittwieser, J., Simonyan, K., Antonoglou,
+    I., Huang, A., Guez, A., Hubert, T., Baker, L., Lai, M.,   Wang, Y., Tang, H., Huang, L., Pan, L., Yang, L., Yang, H.,
+  Bolton, A., Chen, Y., Lillicrap, T. P., Hui, F., Sifre, L.,     Mu, F., and Yang, M. Self-play reinforcement learning
+  van den Driessche, G., Graepel, T., and Hassabis, D. Mas-      guides protein engineering. Nature Machine Intelligence,
+   tering the game of Go without human knowledge. Nature,      (5):845–860, 2023a.
+  550(7676):354–359, 2017. doi: 10.1038/NATURE24270.
+                                                Wang, Y., Zhao, T., and Yi, F.  Multiverse transformer:
+Silver, D., Hubert, T., Schrittwieser, J., Antonoglou, I., Lai,       1st place solution for Waymo open sim agents chal-
+  M., Guez, A., Lanctot, M., Sifre, L., Kumaran, D., Grae-      lenge 2023, 2023b.  URL https://arxiv.org/
+   pel, T., Lillicrap, T., Simonyan, K., and Hassabis, D. A     abs/2306.11868.
+  general reinforcement learning algorithm that masters
+                                                    Wijmans, E., Kadian, A., Morcos, A., Lee, S., Essa, I.,  chess, shogi, and Go through self-play.  Science, 362
+                                                                Parikh, D., Savva, M., and Batra, D. DD-PPO: learning  (6419):1140–1144, 2018. doi: 10.1126/science.aar6404.
+                                                                   near-perfect pointgoal navigators from 2.5 billion frames.
+Stewart, T.  Overview of motor vehicle traffic crashes       In International Conference on Learning Representations
+   in 2021.    Report No. DOT HS 813 435,  2023.     ICLR, 2020.
+ URL https://crashstats.nhtsa.dot.gov/
+                                                   Xu, D., Chen, Y., Ivanovic, B., and Pavone, M. Bits: Bi-  Api/Public/ViewPublication/813435.  Na-
+                                                                      level imitation for traffic simulation. In International Con-   tional Highway Traffic Safety Administration.
+                                                              ference on Robotics and Automation (ICRA), pp. 2929–
+Suo, S., Regalado, S., Casas, S., and Urtasun, R. TrafficSim:      2936, 2023.
+  Learning to simulate realistic multi-agent behaviors. In
+                                                        Yang, B., Su, H., Gkanatsios, N., Ke, T.-W., Jain, A., Schnei-  Conference on Computer Vision and Pattern Recognition
+                                                                     der, J., and Fragkiadaki, K.  Diffusion-ES: Gradient-  (CVPR), pp. 10400–10409, 2021.
+                                                                    free planning with diffusion for autonomous driving and
+Tao, Y., Genc, S., Chung, J., Sun, T., and Mallya, S. Repaint:      zero-shot instruction following, 2024. URL https:
+  Knowledge transfer in deep reinforcement learning. In     //arxiv.org/abs/2402.06559.
+  International Conference on Machine Learning (ICML),
+                                                       Yang, Z., Chen, Y., Wang, J., Manivasagam, S., Ma, W.-C.,  pp. 10141–10152, 2021.
+                                                       Yang, A. J., and Urtasun, R. UniSim: A neural closed-
+Treiber, M., Hennecke, A., and Helbing, D. Congested traf-      loop sensor simulator. In Conference on Computer Vision
+   fic states in empirical observations and microscopic sim-     and Pattern Recognition (CVPR), pp. 1389–1399, June
+   ulations. Physical Review E, 62(2):1805–1824, August      2023.
+  2000. ISSN 1095-3787. doi: 10.1103/physreve.62.1805.
+                                                          Zaheer, M., Kottur,  S., Ravanbakhsh,  S., P´oczos, B.,
+Vinitsky, E., Lichtl´e, N., Yang, X., Amos, B., and Foerster,      Salakhutdinov, R., and Smola, A. J. Deep sets. In Neural
+   J. Nocturne: a scalable driving benchmark for bringing      Information Processing Systems, 2017.
+  multi-agent learning one step closer to the real world.
+                                                       Zhang, C., Tu, J., Zhang, L., Wong, K., Suo, S., and Urtasun,  Neural Information Processing Systems, 35, 2022.
+                                                        R. Learning realistic traffic agents in closed-loop.  In
+Vinyals, O., Babuschkin, I., Czarnecki, W. M., Mathieu, M.,      Conference on Robot Learning (CoRL), 2023.
+  Dudzik, A., Chung, J., Choi, D. H., Powell, R., Ewalds, T.,
+                                                    Zhong, Z., Rempe, D., Xu, D., Chen, Y., Veer, S., Che, T.,  Georgiev, P., Oh, J., Horgan, D., Kroiss, M., Danihelka, I.,
+                                                            Ray, B., and Pavone, M. Guided conditional diffusion for  Huang, A., Sifre, L., Cai, T., Agapiou, J. P., Jaderberg, M.,
+                                                                 controllable traffic simulation. In International Confer-  Vezhnevets, A. S., Leblond, R., Pohlen, T., Dalibard, V.,
+                                                           ence on Robotics and Automation (ICRA), pp. 3560–3566,  Budden, D., Sulsky, Y., Molloy, J., Paine, T. L., G¨ulc¸ehre,
+                                                          2023.   C¸., Wang, Z., Pfaff, T., Wu, Y., Ring, R., Yogatama,
+  D., W¨unsch, D., McKinney, K., Smith, O., Schaul, T.,
+   Lillicrap, T. P., Kavukcuoglu, K., Hassabis, D., Apps, C.,
+  and Silver, D. Grandmaster level in StarCraft II using
+  multi-agent reinforcement learning. Nature, 575(7782):
+  350–354, 2019. doi: 10.1038/S41586-019-1724-Z.
+
+                                                12
+
+=== PDF PAGE 13 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+A. Simulator Design                                         at once and then consume that buffer until it is empty as
+                                              new initializations are requested, e.g., when episodes reset.
+GIGAFLOW is a batched simulator (Makoviychuk et al.,                                                        This allows for better cost amortization when generating
+2021; Freeman et al., 2021; Petrenko et al., 2021; Shacklett                                                                            initial states. Second, we use sequential rejection sampling
+et al., 2021), implemented in PyTorch (Ansel et al., 2024)                                                                to produce collision-free initializations. We add one agent
+and designed for GPU acceleration. A single instance of                                                                  to the world, then add a second agent that is not in collision
+GIGAFLOW simulates thousands of worlds, enabling it to                                                        with existing agents (via rejection sampling), and so on
+leverage the parallelism of modern GPUs. Implementing                                                                      until we reach the desired number of agents. This approach
+GIGAFLOW efficiently required the development of custom                                                 was necessary because the probability that an independent
+batched operators for the kinematics, collision checking,                                                      sample of over one hundred vehicles contains no collisions
+initialization of urban driving environments, and many other                                                                            is extremely low for small maps.
+features. Below we outline the overall flow of GIGAFLOW
+and describe the acceleration techniques used.
+                                                           A.2. Dynamics model update
+At every timestep, GIGAFLOW takes the current state of the i-
+                                                The dynamics model (described below) produces s(t+1)
+th world s(t)i  and vehicle controls a(t)i  to produce the state at    given s(t) and a(t). This is a set of element wise operations
+the next timestep s(t+1)i       . Instead of running multiple copies    (trigonometric functions, multiplications, divisions, etc.)
+of the environment to simulate N = 38 400 worlds, a single     that are parallelized on a GPU using their respective PyTorch
+instance of GIGAFLOW simulates N worlds in parallel. The    implementations.
+state and vehicle controls of all N worlds are denoted s(t)
+and a(t).                                                           A.3. Road localization
+
+A.1. World initialization                             The next step is to localize s(t+1) on the road surface.
+
+                                            Road representation. GIGAFLOW represents the road sur-The simulation process begins with the initialization of ur-
+                                                              face as a set of potentially overlapping polygons, exclusivelyban driving environments by placing up to Na = 150 vehi-
+                                                            using convex quadrilaterals. We find quadrilaterals to offer acles at random positions on the map. We first draw a random
+                                                    good balance between expressivity and the simplicity of op-sample over map locations, vehicle headings, and vehicle
+                                                                  erations. A given lane on the road surface is approximatedbounding box dimensions and reject states that are off-road
+                                                  by quadrilaterals that have the same width as the lane and(off-road checking is detailed below). A naive application
+                                                             are 1 m in length. We find this resolution of polygons toof this process results in a marginal distribution of vehicle
+                                                      be a good trade-off between the accuracy of road geometrylocations that is biased towards wider road sections. To cor-
+                                                        approximation and the total number of primitives.rect for this, we estimate this marginal distribution from an
+initial sample and use it to adjust the proposal distribution      It should be noted that the number of geometric primitives
+used in subsequent rejection sampling. Given the set of valid    could be minimized further by merging polygons in the re-
+vehicle states, we then select a collision-free subset with    gions with simple geometry, such as straight road segments.
+the desired number of agents (collision detection is detailed    However, we retain the uniform polygon density irrespective
+below). This subset becomes the initial traffic configuration    of the geometric complexity because this polygonal subdi-
+at t = 0.                                                     vision additionally serves as a spatial hash map for certain
+                                                           types of queries (e.g., map observations are pre-computedFor each retained vehicle, we select a sequence of its way-
+                                                                 for all polygon center points).points (goals). The first waypoint is sampled uniformly
+over the map and additional waypoints are sampled such    Frenet coordinates. Let q represent the distance along a
+that given the jth waypoint, the (j + 1)th waypoint is at     lane, d be the distance from lane center, and polyId be
+least 20 m away and no more than 200 m away, and has lane    a unique identifier of the polygon approximating the road
+heading that is within 60 degrees of the jth waypoint’s lane    geometry at the current location. The Frenet coordinate for
+heading. There are cases where the jth waypoint is in a loca-    position (x, y) is then (q, d, polyId).
+tion where these constraints cannot be met (e.g., a dead end).
+                                       We convert world-frame state s(t) to Frenet-frame state f (t)In these cases, we gradually relax the constraints as we try
+                                                            as this information is useful for constructing actor obser-to sample points that fit them. The intent of this sampling
+                                                             vations and covers off-road checking in the majority ofprocedure is to generate waypoint sequences that resemble
+                                                               cases. We construct the Frenet-frame state by first findingrealistic driving routes where intermediate destinations are
+                                                               the polygon that contains (x, y). Given this polygon, we canreached in a natural succession.
+                                                  compute (q, d) by transforming (x, y) into the coordinate
+We use two acceleration techniques specific to initialization.   frame defined by the polygon’s heading and center point
+First, we draw a large buffer of vehicle states and goals all    then adding the distance from the start of the lane to the
+
+
+                                                13
+
+=== PDF PAGE 14 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+polygon’s center to q. If multiple polygons contain (x, y),  We again use our spatial hashing data structure to acceler-
+we use the polygon where the agent is most lane centered     ate the check between vehicle bounding box and the OOB
+(where d is the smallest).                                        points. Specifically, each OOB point is first associated with
+                                                                                  its hash bucket. Then, we lookup which buckets the vehicle
+Naively implementing  this would  require performing
+                                                            overlaps with and perform a point-in-bounding-box check
+O(N × A × P) point-in-polygon checks, where N is the
+                                                         with that set of points.
+number of worlds, A is the number of agents, and P is the
+number of polygons. This is prohibitively computationally   We associate the vehicle bounding box with appropriate
+expensive.                                             hash buckets as follows: first, we set the bucket size to be
+                                        2× the maximum possible vehicle length. Then, we approxi-
+Spatial hashing. We accelerate this via spatial hashing
+                                                     mate the vehicle’s oriented bounding box by its axis-aligned
+on the GPU. Specifically, we first construct a 2-D grid of
+                                                     bounding box (AABB). Due to our choice of spatial hash
+non-overlapping axis-aligned boxes with a fixed width and
+                                                           bucket size, the AABB overlaps with at most 4 buckets, each
+height.  This scheme allows us to trivially map a point
+                                                             containing (at least) one of the AABB’s corners. We retrieve
+(x, y) to its given bucket in the hash map. We then assign
+                                                              the OOB points that correspond to ≤4 buckets overlapped
+each polygon in the road representation to the (potentially
+                                                   by the vehicle and perform a point-in-bounding-box check
+multiple) buckets that it overlaps. Note that this step only
+                                                        with each. We find that this fairly simple approximation is
+needs to be performed once at startup.
+                                                               appropriate since it enables very fast lookup which is crucial
+We localize (x, y) by first retrieving the polygons that are in    as it is performed at every simulation step.
+its bucket and then performing a point-in-polygon check for
+                                             Gaps in the road surface. Due to the extremely low off-
+each matching quadrilateral. One challenge of implement-
+                                                         road rates achieved by GIGAFLOW policies, we found that
+ing this efficiently is that each hash bucket has a different
+                                                   most remaining off-road events are characterized by thin
+number of corresponding polygons. We maintain efficiency
+                                                       gaps in the road surface (sometimes under 1 mm), often
+by designing APIs to expect these “ragged” variable-size
+                                                              located between neighboring lanes. These thin gaps are not
+tensors and only perform padding on operations that require
+                                                               actual geometrical features but numerical inaccuracies in
+it (e.g., finding the polygon that minimizes d).
+                                                              the underlying map files.
+This spatial hash additionally allows for the support of mul-
+                                                     During training, we allow any of the 5 points used for off-
+tiple maps via augmentation of vehicle coordinates (x, y)
+                                                          road checking to be in one of the spurious gaps by measuring
+with the map Id: (x, y, mapId). Essentially, the map an
+                                                              the distance from the point to the closest road polygon and
+agent is driving on functions as a “third” dimension, allow-
+                                                            considering points within δ = 15 cm to be still on the road
+ing us to filter out polygons from other maps at the hash
+                                                                surface. We again use spatial hashing to accelerate this
+bucket retrieval step.
+                                                          lookup. We take edges of all road polygons and assign
+                                                    them to any bucket that they overlap with or pass within the
+A.4. Off-road checking                                                             distance δ of, so we can quickly obtain a list of candidate
+Given s(t), we localize the vehicle’s bounding box center    edges.
+and corners on the road surface using the spatial hash proce-
+dure described above. In the majority of cases, a vehicle is    A.5. Collision detection
+off-road if any of these 5 points could not be localized onto
+                                                    Given s(t) and s(t+1), we detect collisions as follows. Let
+the road surface. However, there are two edge cases that are     s(t)ai and s(t+1)ai   be successive states of agent i, and s(t)aj and
+important to handle.
+                                                               s(t+1)aj   be the successive states of agent j. We perform two
+Curved roads and islands. These are various situations                                                         checks to see if a collision occurred. First we transform s(t)aj
+where all 5 of these points can be on the road surface but
+                                                                into the coordinate frame of s(t)ai and s(t+1)aj    into the coor-the vehicle should still be considered off-road. Two such
+examples are curved roads (where part of the bounding    dinate frame of s(t+1)ai     . Then we check to see if any of the
+box overhangs the edge of the road) and pedestrian safety     lines defined by the movement of agent j’s corners intersect
+islands (where the vehicle can straddle the islands). To    with agent i’s bounding box (the bounding box is centered
+handle both these cases, we generate a set of out-of-bounds     at the origin). We then swap the roles of agents i and j
+(OOB) points by taking the mid-point of each polygon edge,    and perform this check again. A collision occurred between
+nudging it slightly in the outwards direction, and keeping all    agents i and j if either check is positive. Note that we only
+points that do not lie within any other polygon. A vehicle is    perform collision detection, not collision simulation.
+classified as off-road if any of these OOB points are found                                      We accelerate this using our spatial hash by constructing,
+to be within its bounding box.                                                                 for all agents, the axis-aligned bounding box (AABB) that
+
+
+
+                                                14
+
+=== PDF PAGE 15 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+contains the vehicle’s bounding box at both states s(t) and   We additionally developed multiple simplified versions of
+s(t+1). We assign the vehicle to all buckets that overlap   GIGAFLOW to speed up diagnostics and troubleshooting.
+with this bounding box and perform the collision detection    Using the minimal single-agent configuration we could train
+procedure described above for all pairs of vehicles that share     policies to convergence in under 20 minutes, allowing us
+at least one bucket. We use the world ID of each agent as     to get immediate feedback on the core functionality. We
+an additional dimension in the spatial hash so that vehicles     established infrastructure for continuous testing, repeatedly
+can only collide with other vehicles in the same world. This     retraining policies from scratch using these streamlined sim-
+hashing method is fast to compute and greatly reduces the     ulator configurations. This system has significantly acceler-
+number of candidate collision pairs.  Therefore hashing    ated the identification and isolation of regressions, thereby
+represents a large improvement over a naive pairwise check.    conserving numerous development cycles.
+
+The check described above only works when (at least) one
+vehicle is in motion. This is acceptable during simulation,   B. Defining the partially observed stochastic
+as at least some movement is required to transition from     game
+collision-free to a colliding state. For detecting collisions
+                                      We model the environment that our agents learn in as aat t = 0, we simply check to see if the two bounding boxes
+                                                                  partially observed stochastic game (POSG) (Hansen et al.,overlap at state s(0). We use the spatial hash in a similar
+                                                          2004); an extension of POMDPs to the multi-agent settingmanner as before, except the AABB corresponds to a single
+                                                                in which there are multiple agents with conflicting goals.(initial) state.
+                                       We define each of the components of the POSG below.
+
+A.6. 2.5-D simulation
+                                                             B.1. Observations
+Simulating driving can be largely approximated without
+                                      We render the world state s(t) into a relatively low dimen-errors as a two-dimensional problem. This approximation
+                                                              sional vector representation.  In order to drive safely, aenables performance improvements and reduces code com-
+                                           GIGAFLOW agent utilizes information about vehicle’s dy-plexity (thereby limiting the surface area for coding errors).
+                                                     namics and its position w.r.t. the lane S(t), approximateHowever, certain cases cannot be accurately approximated
+                                           map of the surrounding area, including roads and trafficin two dimensions, like overpasses. GIGAFLOW handles this
+with “2.5-D” simulation. We simulate the world as if it were     lights W lane,(t) Wboundary,(t)  Wstop(t)   , observations of other traf-
+2-D and then correct for these errors. For example, we per-                                                                           fic participants A(t), desired destination and intermediate
+form collision detection in two dimensions and then remove                                                       waypoints G(t), as well as the agent’s conditioning Creward
+collisions that would not have occurred in 3-D. We maintain                                                            (Table A2) .
+the vehicle’s z-coordinate by applying the dynamics model
+purely in 2-D and then looking up new z(t+1) for all vehi-    Local observation S(t) can be further broken down as fol-
+cles from the map that correspond to new locations s(t+1).    lows (time indices omitted for clarity):
+We use z(t), s(t), and the maximum slope of a given map to
+filter out conflicting z values in cases like overpasses.              • c, θ: the distance from the current lane center and the
+                                                               angle relative to lane heading.
+A.7. Hardening
+                                                                            • κ: local road curvature.
+Given the extremely low collision and off-road rates seen
+in GIGAFLOW training we found that extremely rare bugs        • v: current speed of the vehicle.
+would dominate the collisions and off-road events when
+present. We iterated extensively; training numerous policies        • vlim: maximum allowed speed.
+to very high fidelity, watching videos of collisions and off-
+road events, and sieving those caused by coding errors and        • ϕ: current steering angle.
+numerical inaccuracies rather than the agent’s poor decision
+making. Each iteration would yield new bug fixes, improv-        • along, alat: current longitudinal and lateral acceleration.
+ing both training and downstream benchmark performance.
+                                                                            • Driver’s acceleration limits Cacc.
+To address these bugs, we built numerous visualization tools,
+as merely knowing that a rare bug existed was not enough        •  Cthrottle, Csteer: randomized coefficients determining
+to fix it — we had to find the exact steps to reproduce it as         the vehicle’s responsiveness to throttle and steering
+well. The visualization, diagnostic, and recording tools we          inputs.
+developed were instrumental to the overall success of the
+project.                                                                   •  l, w: driver’s vehicle’s length and width.
+
+                                                15
+
+=== PDF PAGE 16 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Note that all of these observations are normalized to [−1, 1]     tions, the Cartesian product of the sets of available values of
+range and provided in egocentric frame.                       longitudinal ˙along ∈{−15, −4, 0, 4} m s−3 and lateral jerk
+                                                                                                       ˙alat ∈{−4, 0, 4} m s−3.
+Map observations outline the surrounding area at two lev-
+els of resolution, including the high-level overview of the   We compute longitudinal and lateral accelerations using
+nearby road network W lane(t) and a more detailed set of fea-    numerical integration (∆t = 0.3 s during training):
+tures W boundary(t)     that represent the precise shape of the local
+driveable area.
+                                  (t)                                                    a(t)long = a(t−1)long + Cthrottle ˙along ∆t           (1)
+The coarse map view W lane provides a set of positional
+features sampled along driveable lanes at 40 m intervals,                    a(t)lat = a(t−1)lat  + Csteer ˙alat ∆t              (2)
+containing information about lane widths and heading di-
+                                                   where coefficients Cthrottle, Csteer ∈Cdynamics are sampledrections. These features also convey higher-level routing in-
+                                                    from a mixed uniform distribution X(1.25), defined as:formation similar to that provided by GPS-based navigation
+applications. Each observation within W lane(t) is augmented        X(a) = 0.5 U(a−1, 1) + 0.5 U(1, a),  a > 1
+with relative (w.r.t. other observations) and absolute normal-
+ized distances to the next goal, which allows GIGAFLOW    This distribution generates an equal number of samples
+agents to make informed routing decisions at complex junc-    smaller and greater than one, thereby allowing for a bal-
+tions. We pre-calculate all routing information by running    anced randomization of dynamics properties.
+the Dijsktra’s algorithm (Dijkstra, 1959) offline, computing
+                                        We apply a small modification to the Eqs. (1) and (2), setting
+pairwise distances between all locations of interest.
+                                                             values a(t)long, a(t)lat to exactly 0 when acceleration changes sign
+For    a more fine-grained road geometry representation
+    (t)                                                                                   (i.e. when a(t−1)long   a(t)long < 0). We found that this modification
+W boundary we provide midpoints of nearby polygon edges   makes it easier for the agent to wait in place or drive at a
+spaced roughly 1 m apart which delineate the out-of-bounds                                                             constant velocity, producing smoother trajectories.
+areas closest to the driver (Fig. 2c). For both W lane(t) and
+    (t)                                            The  acceleration components are then clipped ensur-
+W boundary we provide the 80 features closest to the driver,                                                          ing the g-forces stay within the specified limits (here
+additionally limited to 200 m viewing horizon for the coarse
+                                                              Cacc ∼X(1.5)):
+map. We pre-calculate Wlane and Wboundary for each map
+polygon which enables extremely fast retrieval at runtime,                 a(t)long ←clip  a(t)long, −5, 2.5 Cacconly requiring a simple conversion to driver’s egocentric
+frame to obtain W lane(t) and W boundary.(t)                                                a(t)lat ←clip  a(t)lat , −4, 4
+For observations of other agents we return the No nearest
+agents within δmax = 200 m of the driver. We pad the array   We update the velocity magnitude using the trapezoidal rule
+of observations in case there are fewer than No nearby actors.    (averaging previous and current accelerations):
+For each agent, we observe its position, orientation, velocity,
+dimensions (i.e. width and length), and z-coordinate, all               v(t) = v(t−1) + 0.5   a(t)long + a(t−1)long   ∆t
+transformed into driver’s egocentric frame. The goals, mo-
+mentary accelerations, dynamics properties, or conditioning     Just as for the accelerations, we set v(t) to exactly 0 when
+parameters of other agents are not observed.                        its value changes sign. We then clip v(t) to stay within the
+                                                      randomized speed limit (Cvel ∼X(1.5)):While we do not explicitly model occlusions, we keep
+the maximum number of observed agents during train-
+                                                                                    v(t) ←clip  v(t), −2, 20 Cveling relatively low: No = 20 ≪Na. Together with the
+distance-based visibility threshold δmax this allows us to
+train the agent well adjusted to limited observability. Our                                                  To reach the acceleration a(t)lat , the vehicle would have to fol-
+permutation-invariant model architecture allows the value                                                    low the arc with radius |ρ| and signed curvature ρ−1 apply-
+No to be trivially increased at test time to use all available                                                            ing the steering angle ϕ (here lwb is the vehicle’s wheelbase
+information (see the model architecture details below).                                                     and ϵ = 10−5 ensures numerical stability):
+
+                                                                                                                 alatB.2. Actions and dynamics                                    ρ−1 =
+                                                                  max(v2, ϵ)
+Our agents use a discrete set of actions to control the vehi-                                                           ρ−1 ←sign ρ−1 max  ρ−1  , ϵ
+cle’s change in acceleration using a jerk-actuated bicycle
+dynamics model. The action space includes 12 total ac-            ϕ = arctan ρ−1 lwb
+
+
+                                                16
+
+=== PDF PAGE 17 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+We calculate the change in the steering angle, δϕ, and        • Rcomfort is a penalty for exceeding the comfortable lim-
+update the effective steering angle, ϕ(t), ensuring that            its of acceleration and jerk. Randomized αcomfort cre-
+both values remain within conservatively defined limits          ates a distribution of driving styles, from relatively
+(δmax = 0.6 rad s−1, ϕmax = 0.55 rad):                        smooth to practically unconcerned with comfort.
+
+       δϕ = clip(ϕ −ϕ(t−1), −δmax ∆t, δmax ∆t)   (3)        •  Rl-align incorporates the preferences for driving in the
+                                                               designated driving direction and staying parallel to
+       ϕ(t) = clip(ϕ(t−1) + δϕ, −ϕmax, ϕmax)         (4)                                                            road lanes. We randomize this term in a wide range,
+                                                        which occasionally exposes our agent to erratic actors
+The clipping in Eqs. (3) and (4) prevent excessive changes
+                                                                   driving against traffic.
+in the steering angle, limiting the maximum lateral accel-
+eration at low speed. To account for the limited steering        •  Rl-center rewards the agent for staying centered in the
+actuation, we update the effective signed curvature ρ−1 and          lane. We randomize αcenter-bias for additional behavioral
+acceleration a(t)lat accordingly:                                          diversity.
+               ρ−1 ←tan  ϕ(t)                                  • Rvelocitythe agentencouragesto prefer routesforwardwithprogressconsistentandtrafficmotivatesflow
+                                lwb
+                                  2                              over traffic jams. We found that this term accelerates
+                      a(t)lat ←  v(t)  ρ−1                         convergence in the early stages of training and helps
+                                                              us train policies that are better at avoiding gridlocks in
+                                                                          self-play.
+Finally, the resulting movement of the vehicle is updated
+using the bicycle dynamics model:                                    • Rreverse penalizes the agents for reversing. Due to the
+                                                            randomization of αreverse some agents perform multi-
+             d = 0.5   v(t) + v(t−1) ∆t                        point turns to reach the goals behind them, while others
+                                                                   prefer to drive forward and wrap around the block or
+              θ = d ρ−1
+                                                           perform a U-turn instead.
+        ∆x = ρ sin (θ)
+                                                                            •  Rstop-line penalizes the agent for crossing a stop line at         ∆y = ρ cos (θ)
+                                                              a red light.
+where d is the displacement along the arc and θ is the angular                                                                            • Rtimestep is a small penalty applied at each simulation
+displacement.                                                                        step. This serves a function similar to the discount
+                                                                  γ, except we disable Rtimestep when ego is stationary
+B.3. Reward                                                       which creates agents more willing to patiently wait at
+                                                                                 traffic lights and intersections when necessary.Our agents optimize a scalar reward function consisting
+of multiple terms weighted by their respective coefficients
+α(·) which are randomly sampled at the beginning of each    B.4. Additional randomized components
+episode (see Table A2). This reward function R is defined                                                              In addition to the reward function coefficients we randomize
+by:                                                        a number of simulator’s components to generate diverse
+                                                   embodiments and behavioral patterns. Agents have access
+  R = Rgoal + Rcollision + Roff-road + Rcomfort + Rlane
+                                                                  to the randomized parameters as a part of their conditioning.
+   + Rvelocity + Rreverse + Rstop-line + Rtimestep
+                                                           Vehicle size. We randomize vehicle’s dimensions as follows
+where the individual terms can be described as follows:       (measured in meters):
+
+   • Rgoal rewards the agent for reaching its intermediate        • Vehicle length and wheelbase: l ∼U(0.8, 7), lwb =
+     goals (waypoints) and the final goal.                         0.6 l.
+
+   •  Rcollision penalizes agents for colliding with vehicles        • Vehicle width: w ∼U(0.8, 3).
+     or pedestrians with an additional penalty for collid-
+                                                                            • The vehicle width is clipped: w ←min(w, l).
+     ing at high speed. Randomizing αcollision allows us
+     to populate the training environments with agents of
+                                                          Size randomization allows us to generate a variety of road     varying risk tolerance, from very aggressive to very
+                                                                 users, from very maneuverable agents with a footprint of     conservative.
+                                                        a pedestrian to relatively big vehicles. We represent occa-
+   • Roff-road penalizes agents for leaving the road.             sional bigger vehicles at test time using a set of smaller
+
+                                                17
+
+=== PDF PAGE 18 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+bounding boxes (e.g., a semi-truck with a trailer can be split     eration of other traffic participants to ensure safety. Ideally,
+into two bounding boxes).                               even clearly erratic maneuvers by other vehicles should
+                                                           not lead to collisions or comfort violations on behalf of
+Goals. A final goal is sampled for each agent. Additionally
+                                           GIGAFLOW agent. In order to achieve this, we degrade a
+we sample Nwp ∼U{0, 3} intermediate waypoints (see
+                                                                 fraction of agents during training by introducing two types
+“World Initialization” for details). We randomize the goal
+                                                             of modifications:
+collection radius δgoal to control how precisely our driver is
+required to adhere to the designated route (see Table A2).
+                                                                      1. Up to 5% of agents occasionally do not see other vehi-
+Vehicle dynamics. For each agent in each episode we ran-          cles. This models inattentive drivers and drivers with
+domly sample maximum permitted acceleration, velocity,         blind spots.
+throttle and steering coefficients (refer to “Actions and dy-
+                                                                      2. Up to 10% of agents sharply apply their brakes atnamics” for specific randomization ranges).
+                                                                         arbitrary moments for a short duration before resuming
+Traffic lights. Real driving situations include a diverse set        normal driving. This models drivers that stop without
+of traffic light systems, from synchronized lights at 3-way        warning or remain stationary when a traffic light turns
+and 4-way intersections to occasional faulty, disabled, or         green.
+miscalibrated signals. Instead of explicitly modeling this
+distribution in GIGAFLOW we simply pick random dura-   Between random applications of these modifications, agents
+tions of green, yellow, and red signals for each traffic light     are still controlled by GIGAFLOW policy and are completely
+independently. We start with default signal durations used    oblivious to their modification, which makes it impossible
+in CARLA (typically ˆτred = 2, ˆτyellow = 3, and ˆτgreen = 10    for regular drivers to predict their erratic behavior. We
+seconds) and then randomize them for each episode within    exclude trajectories from these agents from the rollouts used
+the following ranges:                                           for training.
+
+    •  τred ∼U(0.15 ˆτred, 5.0 ˆτred)                                            C. Training algorithm
+    •  τyellow ∼U(0.5 ˆτyellow, 0.75 ˆτyellow)                                                     Agents are trained using a version of Proximal Policy Op-
+    •  τgreen ∼U(0.1 ˆτgreen, ˆτgreen)                              timization (PPO) (Schulman et al., 2017) derived from the
+                                                             Stable Baselines codebase (Raffin et al., 2021). PPO trains
+                                                         a policy that outputs actions, and a critic that estimates dis-We additionally remove 20% of individual lights, 20% of
+                                                       counted returns. In our implementation, we do not sharetraffic light groups (e.g., all lights at an intersection), and
+                                                    any parameters between the policy and the critic, whichin 20% of all episodes we disable traffic lights entirely,
+                                                            empirically produces comparatively more robust low en-making all intersections unregulated. We also set 5% of all
+                                                           tropy policies at convergence.  Additionally, we add theremaining traffic lights to be constantly green.
+                                                              terminal value estimate to reward at the end of all truncated
+Even though we train only on 128 variants of CARLA maps    episodes, thus emulating infinite-horizon learning, similar
+(8 maps modified with affine transformations), this aggres-    to “Reset Handling” in Rudin et al. (2021). We use Adam
+sive traffic light randomization allows us to combinatorially    optimizer (Kingma & Ba, 2015) with annealed cosine-rate
+increase the total number of unique training environments    learning schedule:
+and traffic patterns, preventing overfitting. Our policy learns
+                                                                               α(0)to handle arbitrary traffic light configurations which helps                                                                      α(k) =                                                                        1 −cos  π −π k
+significantly in benchmarks like nuPlan where traffic signal                    2         K
+states are derived from the sense stack and often have errors.
+                                                   where k is the current training iteration and K is the maxi-
+The maximum red light duration in our simulator is delib-  mum number of iterations. We use in DD-PPO (Wijmans
+erately limited (τred ≤10 s). This allows us to mitigate the     et al., 2020) to train with mutliple GPUs. Specifically, each
+impatient nature of discounted reward maximization. When   GPU collects experience independently and then gradients
+durations of required stops are short during training, agents    are synchronized before the model update.
+with αstop-line ≫0 are never incentivized to run red lights to
+                                                       During development, we optimized a subset of hyperparam-
+maximize their return by getting to the goal faster. We find
+                                                                  eters of PPO and GIGAFLOW simulator using Population
+that our agents, due to their reactive nature, generalize to
+                                                     Based Training (PBT) (Jaderberg et al., 2017; Petrenko et al.,
+much longer red light durations occasionally encountered
+                                                          2023). We conducted this optimization using a simplified
+in benchmarks.
+                                                            version of GIGAFLOW training setup (single map, reduced
+Modeling erratic drivers. We aim to train an attentive,    randomization) which enabled faster iteration. Our PBT ex-
+rational, and defensive driver which does not require coop-    periments informed a number of non-trivial hyperparameter
+
+                                                18
+
+=== PDF PAGE 19 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+Algorithm 1 Advantage filtering                     D. Neural network architecture
+Require: Initial model parameters Θ, RL environment E, EWMA
+                                                Our actor and critic are parameterized by virtually iden-    decay β = 0.25.
+ 1: for k = 0 to K −1 do              ▷Training iteration k     tical compact neural networks with 3 million parameters
+ 2:     Bexp ←COLLECTROLLOUTS(Θ, E) ▷Experience buffer    each (6 million trainable parameters combined). At the high
+                                                                     level, the architecture consists of a fully-connected back-
+ 3:      ˆA(·)GAE ←GAE(Bexp, Θ, γ, λ)    ▷GAE advantages    bone ([1024 × 1024 × 1024] MLP) which receives concate-
+                                                          nated feature embeddings and outputs either a distribution
+ 4:    Amax ←max  ˆA(t)GAE        ▷Max abs. advantage                  t∈Bexp                                       over actions or a scalar value estimate (see Fig. 2d).
+ 5:     ¯Amax ←1k=0Amax + 1k>0 βAmax + (1 −β)¯Amax        Observations represented by simple feature vectors (S(t),
+ 6:     Filtering threshold: η ←0.01 ¯Amax                        G(t), Creward, etc.) are trivially encoded by smaller fully-
+                                                        connected networks, e.g.,: fS(t) = MLP  S(t)  . 7:       Bfiltered ←FILTER(Bexp,  ˆA(·)GAE < η)
+                                                         Observations  containing  multiple  features  per  agent
+ 8:   Θ ←PPO(Bfiltered, Θ)
+ 9: end for                       W lane,(t) Wboundary,(t)  Wstop,(t) A(t)  are represented by sets of
+                                                               feature  vectors and  require  permutation-invariant  en-
+                                                         coders (Zaheer et al., 2017).  For each feature type we
+                                                  employ a small fully-connected network to encode each
+choices, from the learning rate schedule to comparatively                                                                             (t)
+                                                       element in a set (e.g., an individual map feature in W lane)large integration step ∆t = 0.3 s. Table A3 provides our
+                                                          followed by channel-wise maxpooling layer. Outputs of all
+final list of training hyperparameters.
+                                                     maxpooling encoders are then concatenated.
+Advantage filtering. To make use of the vast scale of syn-                              (t)                                                          Observation sets W   and A(t) represent some of the largest
+thesized data, we implement a technique termed advantage
+                                                              data structures in our computation graph containing over 108
+filtering which can be viewed as a variant of Prioritized
+                                                                individual feature vectors per inference step across all agents.
+Experience Replay (Schaul et al., 2016) where the majority
+                                                             Storing all of these observations in the PPO’s rollout buffer
+of transitions are sampled exactly zero times.
+                                                    would be prohibitively expensive. Instead, we store only the
+Specifically, for each transition we calculate the advantage    world states s(t) and reconstruct most of the observations as
+estimate ˆA(t)GAE (Schulman et al., 2016) and then simply dis-   needed for each training minibatch.
+card all transitions that satisfy  ˆA(t)GAE < η. The adaptive    In addition to that, for the largest feature sets Wlane and
+filtering threshold η is set to 1% of the moving average esti-    Wboundary we omit a fraction of input features (akin to the
+mate of the maximum advantage magnitude at the current    dropout regularization technique). We randomly drop 40%
+stage of training, thus rendering the method insensitive to    of Wboundary and 50% of Wlane features during training for
+the absolute scale of rewards (see Algorithm 1).             each agent. This feature dropout approach allows us to fit
+                                                               the full GIGAFLOW training system on 40 GB A100 GPUs,
+Empirically, we filter out on average ∼80% of all samples
+                                                          while additionally modelling potential sensor noise, increas-
+throughout training (over 90% in the early epochs). This
+                                                           ing robustness of the policy and preventing overfitting.
+significantly increases learning throughput as we avoid com-
+puting gradients that contribute minimally to the overall
+parameter update. With the proposed adaptive threshold   E. Benchmark evaluation
+η we observe a 2.3-fold increase in training throughput,
+                                                        For each benchmark, we use the benchmark-provided simu-
+from 0.53 to 1.2 million steps per second. Our experiments
+                                                                    lation infrastructure, translate observations into GIGAFLOW,
+suggest that application of this technique not only acceler-
+                                                    and run GIGAFLOW as a co-simulator. For Waymax and
+ates learning, but also yields more robust policies (e.g., see
+                                          CARLA, we co-simulate a single GIGAFLOW step for each
+Carla LAV results in Fig. A2). We hypothesize that advan-
+                                                              evaluation step. nuPlan additionally requires trajectory pre-
+tage filtering could be beneficial across various RL setups,
+                                                                 dictions at each step. At each time-step, we roll out an entire
+especially where data collection is cheaper than gradient
+                                                              scenario using GIGAFLOW policies for all agents for 0.3 sec-
+calculation (e.g., training LLMs on synthetic data).
+                                                          onds, and use the subsequent observed trajectory from the
+Previously Tao et al. (2021) explored an experience filtering     driver as its trajectory.
+approach based on the fixed advantage threshold, selecting
+a subset of maximally informative samples from the teacher    E.1. nuPlan benchmark evaluation
+policy in the context of transfer learning. We further develop
+                                                  The nuPlan benchmark consists of a training, validation andthis idea and propose a general adaptive method compatible
+                                                          held out test set built from thousands of hours of data col-with a broad class of reinforcement learning applications.
+
+                                                19
+
+=== PDF PAGE 20 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+lected from Las Vegas, Boston, Pittsburgh, and Singapore.    tracks do not provide such information, Jaeger et al. adapt
+However, in our work we never use data from the training    the leaderboard code accordingly. We adopt this procedure
+set. The benchmark provides three different challenges, an    and extract this information in a similar way. Moreover, we
+open-loop (OL) Challenge 1, closed-loop non-reactive (CL-    identified a bug in CARLA that can lead to faulty pedestrian
+NR) Challenge 2, and closed-loop reactive (CL-R) Chal-    states when a pedestrian collides with other traffic partici-
+lenge 3. We focus only on challenge 3 because it repre-    pants. This bug can result in erroneous collision infractions;
+sents the most realistic setting with both the driver and the    see video in the supplementary material. We obviate this
+traffic vehicles being closed loop. The reactive traffic ve-   bug by removing a pedestrian actor from the scene in case
+hicle agents are controlled by the Intelligent Driver Model    of an event. To ensure the same test bed for all competing
+(IDM) (Kesting et al., 2010) with their initial placement    approaches, we run all of them in our setup and report the re-
+taken from real traffic distributions. However pedestrians     sulting scores along with the scores reported by the authors.
+are non-reactive and follow their logged trajectory. After    In addition to the expert in Jaeger et al. (2023), we compare
+initialization, the IDM agent will select a series of lanes     to the CARLA autopilot and another expert from Chitta
+(independent of the log vehicles trajectory) and follow a     et al. (2023). Since simulations in CARLA contain a large
+centerline lane path provide by nuPlan’s map. Longitudinal    amount of randomness, Table A6 presents the mean and
+acceleration control comes from the IDM equation.           standard deviations of the evaluation results for 3 different
+                                                                runs.
+                                    δ      2!          dv            v        s∗
+        = a  1 −     −                          E.3. Waymax benchmark evaluation
+           dt             v0        s
+                                                To run the Waymax simulator, we wrote a distributed sce-
+With acceleration limit a, desired speed v0, current speed v,    nario runner to evaluate on the full Waymo Open Mo-
+distance to lead agent s, safety margin s∗, and exponent δ is     tion Dataset (WOMD) 1.2.0 validation set consisting of
+usually set to 4. The agent defaults to acceleration a unless    44 097 scenarios each 8 s long running at 10 Hz.  To
+it’s close to desired v0 or close to an object in its path. In    match the results from Table 3 in Gulino et al. (2023), for
+this challenge, there is less diversity in behavior, but it has    our DatasetConfig we use max num objects=128,
+more realistic vehicle interactions when the driver deviates    and use the default IDMRoutePolicy settings.  We
+from the logged vehicle trajectory.                            also  applied  this  patch,  https://github.com/
+                                           waymo-research/waymax/pull/54,  to  fix IDM
+Due to the nuPlan online leaderboard evaluation servers
+                                                         agent issues on top of commit 720f9214a in the pub-
+no longer being accessible, we evaluate GIGAFLOW on
+                                                                              lic Waymax Github repo. For goals used for the GIGAFLOW
+the Val14 benchmark, which has been shown to be a good
+                                                            policy we use the final location of the expert logged tra-
+proxy for the leaderboard evaluation and has other publicly
+                                                               jectory as an intermediate goal, as well as two more goals
+reported results (Dauner et al., 2023).
+                                                              projected out at 50 m and 100 m and snapped to the nearest
+The GIGAFLOW policy achieves state of the art results zero-    lane center.
+shot on the Challenge 3 closed loop score. The closed-
+                                      We use the provided agent overlap, off road rate, log diver-
+loop score is measured from 0 to 100 and is a weighted
+                                                          gence, and SDC kinematic infeasibility metrics provided
+evaluation composed of at-fault collisions, drive-able area
+                                                  by Waymax to calculate our results. However, due to the
+compliance, driving direction compliance, progress towards
+                                          Waymax route information not being released at the time
+goal, time-to-collision bounds, speed limit compliance, and
+                                                            of this writing, we report a modified metric for Route
+comfort. Full results are shown in Table A5. We are able to
+                                          Progress Ratio. We calculate it by dividing the dis-
+compute the component scores for the PDM-Hybrid entrant
+                                                           tance the GIGAFLOW policy drove by the expert logged
+and simply present the total score for the other entrants.
+                                                                 trajectory per scenario, and clamp to 100% if the expert
+Finally, we categorized all videos of nuPlan’s collisions and
+                                                       drove less than 1 m. We also report an additional progress
+we provide them in the supplementary material.
+                                                              metric, Total Distance Driven Ratio, which is
+                                                        simply the total distance the GIGAFLOW policy drove over
+E.2. CARLA benchmark evaluation                                                                            all scenarios divided by the total the expert log drove.
+Jaeger et al. (2023) implemented a CARLA expert driver                                                       Unlike Carla and nuPlan, Waymax does not have an ag-
+that serves as a teacher for a trained perception-based model.                                                             gregate score which allows for easier comparison and visu-
+To our best knowledge, the presented expert manifests the                                                                 alization of results. Because of this, we propose a sim-
+best scores on CARLA benchmarks ever reported in the                                                             ple aggregate score composed of a progress score (i.e.
+literature. This expert makes use of privileged information                                                        a clamped Total Distance Driven Ratio), colli-
+such as exact positions of all traffic participants and perfect                                                            sion rates, and off-road rates show in Eq. (5) below. This
+map information. Since the default CARLA leaderboard
+
+                                                20
+
+=== PDF PAGE 21 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+metric is what is reported in our figures when referring to a     until a collision is no longer imminent. To account for
+single Waymax score.                                      sensor noise in recorded data, we add random Gaussian
+                                                             noise to all generated actor positions. We achieved a 2-point
+                                                    improvement in the overall metametric using σ = 0.0125
+             P ds               when compared to rollouts without the added noise.
+                          s∈S
+          progress = min                                                          ,  1                                     Results of our zero-shot evaluation of GIGAFLOW to             P dsexpert
+                         s∈S                  WOSAC are reported in Table A8, using the Waymo-defined
+                                                                validation set to allow for detailed analysis in Table A9. In
+          P 1collisions   × 1off-roads                   addition to GIGAFLOW we include a comparison to a pol-
+                       s∈S                                 icy where all actors are fixed to be stationary, establishing          success = 1 −
+                                   |S|                                                        a lower bound on generated behaviors by the GIGAFLOW
+                                                                    policy. We also include the reported performance for the top
+             score = progress × success                (5)                                                     methods included on the public 2023 WOSAC leaderboard
+                                                            as well as a set of baseline approaches reported in Montali
+                                           is the distance the policyWhere S is the set of scenarios, ds                                                                       et al. (2023), nearly all based around supervised autoregres-                                                expert
+under test drove in scenario s, ds      is the distance the                                                                 sive modeling.
+expert policy drove in scenario s, 1collisions       is the indicator
+function for if scenario s contained a collision, and 1off-roads      We see that the GIGAFLOW policy approaches the perfor-
+is the indicator function for if scenario s contained an off-   mance of expert models, despite having never been exposed
+road event.                                                       to any map or human data recorded in WOMD during train-
+                                                                    ing. Notably, GIGAFLOW offers strong performance for col-
+Table A7 presents Waymax results.                                                                      lision and off-road metrics, out-performing most approaches.
+                                            GIGAFLOW also maintains respectable performance among
+E.4. Waymo Open Sim-Agents Challenge                    acceleration metrics, a consequence of producing kinemati-
+                                                                cally feasbile and smooth rollouts following the dynamicsWaymo introduced their Open Sim Agents Challenge
+                                                    model the policy was trained with. With GIGAFLOW, we are(WOSAC) in 2023 to promote the development of intel-
+                                                            able to control multiple actors within real-world scenariosligent, interactive simulation agents capable of exhibiting a
+                                                         without colliding or driving off-road, producing natural-diversity of behaviors in response to decisions made by the
+                                                                           istic driving. The scoring metrics used for WOSAC areautonomous vehicle (Montali et al., 2023). In WOSAC, driv-
+                                                             likelihood measures of the ground truth behavior withining scenarios are characterized by 9.1 second sequences of
+                                                              the distribution induced by generated actor trajectories. Torecorded tracks of road users derived from the Waymo Open
+                                                          achieve idealized performance for the likelihood of colli-Motion Dataset (WOMD) (Ettinger et al., 2021), stored at
+                                                             sion and off-road behavior, it is expected that the generated10 Hz, where the first 1.1 s of history is used to form an
+                                                                     trajectories collide or drive off-road whenever ground truthinitial context. Models are evaluated by their ability to accu-
+                                                                 actors are assessed to do so. Because GIGAFLOW explicitlyrately reproduce the remaining 8 s of the scenario for up to
+                                                             penalizes these outcomes during training we cannot expect128 agents.
+                                                          our policy to substantively improve over the reported scores
+Despite being designed for imitative traffic modeling, we     in Table A8 for these metrics. We characterize the collision
+use WOSAC to evaluate GIGAFLOW in real-world multi-   and off-road behavior of GIGAFLOW within WOSAC in
+agent settings and demonstrate the policy’s ability to control    Table A9, conditioned on actor type and whether the ground
+a diversity of road users while avoiding undesired behavior.    truth trajectories collide or go off-road.
+Following the evaluation of other benchmarks, we evaluate
+a fully trained GIGAFLOW policy zero-shot on WOSAC
+                                                        F. Analysis
+without fine-tuning. We use the provided 1.1 s history to
+conditionally sample from the map distribution of possible     F.1. Reward conditioning analysis
+goal locations, filtering out positions that are either unreach-
+                                                 To capture a continuum of driving styles in GIGAFLOW weable or are trivially reachable. Proposed goal locations are
+                                                         vary reward parameters for our agents and then allow theretained proportional to the GIGAFLOW agent’s value esti-
+                                                            policy to condition on them. In total we condition on 12mate from the provided initial position of each actor.
+                                                                   different parameters used in our reward shown in Table A2.
+Behavior of all vehicles and bicycles is modeled using a
+                                                  To better understand how these reward parameter conditionsGIGAFLOW policy, while pedestrians are controlled with
+                                                                     affect GIGAFLOW policy behavior, we attempt to find whichan IDM-like policy based on the provided initial velocity
+                                                         parameters can explain the most variation in trajectories.and heading. If a collision with a vehicle is forecast within
+                                      We do this by sampling 200 random reward parametersa 0.5 s horizon, the pedestrian actor stops moving forward
+
+                                                21
+
+=== PDF PAGE 22 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+within the training distribution range, roll out each of them    Fig. A2 demonstrates the effect of the advantage filtering
+on various scenarios in nuPlan, then cluster trajectories to    technique described earlier. Using this method we filter out
+find which conditioned reward parameter provides the most    samples that have near zero contribution to PPO’s policy and
+mutual information on the clusters. Because single reward     critic losses, thus focusing on rare events at the tails of data
+parameter will typically dominate the variation seen in the     distribution. While we expect this technique to improve the
+trajectories, we repeat the analysis again but with the previ-    wall time performance of the algorithm, to our surprise we
+ous dominant parameter fixed. We repeat this procedure for    also see qualitative difference at convergence. The version
+the top 6 parameters with the results shown in Fig. A1.        of GIGAFLOW without filtering plateaus substantially lower
+                                                  on the Carla LAV benchmark and is unable to reach up to
+The order of parameters with highest mutual information
+                                     5% of goals in time leading to timed out episodes in the
+with the clusters is αcenter-bias followed by δgoal, αl-center,
+                                                                 self-play evaluation mode.
+αcomfort, αl-align, and αvel-align. As seen in Fig. A1, the vari-
+ation is interpretable and relatable to a human driver. For    Fig. A3 demonstrates the influence of various algorithmic
+αcenter-bias, the policy will pick the left lane if it’s biased to-    features on zero-shot benchmark performance. Here, we
+wards the right (so that it can be further from the boundary)    quantify the error rate across multiple benchmarks; specifi-
+and vice versa for the right lane. For δgoal, the policy will     cally, we measure the additional percentage points needed
+change lanes to get closer to the goal when the max distance     to achieve a perfect score on each benchmark.
+is small enough. For αl-center, if this value is high enough,
+the policy prefers to stay centered in its lane to not incur the     F.3. Long-form evaluation in self-play
+extra cost of a lane change, despite the additional progress
+                                                  To evaluate robustness of our agent in self-play, we devise ait could make. For αcomfort, the policy cares less about high
+                                                             version of GIGAFLOW training environment tuned for long-accelerations and jerks when this penalty is closer to zero,
+                                                     form evaluation. We remove dynamics noise, set the numberso will take more aggressive turns to stay within its lane and
+                                                              of drivers to Na = 50, and slightly modify the initializationreceive centering rewards. For αl-align, the policy incurs less
+                                                          procedure to ensure minimal clearance between all vehiclesreward for staying oriented with its lane if this value is low,
+                                                                     at t = 0. We remove all traffic light randomization andand therefore if this value is low enough the driver is willing
+                                                         simply use CARLA’s default traffic light system to promoteto U-turn to get to its goal behind it. Finally for αvel-align,
+                                                           conventional interactions at intersections. We additionallywe are rewarded for staying centered in our lane at higher
+                                                    modify drivers’ observations to increase their perceivedspeeds, and therefore when this value is low the policy takes
+                                                              vehicle size by 10 cm on each side.a wider turn to maximize comfort.
+                                      We observe that at decision-making frequency of 15 Hz,By allowing our policy to condition on a range of reward
+                                           GIGAFLOW agent conditioned for safe and conservativeparameters, we solve a few problems at once while keep-
+                                                               driving (see Table A4) exhibits nearly accident-free driving,ing the simplicity of a single policy. First, it introduces a
+                                                          covering on average 3 million km before encountering anywide variety of agent behaviors that makes our policy more
+                                                                  collision or going off-road (Fig. A4).robust. One reason is because the policy now must handle
+both the hidden goals and hidden behaviors of other agents.
+Due to this, the GIGAFLOW policy learns to handle vehi-
+cles that favor different positioning within the lane, drive
+aggressively, lane change more often, plus combinations of
+the above. The second benefit is that the optimal driving
+style could be captured in our conditioning range. So as
+an additional alignment step, the reward conditions can be
+tuned to reduce the error between the GIGAFLOW policy
+and an ideal logged driver. This method would then allow
+us to create both a chaotic self-play training environment
+to increase robustness, and a safe and comfortable driving
+controller, all with the same policy.
+
+
+F.2. Ablation studies
+
+We perform a series of experiments to understand how dif-
+ferent algorithmic choices influence the final performance
+of the GIGAFLOW agent using a reduced compute budget of
+660 GPU-hours (∼30% of the final training run’s budget).
+
+
+                                                22
+
+=== PDF PAGE 23 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+
+
+
+                       Parameter                                       Value
+
+                             Total num. of maps w/ affine transformations            128
+                      Number of agents per sim.                      U{1, 150}
+                      Number of sims per GPU                          4800
+                   Max number of agents per GPU                    720 000
+                    GPUs used                       8× Nvidia A100 (40 GB)
+                             Total GPU hours used in training                     1900
+                             Total number of sims                             38 400
+                             Total number of agents                          5 760 000
+                          Throughput: steps per second             ∼1 200 000
+                          Throughput: km driven per second               ∼1850
+                            Training cost per million km driven            ∼$5 USD
+                             Total simulated distance driven                 1 600 000 000 km
+                             Total number of simulated state transitions        1 000 000 000 000
+
+                                 Table A1: Setup and scale of GIGAFLOW training.
+
+
+
+
+
+                                Reward                                               Training distribution
+
+                                                                                        δgoal∼U(2, 12)   Rgoal= 1(||x−g||<δgoal ∧(1waypoint∨|v|<vgoal))                                                                                                     vgoal= 3
+
+Rcollision= −(αcollision + 0.1|v|) 1collision                                                            αcollision∼U(0, 3)
+
+Roff-road= −αboundary1boundary                                                                αboundary∼U(0, 3)
+
+ Rcomfort= −αcomfort  1|along|>3 + 1|alat|>3 + 1|˙along|>5 ∨|˙alat|>5                                   αcomfort∼U(0.0, 0.1)
+
+                                                                                                        |θf |          αl-align∼U(2.5 × 10−4, 2.5 × 10−2)
+  Rl-align= αl-align∆t min (cos (θf) , 0) + αvel-align min (cos (θf) ∗v, 0) + 0.0025  1 − π/2         αvel-align∼U(0, 1)
+
+                                                                           0.05                            αl-center∼U(2.5 × 10−4, 7.5 × 10−3)
+ Rl-center= −αl-center∆t  1cos(θf)>0.5 ∗|xf −αcenter-bias| − exp(|xf −αcenter-bias|−0.5)                 αcenter-bias∼U(−0.5, 0.5)
+
+ Rvelocity= αvelocity ∆t max (cos (θf) , 0.0) 1|v|>2.5                                                       αvelocity= 2.5 × 10−3
+
+ Rreverse= −αreverse ∆t 1v<0                                                                   αreverse∼U(2.5 × 10−4, 7.5 × 10−3)
+
+Rstop-line= −αstop-line 1stop-line-violation                                                                  αstop-line∼U(0, 1)
+
+Rtimestep= −(αtimestep∆t) 1|v|>0 ∨|a|>0                                                                 αtimestep= 2.5 × 10−5
+
+
+                         Table A2: Training distribution for each of the reward components.
+
+
+
+
+
+                                                23
+
+=== PDF PAGE 24 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+                                                                        Setting/Parameter         Value
+
+                                                                             Vehicle length               l ∼U(2, 5.5)
+                                                                             Vehicle width      w ∼U(1.5, 2.5)    Parameter                         Value
+                                                        Maximum speed         20 m s−1
+    Training batch size                256 000                          Timestep ∆t              0.066 s
+    Batch size per GPU                32 000                           Episode length       9000 steps (600 s)
+    Rollout length                      128                           Agents per sim Na          50
+   Num. PPO epochs                    3                            Observed agents No    up to 40 closest
+    Discount factor γ                     0.999
+    λGAE                                  0.95                                        δgoal                    10 m
+   Max. episode length            1200 steps (360 s)                              vgoal                   3 m s−1
+   PPO clipping ratio                       0.2                                            αcollision                      3.0
+    Value function clipping             None                                    αboundary                     3.0
+     Initial LR α(0)                   5 × 10−4                                  αcomfort                     0.05
+   LR schedule                        Cosine                                         αl-align                   2.5 × 10−2
+    Entropy coefficient                     0.01                                          αvel-align                      1.0
+    Value loss coefficient                     0.5                                           αl-center                  3.8 × 10−3
+   Max grad. norm                         0.5                                            αcenter-bias                     0.0
+    Advantage normalization             Enabled                                       αvelocity                  2.5 × 10−3
+    Adv. filtering threshold η         0.01 ¯Amax (Alg. 1)                               αreverse                   5.0 × 10−3
+    Inference & training precision        16-bit AMP                                      αstop-line                       1.0
+   Model weights initialization     Orthogonal, zero bias                             αtimestep                  2.5 × 10−5
+
+Table A3: RL algorithm settings and hyperparameters used       Table A4: GIGAFLOW settings for long-form evaluation in
+during training.                                                     self-play.
+
+
+
+
+  Method                            Score ↑   Ego Progress↑  No AF-Collisions ↑   Comfort ↑  TTC in bounds ↑   Driving Direction ↑  Speed Limit ↑   Drivable Area ↑  Ego Making Progress ↑
+
+  Val14 Benchmark
+  Urban Driver (Scheel et al., 2021)      50                 -                       -                     -                   -                         -                       -                     -                          -
+  GC-GPP (Hallgarten et al., 2023)       55                 -                       -                     -                   -                         -                       -                     -                          -
+  PlanCNN (Renz et al., 2022)          72                 -                       -                     -                   -                         -                       -                     -                          -
+  IDM (Treiber et al., 2000)             77                 -                       -                     -                   -                         -                       -                     -                          -
+  PDM-Hybrid (Dauner et al., 2023)      92.1          90.2              98.1             94.8           93.5                99.9              99.8             99.5                 99.1
+  Diffion-ES (Yang et al., 2024)          92.2          91.2              97.7             93.4           93.8               100.0              99.7             99.6                 99.2
+  GIGAFLOW (ours)                93.8±0.11    93.6±0.06        98.4±0.09      96.4±0.27     93.8±0.23         99.6±0.05        99.9±0.00      99.7±0.04          99.0±0.07
+
+                        Table A5: Results on Val14 (Dauner et al., 2023) nuPlan benchmark.
+
+
+
+
+ Method                         DS↑   RC↑       IP↑        Ped↓       Veh↓       Lay↓       Red↓        Stop↓        Off↓       Dev↓      TO↓       Block↓
+
+ CL1 Testing Routes (leaderboard.carla.org/get_started_v1)
+ CARLA Agent (our run)                29 ±0  41 ±0   0.73 ±0.03   0.03 ±0.00   0.36 ±0.11   0.00 ±0.00   0.28 ±0.02   0.03 ±0.02   0.00 ±0.00   0.44 ±0.02   0.01 ±0.01   0.15 ±0.00
+  Expert from Jaeger et al. (2023) (our run)  90 ±0  96 ±1   0.94 ±0.01   0.00 ±0.00   0.06 ±0.01   0.00 ±0.00   0.06 ±0.03   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.05 ±0.02   0.05 ±0.00
+ GIGAFLOW (ours)                     93 ±1  97 ±2   0.95 ±0.01   0.00 ±0.00   0.07 ±0.01   0.00 ±0.00   0.01 ±0.01   0.00 ±0.00   0.64 ±0.44   0.01 ±0.01   0.07 ±0.02   0.00 ±0.00
+
+ LAV Benchmark (Chen & Kr¨ahenb¨uhl, 2022) (with adapted scenarios from Jaeger et al. (2023))
+ CARLA Agent (our run)                9 ±2   58 ±0   0.18 ±0.04   0.22 ±0.00   0.74 ±0.43   0.00 ±0.00   3.99 ±0.10   0.58 ±0.21   0.00 ±0.00   0.87 ±0.00   0.00 ±0.00   0.00 ±0.00
+  Expert from Jaeger et al. (2023)            94     95        0.99         0.00         0.02         0.00         0.02         0.00              -           0.00         0.00         0.08
+  Expert from Jaeger et al. (2023) (our run)  92 ±9  95 ±7   0.98 ±0.02   0.00 ±0.00   0.04 ±0.05   0.00 ±0.00   0.02 ±0.03   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.09 ±0.07   0.07 ±0.07
+ GIGAFLOW (ours)                     99 ±1  99 ±1   1.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.00 ±0.00   0.02 ±0.03   0.00 ±0.00
+
+  Longest6 Benchmark (Chitta et al., 2023)
+ CARLA Agent (our run)                7 ±1   54 ±0   0.25 ±0.01   0.31 ±0.00   1.50 ±0.21   0.00 ±0.00   1.84 ±0.06   0.10 ±0.02   0.00 ±0.00   0.43 ±0.00   0.02 ±0.01   0.04 ±0.00
+  Expert from Chitta et al. (2023)          77 ±2  89 ±1   0.86 ±0.03      0.02         0.28         0.01         0.03         0.00         0.00         0.00         0.08         0.13
+  Expert from Jaeger et al. (2023)          81 ±3  90 ±1   0.91 ±0.04      0.01         0.21         0.00         0.01              -                -           0.00         0.07         0.09
+  Expert from Jaeger et al. (2023) (our run)  83 ±1  94 ±2   0.88 ±0.01   0.00 ±0.00   0.20 ±0.03   0.00 ±0.00   0.04 ±0.01   0.02 ±0.01   0.00 ±0.00   0.00 ±0.00   0.09 ±0.00   0.06 ±0.02
+ GIGAFLOW (ours)                     92 ±2  99 ±1   0.93 ±0.01   0.02 ±0.00   0.08 ±0.01   0.00 ±0.00   0.04 ±0.02   0.03 ±0.01   0.24 ±0.08   0.03 ±0.02   0.05 ±0.03   0.00 ±0.00
+
+                                    Table A6: Results on CARLA benchmarks.
+
+
+
+
+  Method                                Off-Road Rate (%) ↓   Collision Rate (%) ↓   Kinematic Infeasibility (%) ↓  Log ADE (m)   Route Progress Ratio (%) ↑   Total Distance Driven Ratio (%) ↑    Score (%) ↑
+
+  Expert Demonstration (Gulino et al., 2023)          0.32                  0.61                      4.33                   0.00                100.00                        100.00               ≤99.07
+  Wayformer (Gulino et al., 2023)                    7.89                 10.68                     5.40                   2.38                123.58                                    -                 ≤81.43
+ DQN (Gulino et al., 2023)                     3.74±0.90           6.50±0.31               0.00±0.0            9.83±0.48          177.91±5.67                                -               ≤89.76±0.95
+ BC (Gulino et al., 2023)                       1.11±0.2            4.59±0.06               0.00±0.0             2.26±0.2          129.84±0.98                                -               ≤94.3±0.21
+  GIGAFLOW (ours)                           0.43±0.008          0.43±0.005             0.14±0.008           5.87±0.01          146.27±0.08                 106.79±0.05            99.16±0.009
+
+Table A7: Results on Waymax benchmarks when evaluated with IDM agents. For the Score of other agents, we assumed
+100% progress and mutually exclusive collision and offroad events.
+
+
+                                                24
+
+=== PDF PAGE 25 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+
+
+
+  Method                                   Linear Speed   Linear Accel.  Ang. Speed  Ang. Accel.   Dist. to Obj.   Collision   TTC    Dist. to Road Edge   Off-road   Composite Metric
+
+  Expert Demo.* (Montali et al., 2023)          0.5610        0.3300        0.5630       0.4890       0.4850      1.0000    0.8810        0.7130         1.0000         0.7220
+
+  Random Agent*                            0.0020        0.0440        0.0740       0.1200       0.0000      0.0000    0.7340        0.1780         0.2870         0.1550
+  Linear Extrapolation*                       0.1570        0.1190        0.0190       0.0350       0.2470      0.4110    0.7750        0.5020         0.4630         0.3240
+
+  Stationary Policy                           0.0408        0.0612        0.4984       0.3195       0.0553      0.9466    0.7363        0.2408         0.8575         0.5007
+
+  Joint-Multipath++* (Wang & Zhen, 2023)     0.4340        0.2300        0.5150       0.4520       0.3450      0.5670    0.8120        0.6390         0.6820         0.5330
+
+  PredSim*                                  0.4051        0.2208        0.4958       0.4653       0.3441      0.7193    0.8027        0.6167         0.7519         0.5663
+
+  Wayformer* (Nayakanti et al., 2023)          0.3310        0.0980        0.4130       0.4060       0.2970      0.8700    0.7820        0.5920         0.8660         0.5750
+
+  SceneDMF* (Guo et al., 2023)               0.4315        0.2767        0.5230       0.4666       0.3678      0.7447    0.8128        0.6215         0.7392         0.5821
+
+ MTR+++* (Qian et al., 2023)                0.4119        0.1066        0.4838       0.4365       0.3457      0.8630    0.7969        0.6545         0.8954         0.6077
+
+  GIGAFLOW (ours)                          0.2613        0.2534        0.5060       0.4756       0.3161      0.9470    0.8077        0.5445         0.9095         0.6190
+
+  VPD-BP* (Huang et al., 2024)               0.4751        0.2161        0.5358       0.4775       0.3908      0.8162    0.8234        0.6628         0.9010         0.6315
+
+ MTR-E* (Qian et al., 2023)                  0.4278        0.2353        0.5335       0.4753       0.3455      0.8774    0.7983        0.6541         0.9143         0.6348
+
+ MVTE* (Wang et al., 2023b)                 0.4426        0.2218        0.5353       0.4810       0.3819      0.8943    0.8321        0.6641         0.9086         0.6448
+
+  Trajeglish* (Philion et al., 2023)              0.4504        0.1929        0.5382       0.4850       0.3869      0.9226    0.8369        0.6596         0.8864         0.6451
+
+  InteractionFormer*                         0.4294        0.2394        0.5291       0.4780       0.3776      0.9591    0.8311        0.6464         0.9347         0.6587
+
+Table A8: Per-component metrics, as defined and computed within WOSAC using the WOMD validation split. *-scores
+publicly reported on WOMD test set at https://waymo.com/open/challenges/2023/sim-agents/ and
+from Montali et al. (2023). All scores are derived using the 2023 metric definitions. Shaded rows correspond to approaches
+that do not use training data. We see that GIGAFLOW, in zero-shot evaluation, is capable of producing effective driving
+performance that approaches expert policies specifically developed for imitative traffic modeling using the provided training
+data, even without having been shown WOMD data or maps previously.
+
+
+
+
+
+                                                                             Collisions
+
+                               Overall                  Ego                      Vehicles                   Pedestrians                  Bicycles
+
+      Method         Total   ¬C    C       Total   ¬C    C       Total   ¬C    C       Total   ¬C    C       Total   ¬C    C
+
+  Expert Demo.      0.0337   0.0000   1.0000   0.0048   0.0000   1.0000   0.0076   0.0000   1.0000   0.2986   0.0000   1.0000   0.0547   0.0000   1.0000
+
+  GIGAFLOW (ours)   0.0322   0.0085   0.7082   0.0021   0.0006   0.3223   0.0080   0.0051   0.3700   0.2391   0.0029   0.7938   0.0291   0.0003   0.5268
+
+  Stationary          0.0220   0.0017   0.6015   0.0021   0.0007   0.2832   0.0035   0.0012   0.3513   0.2012   0.0003   0.6731   0.0242   0.0001   0.3556
+
+
+
+                                                                     Off-road
+
+                               Overall                  Ego                      Vehicles                   Pedestrians                  Bicycles
+
+                        Total   ¬O    O      Total   ¬O    O      Total   ¬O    O      Total   ¬O    O      Total   ¬O    O
+
+  Expert Demo.      0.1263   0.0000   1.0000   0.0127   0.0000   1.0000   0.0599   0.0000   1.0000   0.8513   0.0000   1.0000   0.3611   0.0000   1.0000
+
+  GIGAFLOW (ours)   0.1105   0.0072   0.8252   0.0071   0.0003   0.5367   0.0409   0.0051   0.6033   0.8385   0.0014   0.9847   0.2397   0.0013   0.6635
+
+  Stationary          0.0959   0.0060   0.7053   0.0041   0.0001   0.3220   0.0298   0.0052   0.5117   0.6999   0.0002   0.8201   0.2346   0.0002   0.6493
+
+Table A9: Calculated rates by which vehicles controlled by either the GIGAFLOW policy or with the baseline stationary
+policy are assessed to be in collision (condition C) or drive off-road (condition O), grouped by actor type and whether
+these outcomes were assessed to occur in the ground truth. We anchor this analysis by the provided expert demonstrations
+recorded in WOMD. GIGAFLOW produces the expected vehicle behavior when the ground truth trajectories do not collide
+or drive off-road, achieving incidence rates well below one percent. While not directly rewarded in WOSAC scoring, the
+aversion of GIGAFLOW to colliding and off-road driving is evident among circumstances where the ground truth trajectories
+are assessed to do so. Aside from pedestrians, all other actors controlled by GIGAFLOW have incidence rates far lower than
+anticipated (where generated rollouts are expected to collide or drive off-road if the underlying ground truth trajectory does
+so). Notably, there is a proportion of trajectories that are initialized to be in collision or off-road (unsurprising given the
+presence of pedestrians) since the incidence rates of the stationary policy are not zero for these events in this conditional
+analysis. From this, we conclude that GIGAFLOW avoids an excess amount of collisions or off-road behavior as the incidence
+rates do not significantly increase when applying the self-play policy.
+
+
+
+                                                25
+
+=== PDF PAGE 26 ===
+                                  Robust Autonomy Emerges from Self-Play
+
+
+
+
+
+                                         18                                                                                  300
+                                                                                                                               0                                     1000                                      1 0.4                                         16
+                                                                                  250
+ 0.2                                      1412                                       200                                          −0.02                                      800                                            0.8
+   0                                      10                                       150                                          −0.04                                      600                                            0.6
+−0.2                                       86                                       100                                          −0.06                                      400                                            0.4
+−0.4                                       4                                        50                                          −0.08                                      200                                            0.2
+                                          2
+      0             1             2                                             0      1      2      3      4           0             1             2         −0.1  0             1             2             0                           1        0  0      1      2      3      4
+
+  a                     b                      c                     d                      e                                     f
+
+                                       Figure A1: Conditional analysis.
+
+
+
+
+
+                                              26
+
+=== PDF PAGE 27 ===
+                                    Robust Autonomy Emerges from Self-Play
+
+
+
+
+
+                   Advantage ﬁltering ablation: nuPlan score                                 Advantage ﬁltering ablation: Carla LAV score
+       95
+                                                                                    100
+        score 90                                                                             80
+       85                                                                                                                                                                   score  60              challenge
+       80                                                                                                  LAV
+                                                                                     40            reactive 75                                                                                                                                                                   Carla
+
+                                              nuPlan reactive, advantage ﬁltering                                                                Carla LAV, advantage ﬁltering         nuPlan 70                                                                             20
+                                              nuPlan reactive, no advantage ﬁltering                                                             Carla LAV, no advantage ﬁltering
+                                                                                      0
+          0      10     20     30     40     50     60     70     80                   0      10     20     30     40     50     60     70     80
+
+                Advantage ﬁltering ablation: crash rate in self-play                         Advantage ﬁltering ablation: self-play episode timeouts
+         crashes 1.0        Robustness,Robustness, advantageno advantageﬁlteringﬁltering                                         80                                             Timeouts,Timeouts, advantageno advantageﬁlteringﬁltering
+       0.8                                 %
+                                                                                     60         between 0.6   km                                                                                                                                                                                                                                                                                                                      episodes,
+       0.4                                                                                                   out 40
+         million       0.2                                                                                                                                                                     Timed 20
+             Self-play, 0.0                                                                              0
+          0      10     20     30     40     50     60     70     80                   0      10     20     30     40     50     60     70     80
+                                              Training time, h                                                                                     Training time, h
+
+Figure A2: Training with and without advantage filtering (see Algorithm 1). Top row: nuPlan reactive challenge and Carla
+LAV Benchmark results. Bottom row: accident rate and task completion rate in self-play.
+
+
+
+
+
+                          No reward
+                               randomization
+
+                          No reward
+                                    conditioning
+
+                    No dynamics noise
+                          no randomized
+                      dynamics parameters
+                                                                                                                                       nuPlan reactive
+                       No randomized                                                                             Waymax
+                      dynamics parameters
+                                                                                                                                                  Carla LAV
+
+                    No dynamics noise
+
+
+                                            All features
+
+                                       0                 5                 10                15                20                25
+                                                                              Combined error rate, %
+
+Figure A3: Aggregate impact of algorithmic features used in GIGAFLOW. The length of each bar indicates the cumulative
+percentage points required to attain a perfect score across three benchmarks.
+
+
+
+
+
+                                                27
+
+=== PDF PAGE 28 ===
+                               Robust Autonomy Emerges from Self-Play
+
+
+
+
+
+                                                                km/crash 107106
+                                        rate,
+                       105
+                                                                off-road 104
+                        and
+                       103
+                                                                        collision 102
+
+                       101
+                                                                      Sim. frequency during training, (∆t )−1 = 3.33 Hz                                                                Combined
+                             2          4          6          8         10         12         14         16
+                                                            Decision making frequency, Hz
+
+Figure A4: Accident rate in GIGAFLOW self-play at different values of simulation/decision-making frequency.
+
+
+
+
+
+                                           28

@@ -1,0 +1,20 @@
+Official sources consulted on 2026-10-19
+
+1) BEVFormer official config:
+https://raw.githubusercontent.com/fundamentalvision/BEVFormer/master/projects/configs/bevformer/bevformer_tiny.py
+Key fields: ResNet-50, out_indices=(3,), FPN in_channels=[2048], out_channels=256, num_outs=1, queue_length=3, input scale configuration.
+
+2) BEVFormer official README/model zoo:
+https://raw.githubusercontent.com/fundamentalvision/BEVFormer/master/README.md
+Key fields: R50 BEVFormer Tiny checkpoint; R101-DCN BEVFormer Small/Base checkpoints; reported GPU memory and nuScenes results.
+
+3) DINOv2 official model card:
+https://raw.githubusercontent.com/facebookresearch/dinov2/main/MODEL_CARD.md
+Key fields: ViT-S/14 ~21M, ViT-B/14 ~86M, patch tokens, no FPN, LVD-142M pretraining.
+
+4) PyTorch torchvision model metadata (local installed version 0.29.1):
+ResNet-50: 25,557,032 params, 4.089 GFLOPs at 224x224.
+ResNet-101: 44,549,160 params, 7.801 GFLOPs at 224x224.
+ConvNeXt-Tiny: 28,589,128 params, 4.456 GFLOPs at 224x224.
+Swin-Tiny: 28,288,354 params, 4.491 GFLOPs at 224x224.
+MobileNet-V3 Large: 5,483,032 params, 0.217 GFLOPs at 224x224.
