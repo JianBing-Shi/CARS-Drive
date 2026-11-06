@@ -8,8 +8,10 @@ from torch.nn import functional as F
 class BEVTokenizer(nn.Module):
     """Keep spatial tokens so a BEV region can be replaced."""
 
-    def __init__(self, feature_dim: int, hidden_dim: int, grid: tuple[int, int], heads: int, layers: int, dropout: float) -> None:
+    def __init__(self, feature_dim: int, hidden_dim: int, grid: tuple[int, int], heads: int, layers: int, dropout: float,
+                 architecture_version: int = 1) -> None:
         super().__init__()
+        self.architecture_version = architecture_version
         self.grid = tuple(grid)
         self.tokens = self.grid[0] * self.grid[1]
         self.projection = nn.Conv2d(feature_dim, hidden_dim, 1)
@@ -20,6 +22,27 @@ class BEVTokenizer(nn.Module):
 
     def forward(self, feature: Tensor, age_s: Tensor, valid: Tensor, read_mask: Tensor | None = None) -> tuple[Tensor, Tensor]:
         feature = torch.nan_to_num(feature.float())
+        if self.architecture_version == 2:
+            # Invalid pixels must not affect valid pooled tokens or spatial attention.
+            source_valid = valid[:, None].bool()
+            if read_mask is not None:
+                source_valid = source_valid & F.interpolate(
+                    read_mask.reshape(read_mask.shape[0], 1, *self.grid).float(),
+                    size=feature.shape[-2:], mode="nearest").bool()
+            projected = self.projection(feature.masked_fill(~source_valid, 0))
+            coverage = F.adaptive_avg_pool2d(source_valid.float(), self.grid)
+            pooled = F.adaptive_avg_pool2d(projected.masked_fill(~source_valid, 0), self.grid)
+            tokens = (pooled / coverage.clamp_min(1e-6)).flatten(2).transpose(1, 2) + self.position
+            valid = coverage.flatten(1) > 0
+            if read_mask is not None:
+                valid &= read_mask
+            ratio = valid.float().mean(-1)
+            tokens = tokens + self.age(torch.stack((torch.log1p(age_s.clamp_min(0)), ratio), -1))[:, None]
+            tokens = tokens.masked_fill(~valid[..., None], 0)
+            safe = valid.clone()
+            safe[:, 0] |= ~safe.any(-1)
+            tokens = self.spatial(tokens, src_key_padding_mask=~safe)
+            return tokens.masked_fill(~valid[..., None], 0), valid
         if read_mask is not None:
             source_mask = F.interpolate(read_mask.reshape(read_mask.shape[0], 1, *self.grid).float(), size=feature.shape[-2:], mode="nearest")
             feature = feature * source_mask

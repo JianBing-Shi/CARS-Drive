@@ -1,4 +1,4 @@
-# Paths are relative to the E2EAD project directory.
+# Trajectory Revision Module v3; reuse the trained action v2 checkpoint.
 univeral_config: &univeral_config
   mode: "refresh"
   history_features: 20
@@ -33,8 +33,28 @@ model:
   max_refresh: 1
   cost_weight: 0.0
   utility_weight: 1.0
-  action_loss: smooth_l1
-  yaw_weight: 1.0
+  architecture_version: 2
+  refresh_version: 3
+  refresh_observation: current_full_bev
+  refresh_update: full_valid_bev
+  refresh_probability_threshold: 0.5
+  refresh_label_epsilon: 0.0
+  refresh_update_cost: 1.0
+  refresh_fixed_interval: 3
+  refresh_random_probability: 0.3
+  refresh_monitor_frames: 3
+  refresh_residual_scale: 0.1
+  refresh_trajectory_weight: 1.0
+  refresh_classification_weight: 1.0
+  refresh_history_weight: 0.25
+  refresh_heading_weight: 0.1
+  decoder_layers: 2
+  teacher_forcing_ratio: 0.0
+  action_loss: l1
+  xy_loss_weight: 0.50
+  yaw_weight: 0.10
+  trajectory_loss_weight: 0.35
+  heading_loss_weight: 0.05
   learning_rate: 0.0003
   weight_decay: 0.0001
   warmup_epochs: 4
@@ -42,14 +62,16 @@ model:
   anchor_dropout: 0.2
 
 trainer:
-  ckpt_path: null
+  ckpt_path: lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt
+  # Start v3 from the original frozen action, independently of action_extend12.
+  reset_training_state: false
   strategy: auto
   accelerator: gpu
   devices: 1
   max_epochs: 20
   gradient_clip_val: 1.0
   ckpt:
-    monitor: val/loss
+    monitor: val/ade
     save_top_k: 3
     mode: min
     save_last: true
@@ -57,4 +79,4 @@ trainer:
     logging_interval: epoch
   csv_logger:
     save_dir: lightning_logs
-    name: refresh
+    name: trajectory_revision_v3

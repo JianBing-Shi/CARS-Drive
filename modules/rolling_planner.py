@@ -44,7 +44,9 @@ class RollingPlanner(nn.Module):
 
     def forward(self, features, valid, times, poses, bev_range, *, start, steps,
                 tokenizer, memory, decoder, refresh, temporal, region_ids,
-                budget, cost_weight, targets=None, target_mask=None):
+                budget, cost_weight, targets=None, target_mask=None, refresh_policy="learned"):
+        if refresh_policy not in {"learned", "no_refresh", "replan_only", "cyclic", "all_fresh"}:
+            raise ValueError(f"Unknown refresh policy: {refresh_policy}")
         batch = features.shape[0]
         grid = tokenizer.grid
         # All historical ages are measured at the initial decision time.
@@ -81,16 +83,28 @@ class RollingPlanner(nn.Module):
                                costs, budgets, region_ids)
             available = refresh.region_available(valid[:, frame], region_ids, grid)
             selected = refresh.select(decision["refresh_utility"], available, costs, budgets, cost_weight)
+            # Evaluation interventions share the deployed state/plan transition.
+            if refresh_policy in {"no_refresh", "replan_only"}:
+                selected = torch.zeros_like(available)
+            elif refresh_policy == "all_fresh":
+                selected = available
+            elif refresh_policy == "cyclic":
+                selected = torch.zeros_like(available)
+                region = index % refresh.regions
+                selected[:, region] = available[:, region] & (costs[:, region] <= budgets)
             forced = remaining == 0
             # Deadline resets planning, but never overrides the visual budget.
             updated = refresh.update_anchor(state, features[:, frame], valid[:, frame],
                                             features.new_zeros(batch, dtype=torch.float32), selected, region_ids, tokenizer, memory)
             candidate, _ = self.decode(updated, previous, decoder, self.horizon)
             replan = selected.any(-1) | forced
+            if refresh_policy == "replan_only":
+                replan = torch.ones_like(replan)
             plan = torch.where(replan[:, None, None], ActionLoss.trajectory(candidate), plan)
             remaining = torch.where(replan, torch.full_like(remaining, self.horizon), remaining)
             plan_mask = torch.arange(self.horizon, device=features.device)[None] < remaining[:, None]
             output = {"planned_trajectory": plan, "plan_mask": plan_mask,
+                      "candidate_trajectory": ActionLoss.trajectory(candidate),
                       "proposal_trajectory": ActionLoss.trajectory(proposal),
                       "refresh_utility": decision["refresh_utility"], "refresh_mask": selected,
                       "replan_mask": replan, "forced_replan": forced}

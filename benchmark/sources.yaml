@@ -1,0 +1,37 @@
+# 源码版本快照；正式协议锁定后填写 reference_commit。下载脚本仅打印实际 commit。
+navsim:
+  repository: https://github.com/autonomousvision/navsim.git
+  paper: https://arxiv.org/abs/2411.15139
+  protocol: NAVSIM v1 / PDMS（与参考论文协议对齐）
+  source_directory: benchmark/navsim
+  downloaded_version: main / NAVSIM v2
+  downloaded_commit: 0a380a9063d7162ec93d0f51e9990ebac585f720
+  reference_commit: null
+  data_status: not_prepared
+  environment_status: not_validated
+  adapter_status: not_implemented
+  evaluation_status: not_run
+bench2drive:
+  repository: https://github.com/Thinklab-SJTU/Bench2Drive.git
+  paper: https://arxiv.org/abs/2503.09594
+  protocol: CARLA 0.9.15 / Bench2Drive v0.0.4 val-220（拟选）；CVPR 2025 旧结果需另锁旧协议
+  source_directory: benchmark/Bench2Drive
+  downloaded_version: v0.0.4
+  downloaded_commit: 7ec25d1c9f7522d923ce5f3420986cef1cb2d956
+  reference_commit: null
+  data_status: not_prepared
+  environment_status: not_validated
+  adapter_status: not_implemented
+  evaluation_status: not_run
+nuscenes_planning:
+  repository: https://github.com/OpenDriveLab/UniAD.git
+  paper: https://openaccess.thecvf.com/content/CVPR2023/html/Hu_Planning-Oriented_Autonomous_Driving_CVPR_2023_paper.html
+  protocol: nuScenes / UniAD planning metrics
+  source_directory: benchmark/UniAD
+  downloaded_version: UniAD 2.0
+  downloaded_commit: 609ee083ea51c3521c323f1279dfc4cee0e60467
+  reference_commit: null
+  data_status: not_prepared
+  environment_status: not_validated
+  adapter_status: not_implemented
+  evaluation_status: not_run

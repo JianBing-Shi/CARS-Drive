@@ -5,3 +5,7 @@ from modules.fresh_module import FreshModule
 from modules.temporal import BEVTemporal
 from modules.action_loss import ActionLoss
 from modules.rolling_planner import RollingPlanner
+from modules.refresh_gate import RefreshGate
+from modules.binary_rolling_planner import BinaryRollingPlanner
+from modules.trajectory_revision import TrajectoryRevisionModule
+from modules.trajectory_revision_planner import TrajectoryRevisionPlanner

@@ -1,4 +1,6 @@
-# Paths are relative to the E2EAD project directory.
+# Continue the existing two-layer action weights for 12 additional epochs.
+# This is a new optimization stage; ordinary interruption recovery uses
+# its own last.ckpt with reset_training_state: false.
 univeral_config: &univeral_config
   mode: "action"
   history_features: 20
@@ -26,28 +28,37 @@ model:
   heads: 8
   layers: 4
   dropout: 0.1
-  action_loss: smooth_l1
-  yaw_weight: 1.0
-  learning_rate: 0.0003
+  architecture_version: 2
+  refresh_version: 2
+  decoder_layers: 2
+  teacher_forcing_ratio: 0.0
+  action_loss: l1
+  xy_loss_weight: 0.50
+  yaw_weight: 0.10
+  trajectory_loss_weight: 0.35
+  heading_loss_weight: 0.05
+  learning_rate: 0.00001
   weight_decay: 0.0001
-  warmup_epochs: 4
-  T_max: 20
+  warmup_epochs: 1
+  T_max: 12
   anchor_dropout: 0.2
 
 trainer:
-  ckpt_path: null 
+  ckpt_path: lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt
+  reset_training_state: true
   strategy: auto
   accelerator: gpu
   devices: 1
-  max_epochs: 20
+  max_epochs: 12
   gradient_clip_val: 1.0
   ckpt:
     monitor: val/ade
-    save_top_k: 3
+    save_top_k: 1
+    filename: best
     mode: min
     save_last: true
   lr_monitor:
     logging_interval: epoch
   csv_logger:
     save_dir: lightning_logs
-    name: action
+    name: action_v2_gate2_extend12

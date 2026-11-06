@@ -56,25 +56,18 @@ class NuplanDataModule(pl.LightningDataModule):
         self.prefetch_factor = prefetch_factor
 
     def setup(self, stage: Optional[str] = None) -> None:
-        self.train_dataset = NuplanEventDataset(
-            root=self.root, dir=self.dir, split="train", bevformer_root=self.bevformer_root,
-            history_features=self.history_features, future_action=self.future_action,
-            ratio=self.ratio, event_types=self.event_types, preprocess=False)
-        if self.mode == "refresh":
-            self.train_dataset.samples = [path for path in self.train_dataset.samples
-                                         if path.parent.name == "background_control"
-                                         or torch.load(path, map_location="cpu", weights_only=False).get("anchor_offset_us", 0) == 0]
-        self.val_dataset = NuplanEventDataset(
-            root=self.root, dir=self.dir, split="val", bevformer_root=self.bevformer_root,
-            history_features=self.history_features, future_action=self.future_action,
-            ratio=self.ratio, event_types=self.event_types, preprocess=False)
-
-        if self.mode == "refresh":
-            self.val_dataset.samples = [path for path in self.val_dataset.samples
-                                       if path.parent.name == "background_control"
-                                       or torch.load(path, map_location="cpu", weights_only=False).get("anchor_offset_us", 0) == 0]
-        self.train_dataset._processed_file_names = [str(path.relative_to(self.train_dataset.event_dir)) for path in self.train_dataset.samples]
-        self.val_dataset._processed_file_names = [str(path.relative_to(self.val_dataset.event_dir)) for path in self.val_dataset.samples]
+        splits = ("train", "val") if stage in (None, "fit") else ("val",)
+        for split in splits:
+            dataset = NuplanEventDataset(
+                root=self.root, dir=self.dir, split=split, bevformer_root=self.bevformer_root,
+                history_features=self.history_features, future_action=self.future_action,
+                ratio=self.ratio, event_types=self.event_types, preprocess=False)
+            if self.mode == "refresh":
+                dataset.samples = [path for path in dataset.samples
+                                   if path.parent.name == "background_control"
+                                   or torch.load(path, map_location="cpu", weights_only=False).get("anchor_offset_us", 0) == 0]
+            dataset._processed_file_names = [str(path.relative_to(dataset.event_dir)) for path in dataset.samples]
+            setattr(self, f"{split}_dataset", dataset)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset, batch_size=self.train_batch_size, shuffle=self.shuffle,

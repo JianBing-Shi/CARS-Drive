@@ -1,0 +1,26 @@
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: action
+  history_features: 20
+  future_action: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+checkpoints:
+- lightning_logs/action/version_0/checkpoints/epoch=16-step=3009.ckpt
+- lightning_logs/action/version_0/checkpoints/epoch=17-step=3186.ckpt
+- lightning_logs/action/version_0/checkpoints/epoch=19-step=3540.ckpt
+- lightning_logs/action/version_0/checkpoints/last.ckpt
+trainer:
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+  enable_progress_bar: false
+evaluation:
+  output_dir: evaluation/action_checkpoints
+  max_samples: null
+  scratch_dir: /tmp/fresh_refresh_comparison_cache

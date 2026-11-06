@@ -103,6 +103,8 @@ class NuplanEventDataset(Dataset):
         return str(Path(self.processed_dir) / f"{self.dir}-{self.split}.pt")
 
     def _process(self):
+        if not self.preprocess and Path(self.processed_file_names_path).is_file():
+            return
         if all(Path(path).is_file() for path in self.processed_paths):
             return
         if self.log and "pytest" not in sys.modules:

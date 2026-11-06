@@ -1,0 +1,32 @@
+# All paths are relative to the project root. Architecture comes from checkpoint.
+mode: action
+
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: action
+  history_features: 20
+  future_action: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: true
+  persistent_workers: false
+  ratio: 0.1
+
+trainer:
+  ckpt_path: lightning_logs/action/version_0/checkpoints/epoch=19-step=3540.ckpt
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+
+evaluation:
+  output_dir: evaluation/action
+  max_samples: null  # Positive integer for a smoke run; null evaluates all.
+  save_predictions: false
+  warmup_batches: 1
+  ego_footprint: null  # Verified [front, rear, left, right] in metres from ego origin.
+  max_annotation_age_us: 100000
+  log_map: null  # JSON: recording/DB name -> authoritative original log ID.
+  bootstrap_samples: 2000

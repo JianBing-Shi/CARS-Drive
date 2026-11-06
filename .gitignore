@@ -146,7 +146,16 @@ venv
 *.ckpt
 
 # tools file
-tools/
+tools/*
+!tools/evaluate_action_diagnostics.py
+!tools/evaluate_action_checkpoints.py
+!tools/test_train.py
+!tools/analyze_action_results.py
+!tools/test_action_diagnostics.py
+!tools/evaluate_refresh.py
+!tools/test_refresh_comparison.py
+!tools/test_trajectory_revision.py
+!tools/test_trajectory_revision_metrics.py
 
 # log file
 lightning_logs/
