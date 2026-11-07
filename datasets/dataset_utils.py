@@ -212,11 +212,11 @@ def load_nuplan_trajectory(
         raise ValueError("Trajectory horizons must be nonnegative and interval_us positive")
     database = Path(database).resolve()
     history_steps, history_remainder = divmod(round(history_seconds * 1_000_000), interval_us)
-    future_steps, future_remainder = divmod(round(future_seconds * 1_000_000), interval_us)
+    future_actions, future_remainder = divmod(round(future_seconds * 1_000_000), interval_us)
     if history_remainder or future_remainder:
         raise ValueError("History and future horizons must be divisible by interval_us")
     anchor_targets = [timestamp_us + step * interval_us
-                      for step in range(-history_steps, future_steps + 1)]
+                      for step in range(-history_steps, future_actions + 1)]
     lower, upper = anchor_targets[0] - max_pose_age_us, anchor_targets[-1]
     pose_columns = (
         "timestamp,x,y,z,qw,qx,qy,qz,vx,vy,vz,"

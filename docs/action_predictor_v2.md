@@ -55,7 +55,7 @@ heading_loss_weight: 0.05
 按用户确认的整段轨迹质量目标，action 选模使用 `val/ade` 最小，设置 `save_top_k: 1`、`filename: best`、`save_last: true`，仅保留 `best.ckpt` 与 `last.ckpt`。ADE 衡量整段轨迹，FDE 检查终点漂移；ADE 最低不保证 FDE 同时最低。`val/action_loss` 只包含局部 XY 与转角项，不能保证累计位置误差较低，因此作为训练诊断保留。固定五步指标、分事件误差和运动学对照继续作为进入刷新阶段的独立验收，不能仅凭 ADE 最低直接宣称固定视觉候选合格。诊断工具 `tools/evaluate_action_diagnostics.py` 和刷新对照工具继续适用；验证 YAML 的 checkpoint 路径需指向实际新权重。
 
 ```bash
-conda run -n FRESH-Drive python train.py --config config/train/action.yaml
+conda run -n FRESH-Drive python train.py --config config/train/pred.yaml
 ```
 
 新日志分别写入 `lightning_logs/action_v2`、`lightning_logs/refresh_v2`。新 action 从 `trainer.ckpt_path: null` 开始；refresh 必须配置已训练 v2 action checkpoint。服务器的数据路径和 worker 数仍需按实际环境设置，本次没有改写它们。

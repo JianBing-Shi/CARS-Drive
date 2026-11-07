@@ -3,7 +3,7 @@
 在项目根目录执行：
 
 ```bash
-conda run --no-capture-output -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/refresh_comparison.yaml
+conda run --no-capture-output -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/plan_comparison.yaml
 ```
 
 配置默认加载下载的 `refresh_m7j0i4p14fp2p9r4/version_0/checkpoints/epoch=37-step=456.ckpt`。
@@ -14,7 +14,7 @@ conda run --no-capture-output -n FRESH-Drive python tools/evaluate_refresh.py --
 临时目录可删除后重建，源数据不修改。默认 `accelerator: auto`，有可用 CUDA 时使用 GPU，否则使用 CPU。
 
 评估模块通过 Lightning `trainer.validate()` 导出 `metrics.json` 和 `per_sample.csv`；原 `val.py` 入口保持不变。
-本 CLI 专用于成对比较，原 `val.py --config config/val/refresh.yaml` 保留训练验证指标口径。
+本 CLI 专用于成对比较，原 `val.py --config config/val/plan.yaml` 保留训练验证指标口径。
 
 | 策略 | 新视觉获取 | 规划替换 |
 | --- | --- | --- |

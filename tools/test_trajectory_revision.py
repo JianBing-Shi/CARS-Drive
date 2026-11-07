@@ -12,15 +12,15 @@ import yaml
 from torch.utils.data import DataLoader
 
 from metrics.trajectory_revision import revision_metrics
-from model import FRESHDrive
+from model import CARSDirve
 
 
 class TrajectoryRevisionTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
         torch.manual_seed(42)
-        self.model = FRESHDrive(
-            mode='refresh', refresh_version=3, architecture_version=2,
+        self.model = CARSDirve(
+            mode='plan', refresh_version=3, architecture_version=2,
             feature_dim=4, hidden_dim=8, heads=2, layers=1,
             spatial_grid=(3, 3), dropout=0, refresh_monitor_frames=3)
         self.inputs = dict(
@@ -44,7 +44,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
         loss = self.losses(output)['trajectory_l1']
         self.assertTrue(loss.requires_grad)
         loss.backward()
-        adapter_gradients = [p.grad for p in self.model.refresh.revision.parameters()]
+        adapter_gradients = [p.grad for p in self.model.cars_adapter.revision.parameters()]
         self.assertTrue(any(g is not None and g.abs().sum() > 0 for g in adapter_gradients))
         for part in (self.model.tokenizer, self.model.memory, self.model.decoder):
             self.assertFalse(part.training)
@@ -59,7 +59,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
 
     def test_every_decision_generates_even_rejected_candidates(self):
         self.model.eval()
-        with patch.object(self.model.refresh, 'compare', side_effect=self.keep_logits):
+        with patch.object(self.model.cars_adapter, 'compare', side_effect=self.keep_logits):
             with patch.object(self.model.decoder, 'forward', wraps=self.model.decoder.forward) as decoder:
                 output = self.model(**self.inputs, return_details=True)
         self.assertEqual(decoder.call_count, 55)  # initial five, ten five-step candidates
@@ -92,7 +92,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
 
     def test_history_only_compares_surviving_common_future(self):
         self.model.eval()
-        with patch.object(self.model.refresh, 'compare', side_effect=self.keep_logits):
+        with patch.object(self.model.cars_adapter, 'compare', side_effect=self.keep_logits):
             output = self.model(**self.inputs, **self.targets, return_details=True)
         history_valid = output['history_valid']
         self.assertEqual(tuple(history_valid.shape), (2, 10, 4))
@@ -108,11 +108,11 @@ class TrajectoryRevisionTests(unittest.TestCase):
         self.model.eval()
         valid = torch.ones(2, 31, 6, 6, dtype=torch.bool)
         valid[:, 17] = False
-        with patch.object(self.model.refresh, 'compare', side_effect=self.keep_logits):
+        with patch.object(self.model.cars_adapter, 'compare', side_effect=self.keep_logits):
             output = self.model(**self.inputs, bev_valid_mask=valid, **self.targets, return_details=True)
         self.assertEqual(output['history_valid'][0, 3].tolist(), [True, False, True, True])
         self.assertEqual(output['history_common_mask'][0, 3].sum(-1).tolist(), [4, 0, 2, 1])
-        self.model.refresh_budget = 0
+        self.model.cars_adapter_budget = 0
         with patch.object(self.model.decoder, 'forward', wraps=self.model.decoder.forward) as decoder:
             output = self.model(**self.inputs, return_details=True)
         self.assertEqual(decoder.call_count, 15)  # initial plus two stale fallback plans
@@ -120,7 +120,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
         self.assertEqual(output['online_decode_calls'][0].sum().item(), 10)
 
     def test_invalid_observation_and_target_masks_remain_finite(self):
-        self.model.refresh_budget = 0
+        self.model.cars_adapter_budget = 0
         self.model.eval()
         invalid = dict(self.inputs, bev_valid_mask=torch.zeros(2, 31, 6, 6, dtype=torch.bool))
         targets = dict(self.targets, planning_mask=torch.zeros(2, 10, 5, dtype=torch.bool),
@@ -133,7 +133,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
         self.assertEqual(losses['loss'].item(), 0)
         self.assertTrue(losses['loss'].requires_grad)
         losses['loss'].backward()
-        self.assertTrue(any(p.grad is not None for p in self.model.refresh.parameters()))
+        self.assertTrue(any(p.grad is not None for p in self.model.cars_adapter.parameters()))
         self.assertTrue(torch.isfinite(output['planned_trajectory']).all())
 
     def test_actual_error_can_prefer_old_plan_and_comparison_is_symmetric(self):
@@ -141,17 +141,17 @@ class TrajectoryRevisionTests(unittest.TestCase):
         poor_candidate = zero.clone()
         poor_candidate[..., 0] = .4
         common = torch.ones(2, 5, dtype=torch.bool)
-        labels, valid, gain = self.model.refresh.replacement_labels(
+        labels, valid, gain = self.model.cars_adapter.replacement_labels(
             zero, poor_candidate, zero, common, torch.ones(2, dtype=torch.bool),
             0., 0., torch.ones(2))
         self.assertTrue(valid.all())
         self.assertFalse(labels.any())
         self.assertTrue((gain < 0).all())
         context = torch.randn(2, 8)
-        logits = self.model.refresh.compare(context, zero, poor_candidate, common)
-        reversed_logits = self.model.refresh.compare(context, poor_candidate, zero, common)
+        logits = self.model.cars_adapter.compare(context, zero, poor_candidate, common)
+        reversed_logits = self.model.cars_adapter.compare(context, poor_candidate, zero, common)
         torch.testing.assert_close(logits, reversed_logits.flip(-1))
-        tied = self.model.refresh.compare(context, zero, zero, common)
+        tied = self.model.cars_adapter.compare(context, zero, zero, common)
         torch.testing.assert_close(tied[:, 0], tied[:, 1])
 
     def test_current_visual_change_and_old_plan_affect_monitor_context(self):
@@ -165,14 +165,14 @@ class TrajectoryRevisionTests(unittest.TestCase):
                          monitor_lags=torch.tensor([[.2, .1, 0.], [.2, .1, 0.]]),
                          retained_plan=torch.zeros(2, 5, 3), plan_mask=torch.ones(2, 5, dtype=torch.bool),
                          previous_action=torch.zeros(2, 3), budget=torch.ones(2))
-        context = self.model.refresh.context(**arguments)
+        context = self.model.cars_adapter.context(**arguments)
         changed_monitor = monitor.clone()
         changed_monitor[:, -1, 0] += 5
-        changed_visual = self.model.refresh.context(
+        changed_visual = self.model.cars_adapter.context(
             **dict(arguments, tokens=changed_monitor[:, -1], monitor_tokens=changed_monitor))
         changed_plan = arguments['retained_plan'].clone()
         changed_plan[..., 0] = 3
-        changed_trajectory = self.model.refresh.context(**dict(arguments, retained_plan=changed_plan))
+        changed_trajectory = self.model.cars_adapter.context(**dict(arguments, retained_plan=changed_plan))
         self.assertFalse(torch.allclose(context, changed_visual))
         self.assertFalse(torch.allclose(context, changed_trajectory))
 
@@ -200,8 +200,8 @@ class TrajectoryRevisionTests(unittest.TestCase):
         self.assertTrue(candidate.grad[..., 0].abs().sum() > 0)
 
     def test_old_action_strict_load_and_new_revision_checkpoint_roundtrip(self):
-        old_action = FRESHDrive(
-            mode='action', refresh_version=2, architecture_version=2,
+        old_action = CARSDirve(
+                                     mode='pred', refresh_version=3, architecture_version=2,
             feature_dim=4, hidden_dim=8, heads=2, layers=1,
             spatial_grid=(3, 3), dropout=0)
         with tempfile.TemporaryDirectory(prefix='fresh-revision-', dir='/tmp') as temporary:
@@ -212,19 +212,19 @@ class TrajectoryRevisionTests(unittest.TestCase):
                                   **{'pytorch-lightning_version': pl.__version__})
                 model.on_save_checkpoint(checkpoint)
                 torch.save(checkpoint, path)
-            restored_action = FRESHDrive.load_from_checkpoint(old_path, map_location='cpu')
-            self.assertEqual(restored_action.refresh_version, 2)
+            restored_action = CARSDirve.load_from_checkpoint(old_path, map_location='cpu')
+            self.assertEqual(restored_action.refresh_version, 3)
             for name in ('tokenizer', 'memory', 'decoder'):
                 getattr(self.model, name).load_state_dict(getattr(restored_action, name).state_dict(), strict=True)
-            restored_revision = FRESHDrive.load_from_checkpoint(new_path, map_location='cpu')
+            restored_revision = CARSDirve.load_from_checkpoint(new_path, map_location='cpu')
             self.assertEqual(restored_revision.refresh_version, 3)
             with self.assertRaises((ValueError, RuntimeError)):
-                FRESHDrive.load_from_checkpoint(new_path, refresh_version=2)
+                CARSDirve.load_from_checkpoint(new_path, refresh_version=1)
             with self.assertRaisesRegex(ValueError, 'revision protocol differs'):
-                FRESHDrive.load_from_checkpoint(new_path, refresh_history_weight=.5)
+                CARSDirve.load_from_checkpoint(new_path, refresh_history_weight=.5)
 
     def test_training_cli_migrates_action_and_resumes_revision(self):
-        action = FRESHDrive(mode='action', refresh_version=2, architecture_version=2,
+        action = CARSDirve(mode='pred', refresh_version=3, architecture_version=2,
                             feature_dim=4, hidden_dim=8, heads=2, layers=1,
                             spatial_grid=(3, 3), dropout=0)
         with tempfile.TemporaryDirectory(prefix='fresh-revision-cli-', dir='/tmp') as temporary:
@@ -256,7 +256,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
                 path.parent.mkdir(parents=True)
                 torch.save(event, path)
                 torch.save([name.as_posix()], cache / f'mini-{split}.pt')
-            config = yaml.safe_load(Path('config/train/refresh.yaml').read_text())
+            config = yaml.safe_load(Path('config/train/plan.yaml').read_text())
             config['datamodule'].update(root=str(root), train_batch_size=1, val_batch_size=1,
                                        num_workers=0, pin_memory=False, persistent_workers=False)
             config['model'].update(feature_dim=4, hidden_dim=8, heads=2, layers=1,
@@ -294,7 +294,7 @@ class TrajectoryRevisionTests(unittest.TestCase):
             trainer = pl.Trainer(max_epochs=1, **settings)
             trainer.fit(self.model, train_dataloaders=loader, val_dataloaders=loader)
             self.assertTrue(Path(callback.best_model_path).is_file())
-            restored = FRESHDrive.load_from_checkpoint(callback.last_model_path, map_location='cpu')
+            restored = CARSDirve.load_from_checkpoint(callback.last_model_path, map_location='cpu')
             resumed = pl.Trainer(max_epochs=2, **settings)
             resumed.fit(restored, train_dataloaders=loader, val_dataloaders=loader,
                         ckpt_path=callback.last_model_path)

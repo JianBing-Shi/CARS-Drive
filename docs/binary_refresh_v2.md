@@ -27,9 +27,9 @@
 ## 训练与 checkpoint
 
 ```bash
-conda run -n FRESH-Drive python train.py --config config/train/action.yaml
+conda run -n FRESH-Drive python train.py --config config/train/pred.yaml
 # 在 refresh YAML 的 trainer.ckpt_path 填写验收合格的 action checkpoint 后：
-conda run -n FRESH-Drive python train.py --config config/train/refresh.yaml
+conda run -n FRESH-Drive python train.py --config config/train/plan.yaml
 ```
 
 新日志为 `action_v2_gate2` 与 `refresh_binary_v2`。`architecture_version=2` 标记动作网络，`refresh_version=2` 标记二分类网络；旧回归网络默认 version 1，仅保留历史兼容。新 refresh 不能恢复旧 refresh；从 action 阶段仅严格复制 tokenizer/memory/decoder，门控重新训练。checkpoint 独立保存刷新协议；同阶段恢复核对版本、观测/更新方式、阈值和时间协议，禁止用 `strict=False` 隐藏不匹配。
@@ -41,8 +41,8 @@ conda run -n FRESH-Drive python train.py --config config/train/refresh.yaml
 ## 验证与对照
 
 ```bash
-conda run -n FRESH-Drive python val.py --config config/val/refresh.yaml
-conda run -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/refresh_comparison.yaml
+conda run -n FRESH-Drive python val.py --config config/val/plan.yaml
+conda run -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/plan_comparison.yaml
 ```
 
 两份验证 YAML 的 checkpoint 均需填写新权重，输出使用新目录，保留历史 CSV。`val.py` 导出逐决策 CSV、全局、事件、recording、剩余长度与运动分组；全局按 recording/anchor/decision 去重，事件组保留每个标签关系。运动组当前明确为专家速度/转向分层，不冒称已实现加减速分组。没有核验事件发生起点，只报告相对标签时间，不输出事件检测延迟。

@@ -8,7 +8,7 @@ from datasets.dataset_utils import local_actions
 from metrics.action import sample_metrics
 from metrics.evaluator import Evaluator
 from metrics.statistics import aggregate, paired_comparison
-from modules import RollingPlanner
+from modules import RollingTrajectoryPlanner
 
 
 def history_action(batch, history):
@@ -27,7 +27,7 @@ def replay(model, inputs, *, lag=0, vision='fresh', teacher_actions=None,
     Delayed history has no observations before the stored window. Missing-current
     retains causal history. No-vision removes all feature evidence (an inference
     ablation, not a trained ego-state baseline). Fixed rollout resets decoder
-    hidden/step exactly as RollingPlanner.decode does.
+    hidden/step exactly as RollingTrajectoryPlanner.decode does.
     """
     features = inputs['bev_features']
     masks = inputs['bev_valid_mask']
@@ -66,7 +66,7 @@ def replay(model, inputs, *, lag=0, vision='fresh', teacher_actions=None,
         if frame < h:
             continue
         if fixed_horizon:
-            actions, _ = RollingPlanner.decode(state, previous, model.decoder, fixed_horizon)
+            actions, _ = RollingTrajectoryPlanner.decode(state, previous, model.decoder, fixed_horizon)
             return actions
         action, hidden = model.decoder(state['memory'], state['valid'], previous, hidden, frame-h)
         outputs.append(action)
@@ -79,7 +79,7 @@ class ActionDiagnosticsEvaluator(Evaluator):
 
     def on_validation_epoch_start(self):
         super().on_validation_epoch_start()
-        if self.model.mode != 'action':
+        if self.model.mode != 'pred':
             raise ValueError('Diagnostics require an action checkpoint')
         if self.model.future_action < 5 or self.model.history_features < max(self.options['stale_steps']):
             raise ValueError('Diagnostics require five future steps and sufficient delay history')
@@ -118,13 +118,20 @@ class ActionDiagnosticsEvaluator(Evaluator):
             name = 'fixed5_fresh' if lag == 0 else f'fixed5_delayed_{lag*100}ms'
             predictions[name] = replay(model, inputs, lag=lag, fixed_horizon=5)
         predictions['fixed5_no_vision'] = replay(model, inputs, vision='none', fixed_horizon=5)
+        # Fixed-context candidate with the last causal ego motion as the
+        # decoder prefix.  This is the CARS-compatible motion initialization
+        # ablation; it must not read future poses or actions.
+        predictions['fixed5_history_motion_initialization'] = replay(
+            model, inputs, initial_action=historical, fixed_horizon=5)
         predictions['fixed5_arrived_observations'] = predictions['fresh'][:, :5]
         predictions['fixed5_constant_action'] = historical[:, None].expand(-1, 5, -1)
         offset = batch_idx * self.trainer.val_dataloaders.batch_size
         for scenario, actions in predictions.items():
             horizon = actions.shape[1]
             mask = valid[:, :horizon]
-            if scenario in ('constant_action', 'fixed5_constant_action', 'history_motion_initialization'):
+            if scenario in ('constant_action', 'fixed5_constant_action',
+                            'history_motion_initialization',
+                            'fixed5_history_motion_initialization'):
                 mask = mask & historical_valid[:, None]
             scores = sample_metrics(actions, target[:, :horizon], mask, model.action_loss, .1)
             truth = teacher[:, :horizon]
@@ -187,6 +194,7 @@ class ActionDiagnosticsEvaluator(Evaluator):
                           fixed5='anchor only; fixed visual memory; reset hidden, zero previous action and step=0 as refresh candidate',
                           teacher_forced='future expert prefix is diagnostic only, not deployable performance',
                           motion_initialized='extra historical ego-motion input; inference diagnostic, not a retrained architecture',
+                          fixed5_motion_initialized='fixed visual five-step candidate with the last causal historical action as decoder prefix; checkpoint unchanged',
                           ci='not computed; no authoritative log map supplied',
                           adaptation='robustness evaluation only; checkpoint unchanged, no stale-input finetuning'))
         report['protocol']['delay_controls'] = {

@@ -2,12 +2,12 @@
 import torch
 from torch import Tensor
 from datasets.dataset_utils import local_actions
-from modules import ActionLoss
+from modules import TrajectoryL1Loss
 from metrics.displacement import displacement_metrics as position_metrics
 
 
 def sample_metrics(actions: Tensor, expert: Tensor, valid: Tensor,
-                   loss_fn: ActionLoss, interval_s: float) -> dict[str, Tensor]:
+                   loss_fn: TrajectoryL1Loss, interval_s: float) -> dict[str, Tensor]:
     """Per-window metrics; missing targets are NaN rather than artificial zeros.
 
     A trajectory endpoint needs all preceding actions to be valid. FDE requires
@@ -21,7 +21,7 @@ def sample_metrics(actions: Tensor, expert: Tensor, valid: Tensor,
         raise ValueError("A valid expert pose contains non-finite values")
     expert = torch.nan_to_num(expert)
     targets = local_actions(expert)
-    trajectory = ActionLoss.trajectory(actions)
+    trajectory = TrajectoryL1Loss.trajectory(actions)
     prefix = valid.long().cumprod(-1).bool()
     distance = (trajectory[..., :2] - expert[..., :2]).norm(dim=-1)
     dyaw = trajectory[..., 2] - expert[..., 2]

@@ -1,11 +1,11 @@
 # FRESH-Drive 模型
 
-`FRESHDrive` 使用缓存的融合 BEV 特征完成两个阶段的训练：
+`CARSDirve` 使用缓存的融合 BEV 特征完成两个阶段的训练：
 
-1. `mode: action`：Tokenizer 保留 `9×9` 空间 token，先编码 20 帧历史，再逐时刻读取当前 BEV、更新记忆、结合前一步动作预测下一步 `[dx, dy, dyaw]`。训练使用前一步专家动作，验证使用前一步预测动作；两者均按时间接收记录中的观察。
-2. `mode: refresh`：从新时序任务训练的 action checkpoint 加载并冻结预测器。每个时刻先用旧记忆提出下一步动作，预测 9 个区域的有符号更新收益，在当前步预算内选择空集合或一个区域，读取选中区域后修正动作并保留状态。
+1. `mode: pred`：Tokenizer 保留 `9×9` 空间 token，先编码 20 帧历史，再逐时刻读取当前 BEV、更新记忆、结合前一步动作预测下一步 `[dx, dy, dyaw]`。训练使用前一步专家动作，验证使用前一步预测动作；两者均按时间接收记录中的观察。
+2. `mode: plan`：从新时序任务训练的 pred checkpoint 加载并冻结预测器。每个时刻先用旧记忆提出下一步动作，预测 9 个区域的有符号更新收益，在当前步预算内选择空集合或一个区域，读取选中区域后修正动作并保留状态。
 
-两份训练配置通过 `univeral_config` 共享 `mode`、`history_features` 和 `future_action`，由 YAML 的 `<<: *univeral_config` 分别合并到 DataModule 和模型参数。DataModule 将窗口参数和 `ratio` 传给 Dataset；训练始终读取已有清单，修改 `ratio` 不会重新划分数据，窗口参数也须与预处理结果一致。两个阶段复用同一套缓存，模型统一使用 `mode` 命名。
+两份训练配置通过 `univeral_config` 共享 `mode`、`history_step` 和 `future_step`，由 YAML 的 `<<: *univeral_config` 分别合并到 DataModule 和模型参数。DataModule 将窗口参数和 `ratio` 传给 Dataset；训练始终读取已有清单，修改 `ratio` 不会重新划分数据，窗口参数也须与预处理结果一致。两个阶段复用同一套缓存，模型统一使用 `pred`/`plan` 命名。
 
 ## 最小接口
 
@@ -36,10 +36,10 @@ U[k, r] = action_error(old_action[k], expert_action[k]) - action_error(region_r_
 
 候选区域比较复用相同旧记忆、前一步动作、解码隐藏状态和当前步索引，不读取后续帧。标签无梯度，收益损失按动作有效掩码聚合。该标签衡量一步动作误差改善，尚不是长期轨迹收益；预算也是每步预算，不是整段累计预算。
 
-训练 refresh 时必须从已经训练好的 action checkpoint 开始。`config/train/refresh.yaml` 的 `trainer.ckpt_path` 应填该 checkpoint；同一阶段恢复仍使用相同 mode 的 checkpoint。
+训练 plan 时必须从已经训练好的 pred checkpoint 开始。`config/train/plan.yaml` 的 `trainer.ckpt_path` 应填该 checkpoint；同一阶段恢复仍使用相同 mode 的 checkpoint。
 
 正式测试前仍需运行独立 log 划分、未来信息扰动、区域替换和冻结梯度检查。该模型只在离线 BEV 表示层证明更新价值，不等于已经证明相机计算节省或闭环安全。
 
-## 当前 refresh 协议
+## 当前 plan 协议
 
-refresh 已改为事件中心五步滚动规划：slot 0..14 初始化历史，slot 15 初始化规划，slot 16..25 为十次刷新决策。详见[事件前后半秒五步滚动规划](../idea/FRESH-Drive/FRESH-Drive_事件前后半秒五步滚动规划_2026-11-02.md)。上文逐步单动作 refresh 的说明仅对应此前实现；当前使用 `RollingPlanner` 和五步 ADE 收益标签。`observe_step()` 当前仅支持 action 单步推理，refresh 使用 `forward()` 调用滚动规划器。
+plan 已改为事件中心五步滚动规划：slot 0..14 初始化历史，slot 15 初始化规划，slot 16..25 为十次规划决策。详见[事件前后半秒五步滚动规划](../idea/FRESH-Drive/FRESH-Drive_事件前后半秒五步滚动规划_2026-11-02.md)。当前使用 `RollingPlanner` 和五步 ADE 收益标签。`observe_step()` 当前仅支持 pred 单步推理，plan 使用 `forward()` 调用滚动规划器。

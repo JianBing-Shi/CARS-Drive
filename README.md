@@ -39,11 +39,11 @@ python preprocess_dataset.py
 
 ```bash
 conda activate FRESH-Drive
-python train.py --config config/train/action.yaml
-python train.py --config config/train/refresh.yaml
+python train.py --config config/train/pred.yaml
+python train.py --config config/train/plan.yaml
 ```
 
-`model.stage` 决定训练阶段，训练路径统一使用 `trainer.ckpt_path`：
+`model.mode` 决定训练阶段，训练路径统一使用 `trainer.ckpt_path`：
 
 - `null`：新建模型，从头训练，不加载任何 checkpoint。
 - 已存在的 checkpoint 文件路径：恢复同阶段完整训练状态，包括模型、AdamW、epoch、global step 和 checkpoint 排名。
@@ -56,7 +56,7 @@ trainer:
   ckpt_path: lightning_logs/action/version_0/checkpoints/last.ckpt
 ```
 
-两个阶段默认均为 `null`。恢复时模型配置和阶段必须与 checkpoint 匹配。此入口不执行 action 到 refresh 的权重迁移；refresh 从头运行会冻结随机初始化的动作预测器，不等于基于已训练动作基线的刷新实验。正式刷新实验需要使用包含已训练动作预测器的 refresh checkpoint。
+`pred` 阶段从头训练或恢复同阶段 checkpoint；`plan` 阶段的 `trainer.ckpt_path` 应填写已训练的 `pred` checkpoint，入口会迁移并冻结视觉 Memory、ActionEncoder 和 ActionDecoder，再开始 CARS 规划阶段训练。`plan` 阶段恢复时使用同阶段的 plan checkpoint。
 
 checkpoint 保存在 `lightning_logs/<stage>/version_<n>/checkpoints/`。默认每轮验证后保存 `val/loss` 最低的三个 checkpoint 和完整状态的 `last.ckpt`，并启用异常保存。恢复时 CSV 日志使用新版本，checkpoint 继续保存在传入 checkpoint 所在目录，以保留最佳模型排名。
 
@@ -79,7 +79,7 @@ model:
 
 `T_max` 是包含热身的调度总轮数；`trainer.max_epochs` 是本次训练停止的累计轮数。目前配置为 20，因此本次只运行 32 轮调度的前 20 轮；若希望完整运行该调度，将 `max_epochs` 设置为 32。恢复时保持 `warmup_epochs` 和 `T_max` 不变。
 
-热身只改变学习率，不改变 action/refresh 的训练对象。学习率会由现有 LearningRateMonitor 写入 CSV 日志。
+热身只改变学习率，不改变 pred/plan 的训练对象。学习率会由现有 LearningRateMonitor 写入 CSV 日志。
 
 ## 数据目录约定
 

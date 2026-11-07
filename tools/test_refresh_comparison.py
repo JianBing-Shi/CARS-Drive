@@ -10,13 +10,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from metrics.refresh_comparison import RefreshComparisonEvaluator, rollout, window_errors
-from model.FRESHDrive import FRESHDrive
+from model.CARSDirve import CARSDirve
 
 
 class RefreshComparisonTest(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(1024)
-        self.model = FRESHDrive(mode='refresh', feature_dim=4, hidden_dim=8,
+        self.model = CARSDirve(mode='plan', feature_dim=4, hidden_dim=8,
                                 heads=2, layers=1, spatial_grid=(3, 3), dropout=0).eval()
         self.batch = dict(bev_features=torch.randn(2, 31, 4, 6, 6),
                           bev_valid_mask=torch.ones(2, 31, 6, 6, dtype=torch.bool),

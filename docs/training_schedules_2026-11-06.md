@@ -4,30 +4,20 @@
 `lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt` 初始化；refresh
 不读取本轮 action 追加训练的结果。
 
-| 设置 | Action 追加训练 | Refresh / TRM v3 |
+| 设置 | Action 训练 | Refresh / TRM v3 |
 | --- | --- | --- |
-| 权重初始化 | 原 action best，严格加载 | 原 action tokenizer、memory、decoder，严格加载并冻结 |
-| 训练轮数 | 新阶段 12 轮，epoch 0–11 | 20 轮 |
-| 峰值学习率 | `1e-5` | `3e-4` |
-| warmup | 1 轮，首轮即达到峰值 | 4 轮 |
-| 余弦调度长度 `T_max` | 12 | 20 |
-| 优化器 | 新 AdamW，不恢复旧动量 | 新 AdamW，仅刷新参数 |
+| 权重初始化 | `ckpt_path: null`，从头初始化 | action checkpoint 的 tokenizer、memory、decoder，严格加载并冻结 |
+| 训练轮数 | 40 轮 | 20 轮 |
+| 峰值学习率 | `3e-4` | `3e-4` |
+| warmup | 4 轮 | 4 轮 |
+| 余弦调度长度 `T_max` | 40 | 20 |
+| 优化器 | 新 AdamW | 新 AdamW，仅刷新参数 |
 | 梯度裁剪 | 1.0 | 1.0 |
 | 保存指标 | `val/ade`，top-1 + last | `val/ade`，top-3 + last |
 | 日志目录名称 | `action_v2_gate2_extend12` | `trajectory_revision_v3` |
 
-Action 各轮实际学习率依次为：
-
-```text
-轮次  1       2           3           4           5       6
-LR    1e-5    9.82963e-6  9.33013e-6  8.53553e-6  7.5e-6  6.29410e-6
-轮次  7       8           9           10          11          12
-LR    5e-6    3.70590e-6  2.5e-6      1.46447e-6  6.69873e-7  1.70371e-7
-```
-
-沿用现有 warmup + cosine 公式，所有实际训练轮次 LR 均为正，完成最后一轮后为 0。
-此设置是固定实验计划，不承诺延长训练一定改善效果。新阶段 best 只在新增
-12 轮内排序；原 best 保留，评估时应保留其对照结果。
+两阶段都沿用 warmup + cosine 公式。Action 的 40 轮学习率从第一轮开始建立，
+最后一轮后才降到 0；不再从旧的零学习率 scheduler 追加训练。
 
 ## 启动
 
@@ -35,29 +25,26 @@ LR    5e-6    3.70590e-6  2.5e-6      1.46447e-6  6.69873e-7  1.70371e-7
 此前环境仅确认 `num_workers: 0` 可以运行，勿用本地的 10 覆盖该设置。
 
 ```bash
-conda run --no-capture-output -n FRESH-Drive python train.py --config config/train/action.yaml
-conda run --no-capture-output -n FRESH-Drive python train.py --config config/train/refresh.yaml
+conda run --no-capture-output -n FRESH-Drive python train.py --config config/train/pred.yaml
+conda run --no-capture-output -n FRESH-Drive python train.py --config config/train/plan.yaml
 ```
 
 两个命令对应独立实验；需要同时运行时在两个终端或两个训练作业中分别启动。
 当前配置均为 `devices: 1`，使用多张 GPU 时通过各自的 `CUDA_VISIBLE_DEVICES`
 指定卡号。单卡同时运行的显存和吞吐尚未验证。
 
-必须同步新 `train.py` 和两份配置，保留最新 v3 代码；旧入口不能识别
-`reset_training_state`。无需修改网络结构。
+必须同步新 `train.py` 和两份配置，保留最新 v3 代码。无需修改网络结构。
 
 ## 中断恢复
 
-首次 action 追加训练使用 `reset_training_state: true`，只载入模型权重，重置
-优化器、调度器、epoch/global step 和最佳模型排序，输出到新日志目录。
+`ckpt_path: null` 或空字符串表示初始化新模型、优化器和学习率表。
 
-若追加训练中断，将 `trainer.ckpt_path` 改为本轮
-`action_v2_gate2_extend12/version_N/checkpoints/last.ckpt`，同时改成
-`reset_training_state: false`。保持 `max_epochs: 12` 和新阶段 LR 配置，完整恢复
-优化器、调度器与计数；不要再次从原 best 重启。
+训练中断时，将 `trainer.ckpt_path` 改为本轮 `last.ckpt`，保持相同的
+`max_epochs` 和学习率配置，完整恢复优化器、调度器与计数。恢复时不能修改
+学习率表；如需新的学习率阶段，应另建配置并从 `ckpt_path: null` 开始。
 
-Refresh 中断时使用本轮 v3 `last.ckpt`，保持 `reset_training_state: false`，
-`max_epochs: 20`。常规断点恢复若 YAML 与 checkpoint 的优化器或学习率表不一致，
+Refresh 首次使用 action checkpoint 初始化；中断时使用本轮 v3 `last.ckpt`，
+保持 `max_epochs: 20`。常规断点恢复若 YAML 与 checkpoint 的优化器或学习率表不一致，
 入口会报错，避免配置修改静默失效。
 
 ## 已完成验证

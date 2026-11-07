@@ -1,0 +1,28 @@
+# Compare the TRM action base and the independently fine-tuned action.
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: pred
+  history_step: 20
+  future_step: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+
+checkpoints:
+  - lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt
+  - lightning_logs/action_v2_gate2_extend12/version_0/checkpoints/best.ckpt
+
+trainer:
+  accelerator: cpu
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+  enable_progress_bar: false
+
+evaluation:
+  output_dir: evaluation/action_extend12
+  max_samples: null
+  scratch_dir: /tmp/fresh_latest_validation_cache

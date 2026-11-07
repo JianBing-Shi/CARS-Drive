@@ -40,7 +40,7 @@ action loss 在本表中统一使用加载权重的 `XY=1, yaw=1` L1，不改变
 - `val/action_loss` 作为单步动作诊断保留，`val/loss` 用来观察完整训练目标。
 - 进入二分类刷新阶段前，单独检查 `val/fixed5_ade` / `val/fixed5_fde`、事件分组以及历史运动学对照。十步 ADE 最低不能替代固定视觉候选验收。
 
-已按本次确认更新 `config/train/action.yaml`：`monitor: val/ade`、`mode: min`、`save_top_k: 1`、`filename: best`、`save_last: true`。新 action 训练只保留一个 `best.ckpt` 和一个 `last.ckpt`，历史四个权重不删除；额外记录 `val/fde`，但 FDE 不参与最佳权重排序。这里的 ADE 对应持续观察的十步因果回放，不是固定视觉五步候选。ADE 最低不保证 FDE 同时最低，也不替代闭环安全评价。
+已按本次确认更新 `config/train/pred.yaml`：`monitor: val/ade`、`mode: min`、`save_top_k: 1`、`filename: best`、`save_last: true`。新 action 训练只保留一个 `best.ckpt` 和一个 `last.ckpt`，历史四个权重不删除；额外记录 `val/fde`，但 FDE 不参与最佳权重排序。这里的 ADE 对应持续观察的十步因果回放，不是固定视觉五步候选。ADE 最低不保证 FDE 同时最低，也不替代闭环安全评价。
 
 保存与续训验证通过 3 项训练测试及 8 项 v2 预测器测试；单独验证了不完整预测时域样本不参与 `val/fde`。这些检查验证实现行为，不代表 v2 的真实数据精度已得到验证。
 

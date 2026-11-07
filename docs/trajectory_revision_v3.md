@@ -1,6 +1,6 @@
 # 轨迹修订模块 v3（Trajectory Revision Module，TRM）
 
-日期：2026-11-06（Asia/Shanghai）。本版对应第二轮刷新结构修改。动作预测器沿用已训练的连续单步 v2；本版只训练新增刷新侧模块。完成代码与接口验证不代表已验证真实轨迹质量，正式刷新训练与服务器性能验收仍需单独完成。
+日期：2026-11-06（Asia/Shanghai）。本版对应第二轮刷新结构修改。动作预测器沿用已训练的连续单步 v2；本版只训练新增刷新侧模块。服务器训练与日志回放配对评估已完成；这仍不是闭环驾驶或目标设备延迟验收。当前结果与动作基座检查见 [动作预测器与 TRM 验收检查](action_trm_acceptance_2026-11-07.md)。
 
 ## 研究目标与职责
 
@@ -102,10 +102,10 @@ lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt
 仅需执行刷新阶段：
 
 ```bash
-conda run -n FRESH-Drive python train.py --config config/train/refresh.yaml
+conda run -n FRESH-Drive python train.py --config config/train/plan.yaml
 ```
 
-本版按实际采用轨迹的 `val/ade` 保存 top-3 和 last，同时记录轨迹 L1、主分类与历史分类损失。阈值只在开发验证集确定；val YAML 的 checkpoint 需填写训练完成的新权重。
+本版按实际采用轨迹的 `val/ade` 保存 top-3 和 last，同时记录轨迹 L1、主分类与历史分类损失。当前日志中的 `best.ckpt` 是 epoch 16；完整 20 轮的最新文件为 `last-v1.ckpt`，而 `last.ckpt` 仍是 epoch 7 的首段文件。阈值只在开发验证集确定；配对策略评估使用 `best.ckpt`。
 
 ## 验收与归因
 

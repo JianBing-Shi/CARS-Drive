@@ -2,13 +2,13 @@
 import unittest
 import torch
 from metrics.action_diagnostics import replay
-from model.FRESHDrive import FRESHDrive
+from model.CARSDirve import CARSDirve
 
 
 class ActionDiagnosticsTest(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(1024)
-        self.model=FRESHDrive(history_features=3,future_action=5,feature_dim=4,hidden_dim=8,
+        self.model=CARSDirve(history_step=3,future_step=5,feature_dim=4,hidden_dim=8,
                 heads=2,layers=1,spatial_grid=(3,3),dropout=0).eval()
         features=torch.randn(2,9,4,6,6)
         poses=torch.eye(4,dtype=torch.float64).repeat(2,9,1,1)

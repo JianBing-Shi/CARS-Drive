@@ -44,7 +44,7 @@ structure when moving files between machines.
 
 ## Training contract
 
-The current NuplanEventDataset/NuplanDataModule/FRESHDrive interface loads cached
+The current NuplanEventDataset/NuplanDataModule/CARSDirve interface loads cached
 BEV events directly. The training DataModule disables preprocessing and does not
 load the image encoders. Training needs events, BEVs and split manifests, not the
 per-camera `features` cache.

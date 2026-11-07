@@ -7,7 +7,7 @@ from torch import Tensor, nn
 class ActionDecoder(nn.Module):
     """Predict the next action from current visual memory and past actions."""
 
-    def __init__(self, hidden_dim: int, future_action: int, heads: int,
+    def __init__(self, hidden_dim: int, future_step: int, heads: int,
                  architecture_version: int = 1, layers: int = 2, dropout: float = 0.) -> None:
         super().__init__()
         if architecture_version not in (1, 2):
@@ -15,9 +15,12 @@ class ActionDecoder(nn.Module):
         if layers < 1:
             raise ValueError("decoder layers must be positive")
         self.architecture_version = architecture_version
-        self.future_action = future_action
+        self.future_step = future_step
         if architecture_version == 2:
             self.action = nn.Sequential(nn.Linear(3, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
+            # A bounded residual gate lets the decoder learn how much causal
+            # action memory should influence the visual query.
+            self.history_gate = nn.Parameter(torch.tensor(0.0))
             self.visual_norm = nn.LayerNorm(hidden_dim)
             self.initial = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.GELU())
             self.query = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.LayerNorm(hidden_dim))
@@ -32,14 +35,15 @@ class ActionDecoder(nn.Module):
                                           nn.GELU(), nn.Linear(hidden_dim, 1))
             return
         # Exact legacy parameter names and computation for existing checkpoints.
-        self.step = nn.Embedding(future_action, hidden_dim)
+        self.step = nn.Embedding(future_step, hidden_dim)
         self.action = nn.Sequential(nn.Linear(3, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
         self.cross = nn.MultiheadAttention(hidden_dim, heads, batch_first=True)
         self.state = nn.GRUCell(hidden_dim, hidden_dim)
         self.output = nn.Sequential(nn.LayerNorm(hidden_dim), nn.Linear(hidden_dim, 3))
 
     def forward(self, memory: Tensor, valid: Tensor, previous: Tensor,
-                hidden: Tensor | None = None, step: int = 0) -> tuple[Tensor, Tensor]:
+                hidden: Tensor | None = None, step: int = 0,
+                history_context: Tensor | None = None) -> tuple[Tensor, Tensor]:
         if self.architecture_version == 2:
             # Mask before normalization: invalid cells (including NaNs) are never evidence.
             visual = self.visual_norm(memory.masked_fill(~valid[..., None], 0))
@@ -50,6 +54,8 @@ class ActionDecoder(nn.Module):
             previous = torch.cat((previous[..., :2],
                                   torch.atan2(previous[..., 2:].sin(), previous[..., 2:].cos())), -1)
             action = self.action(previous)
+            if history_context is not None:
+                action = action + self.history_gate.sigmoid() * history_context
             if hidden is None:
                 hidden = self.initial(torch.cat((pooled, action), -1))
             query = self.query(torch.cat((hidden, action), -1))
@@ -62,7 +68,7 @@ class ActionDecoder(nn.Module):
         safe[:, 0] |= ~safe.any(-1)
         if hidden is None:
             hidden = (memory * valid[..., None]).sum(1) / valid.sum(1, keepdim=True).clamp_min(1)
-        query = self.action(previous) + self.step.weight[step % self.future_action]
+        query = self.action(previous) + self.step.weight[step % self.future_step]
         context, _ = self.cross(query[:, None], memory, memory, key_padding_mask=~safe)
         hidden = self.state(context[:, 0], hidden)
         return self.output(hidden), hidden

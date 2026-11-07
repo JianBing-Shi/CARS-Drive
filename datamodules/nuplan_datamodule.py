@@ -34,16 +34,16 @@ class NuplanDataModule(pl.LightningDataModule):
                  prefetch_factor: int = 2,
                  dir: str = "mini",
                  bevformer_root: str = "3rdparty/BEVFormer",
-                 mode: str = "action",
-                 history_features: int = 20,
-                 future_action: int = 10,
+                 mode: str = "pred",
+                 history_step: int = 20,
+                 future_step: int = 10,
                  ratio: float = .1) -> None:
         super().__init__()
         self.root = root
         self.dir = dir
         self.mode = mode
-        self.history_features = history_features
-        self.future_action = future_action
+        self.history_step = history_step
+        self.future_step = future_step
         self.ratio = ratio
         self.bevformer_root = bevformer_root
         self.event_types = sorted(event_types) if event_types is not None else None
@@ -60,9 +60,9 @@ class NuplanDataModule(pl.LightningDataModule):
         for split in splits:
             dataset = NuplanEventDataset(
                 root=self.root, dir=self.dir, split=split, bevformer_root=self.bevformer_root,
-                history_features=self.history_features, future_action=self.future_action,
+                history_step=self.history_step, future_step=self.future_step,
                 ratio=self.ratio, event_types=self.event_types, preprocess=False)
-            if self.mode == "refresh":
+            if self.mode == "plan":
                 dataset.samples = [path for path in dataset.samples
                                    if path.parent.name == "background_control"
                                    or torch.load(path, map_location="cpu", weights_only=False).get("anchor_offset_us", 0) == 0]

@@ -1,0 +1,451 @@
+{
+  "global": {
+    "anchors": 392,
+    "recordings": 5,
+    "metrics": {
+      "fixed5_ade_m": {
+        "learned": 0.14144206900364595,
+        "constant_action": 0.03697375705856683,
+        "learned_improvement_percent": -282.5471909159791,
+        "learned_win_fraction": 0.061224489795918366
+      },
+      "fixed5_fde_m": {
+        "learned": 0.2337332579348241,
+        "constant_action": 0.07259180195128744,
+        "learned_improvement_percent": -221.9829948451621,
+        "learned_win_fraction": 0.08928571428571429
+      },
+      "next_step_ade_m": {
+        "learned": 0.07907625929480988,
+        "constant_action": 0.009003326850238502,
+        "learned_improvement_percent": -778.3004394949309,
+        "learned_win_fraction": 0.007653061224489796
+      }
+    }
+  },
+  "by_event_type": {
+    "background_control": {
+      "anchors": 17,
+      "recordings": 5,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.16185762360692024,
+          "constant_action": 0.06792131767553442,
+          "learned_improvement_percent": -138.30165424664918,
+          "learned_win_fraction": 0.17647058823529413
+        },
+        "fixed5_fde_m": {
+          "learned": 0.2653256146346821,
+          "constant_action": 0.14493901019587235,
+          "learned_improvement_percent": -83.06018115903913,
+          "learned_win_fraction": 0.23529411764705882
+        },
+        "next_step_ade_m": {
+          "learned": 0.04980682061218163,
+          "constant_action": 0.009985842440715608,
+          "learned_improvement_percent": -398.7743488631728,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "following_lane_with_slow_lead": {
+      "anchors": 11,
+      "recordings": 3,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.11945541711016135,
+          "constant_action": 0.046301940117369995,
+          "learned_improvement_percent": -157.99225001664263,
+          "learned_win_fraction": 0.09090909090909091
+        },
+        "fixed5_fde_m": {
+          "learned": 0.22334671359170566,
+          "constant_action": 0.10018246485428377,
+          "learned_improvement_percent": -122.93992657953198,
+          "learned_win_fraction": 0.2727272727272727
+        },
+        "next_step_ade_m": {
+          "learned": 0.04103059194643389,
+          "constant_action": 0.006500740302726626,
+          "learned_improvement_percent": -531.1679906552226,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "following_lane_without_lead": {
+      "anchors": 1,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.20229080319404602,
+          "constant_action": 0.026156893000006676,
+          "learned_improvement_percent": -673.3747398591812,
+          "learned_win_fraction": 0.0
+        },
+        "fixed5_fde_m": {
+          "learned": 0.28601163625717163,
+          "constant_action": 0.04130537062883377,
+          "learned_improvement_percent": -592.4320782090196,
+          "learned_win_fraction": 0.0
+        },
+        "next_step_ade_m": {
+          "learned": 0.18283866345882416,
+          "constant_action": 0.00965312123298645,
+          "learned_improvement_percent": -1794.0885444806347,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "near_construction_zone_sign": {
+      "anchors": 10,
+      "recordings": 4,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.16664289236068724,
+          "constant_action": 0.047959152795374396,
+          "learned_improvement_percent": -247.46838225374103,
+          "learned_win_fraction": 0.0
+        },
+        "fixed5_fde_m": {
+          "learned": 0.2694194458425045,
+          "constant_action": 0.08139497227966785,
+          "learned_improvement_percent": -231.00256477365298,
+          "learned_win_fraction": 0.0
+        },
+        "next_step_ade_m": {
+          "learned": 0.10640154518187046,
+          "constant_action": 0.017869313573464753,
+          "learned_improvement_percent": -495.44282294017546,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "near_pedestrian_on_crosswalk": {
+      "anchors": 66,
+      "recordings": 5,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.06873959793434055,
+          "constant_action": 0.01851436849155465,
+          "learned_improvement_percent": -271.2770325690352,
+          "learned_win_fraction": 0.045454545454545456
+        },
+        "fixed5_fde_m": {
+          "learned": 0.11382908543578885,
+          "constant_action": 0.03758298215049735,
+          "learned_improvement_percent": -202.87401084877055,
+          "learned_win_fraction": 0.06060606060606061
+        },
+        "next_step_ade_m": {
+          "learned": 0.038117320657792414,
+          "constant_action": 0.00377726039211914,
+          "learned_improvement_percent": -909.1261046582923,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "near_trafficcone_on_driveable": {
+      "anchors": 26,
+      "recordings": 3,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.14945449952322704,
+          "constant_action": 0.03944587426331754,
+          "learned_improvement_percent": -278.8849970102231,
+          "learned_win_fraction": 0.038461538461538464
+        },
+        "fixed5_fde_m": {
+          "learned": 0.2616500109434128,
+          "constant_action": 0.0827809519206102,
+          "learned_improvement_percent": -216.0751415305591,
+          "learned_win_fraction": 0.038461538461538464
+        },
+        "next_step_ade_m": {
+          "learned": 0.05917751609992523,
+          "constant_action": 0.006579389021051331,
+          "learned_improvement_percent": -799.4378643758802,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "starting_left_turn": {
+      "anchors": 1,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.22430074214935303,
+          "constant_action": 0.025482183322310448,
+          "learned_improvement_percent": -780.2257613183824,
+          "learned_win_fraction": 0.0
+        },
+        "fixed5_fde_m": {
+          "learned": 0.389238566160202,
+          "constant_action": 0.05503271147608757,
+          "learned_improvement_percent": -607.2858227771155,
+          "learned_win_fraction": 0.0
+        },
+        "next_step_ade_m": {
+          "learned": 0.10469907522201538,
+          "constant_action": 0.004855500999838114,
+          "learned_improvement_percent": -2056.2980879935176,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "starting_right_turn": {
+      "anchors": 2,
+      "recordings": 2,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.13356366381049156,
+          "constant_action": 0.01673889998346567,
+          "learned_improvement_percent": -697.9237819834212,
+          "learned_win_fraction": 0.0
+        },
+        "fixed5_fde_m": {
+          "learned": 0.20452145487070084,
+          "constant_action": 0.03232601657509804,
+          "learned_improvement_percent": -532.6837530246505,
+          "learned_win_fraction": 0.0
+        },
+        "next_step_ade_m": {
+          "learned": 0.02863318007439375,
+          "constant_action": 0.0036755279870703816,
+          "learned_improvement_percent": -679.0222295985325,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "starting_straight_traffic_light_intersection_traversal": {
+      "anchors": 31,
+      "recordings": 5,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.17302417490751512,
+          "constant_action": 0.04626484182212622,
+          "learned_improvement_percent": -273.9863103233741,
+          "learned_win_fraction": 0.0967741935483871
+        },
+        "fixed5_fde_m": {
+          "learned": 0.289490359444772,
+          "constant_action": 0.09110605590526134,
+          "learned_improvement_percent": -217.75095142501283,
+          "learned_win_fraction": 0.06451612903225806
+        },
+        "next_step_ade_m": {
+          "learned": 0.10571561002683255,
+          "constant_action": 0.011026164404146614,
+          "learned_improvement_percent": -858.770485837088,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "stopping_at_crosswalk": {
+      "anchors": 1,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.48038071393966675,
+          "constant_action": 0.04895281791687012,
+          "learned_improvement_percent": -881.3137105925784,
+          "learned_win_fraction": 0.0
+        },
+        "fixed5_fde_m": {
+          "learned": 0.7986088395118713,
+          "constant_action": 0.10140172392129898,
+          "learned_improvement_percent": -687.5692923442765,
+          "learned_win_fraction": 0.0
+        },
+        "next_step_ade_m": {
+          "learned": 0.15039195120334625,
+          "constant_action": 0.007556448224931955,
+          "learned_improvement_percent": -1890.2465646113853,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "stopping_with_lead": {
+      "anchors": 5,
+      "recordings": 3,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.07569388896226883,
+          "constant_action": 0.04116010665893555,
+          "learned_improvement_percent": -83.90110013438526,
+          "learned_win_fraction": 0.4
+        },
+        "fixed5_fde_m": {
+          "learned": 0.11802532970905304,
+          "constant_action": 0.08417807072401047,
+          "learned_improvement_percent": -40.209117046665895,
+          "learned_win_fraction": 0.4
+        },
+        "next_step_ade_m": {
+          "learned": 0.03998009040951729,
+          "constant_action": 0.006820793822407722,
+          "learned_improvement_percent": -486.15010877728633,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "traversing_intersection": {
+      "anchors": 221,
+      "recordings": 5,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.1555399277428696,
+          "constant_action": 0.03768559331200781,
+          "learned_improvement_percent": -312.730473566167,
+          "learned_win_fraction": 0.049773755656108594
+        },
+        "fixed5_fde_m": {
+          "learned": 0.25429431532775115,
+          "constant_action": 0.07210730704820265,
+          "learned_improvement_percent": -252.66095176423553,
+          "learned_win_fraction": 0.08597285067873303
+        },
+        "next_step_ade_m": {
+          "learned": 0.09325423861992845,
+          "constant_action": 0.010333253539533974,
+          "learned_improvement_percent": -802.4673425765394,
+          "learned_win_fraction": 0.013574660633484163
+        }
+      }
+    }
+  },
+  "by_recording": {
+    "2021.05.25.14.16.10_veh-35_01690_02183": {
+      "anchors": 71,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.17120965890271564,
+          "constant_action": 0.04790807821013978,
+          "learned_improvement_percent": -257.37116849424984,
+          "learned_win_fraction": 0.15492957746478872
+        },
+        "fixed5_fde_m": {
+          "learned": 0.27990765470853995,
+          "constant_action": 0.09840754023425176,
+          "learned_improvement_percent": -184.43720272068666,
+          "learned_win_fraction": 0.2112676056338028
+        },
+        "next_step_ade_m": {
+          "learned": 0.1063954310727791,
+          "constant_action": 0.009280709700632684,
+          "learned_improvement_percent": -1046.4148163747209,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "2021.06.08.14.35.24_veh-26_02555_03004": {
+      "anchors": 68,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.14313337097273154,
+          "constant_action": 0.04136808170005679,
+          "learned_improvement_percent": -245.9995365763722,
+          "learned_win_fraction": 0.029411764705882353
+        },
+        "fixed5_fde_m": {
+          "learned": 0.23224681626786203,
+          "constant_action": 0.07679522059419576,
+          "learned_improvement_percent": -202.42352905672286,
+          "learned_win_fraction": 0.058823529411764705
+        },
+        "next_step_ade_m": {
+          "learned": 0.07478390524492544,
+          "constant_action": 0.012490725675460827,
+          "learned_improvement_percent": -498.71545647540125,
+          "learned_win_fraction": 0.014705882352941176
+        }
+      }
+    },
+    "2021.06.14.18.42.45_veh-12_03445_03902": {
+      "anchors": 122,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.12980779025276176,
+          "constant_action": 0.030310898934792514,
+          "learned_improvement_percent": -328.254505193052,
+          "learned_win_fraction": 0.03278688524590164
+        },
+        "fixed5_fde_m": {
+          "learned": 0.21636248642548186,
+          "constant_action": 0.06215945468475034,
+          "learned_improvement_percent": -248.07655170527477,
+          "learned_win_fraction": 0.06557377049180328
+        },
+        "next_step_ade_m": {
+          "learned": 0.06593448132062789,
+          "constant_action": 0.005828422687343726,
+          "learned_improvement_percent": -1031.2577151242474,
+          "learned_win_fraction": 0.0
+        }
+      }
+    },
+    "2021.06.23.15.56.12_veh-16_00839_01285": {
+      "anchors": 58,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.1501382896355514,
+          "constant_action": 0.051332718965693795,
+          "learned_improvement_percent": -192.48068806931974,
+          "learned_win_fraction": 0.08620689655172414
+        },
+        "fixed5_fde_m": {
+          "learned": 0.2587056879339547,
+          "constant_action": 0.09591092699175251,
+          "learned_improvement_percent": -169.73536389258453,
+          "learned_win_fraction": 0.10344827586206896
+        },
+        "next_step_ade_m": {
+          "learned": 0.07524186629673531,
+          "constant_action": 0.015139144419788801,
+          "learned_improvement_percent": -397.0021040184051,
+          "learned_win_fraction": 0.034482758620689655
+        }
+      }
+    },
+    "2021.06.23.17.31.36_veh-16_00016_00377": {
+      "anchors": 73,
+      "recordings": 1,
+      "metrics": {
+        "fixed5_ade_m": {
+          "learned": 0.1234488333081061,
+          "constant_action": 0.021972360114787454,
+          "learned_improvement_percent": -461.8369290471656,
+          "learned_win_fraction": 0.0273972602739726
+        },
+        "fixed5_fde_m": {
+          "learned": 0.199398039395232,
+          "constant_action": 0.042475188641182195,
+          "learned_improvement_percent": -369.44591836822093,
+          "learned_win_fraction": 0.0273972602739726
+        },
+        "next_step_ade_m": {
+          "learned": 0.08151339060843807,
+          "constant_action": 0.005915978717993847,
+          "learned_improvement_percent": -1277.851315801891,
+          "learned_win_fraction": 0.0
+        }
+      }
+    }
+  },
+  "protocol": {
+    "model_result_source": "evaluation/trajectory_revision_v3_comparison/per_sample.csv learned policy; previously evaluated v3 epoch16 checkpoint",
+    "anchors": "same 392 unique anchors as exported learned CARS/TRM rollout",
+    "timing": "10 decisions in slots 16..25; five future endpoints per decision; 10 Hz",
+    "baseline": "repeat latest observed local SE(2) action from poses f-1 and f at each decision",
+    "candidate": "fixed5 is generated candidate, including rejected candidates",
+    "execution": "next_step compares first actual retained-plan endpoint against constant action first endpoint",
+    "information": "baseline uses causal logged motion; model does not have this explicit motion input; model already uses logged localization for alignment",
+    "future_data": "only used to compute scoring targets; baseline predictions use two arrived poses",
+    "event_groups": "representative event label from existing globally deduplicated rollout CSV; not complete multilabel groups",
+    "closed_loop": false,
+    "statistical_significance": false
+  }
+}

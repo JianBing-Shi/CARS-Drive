@@ -1,0 +1,25 @@
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: pred
+  history_step: 20
+  future_step: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+trainer:
+  ckpt_path: lightning_logs/action_v2_gate2/version_1/checkpoints/best.ckpt
+  accelerator: cpu
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+  enable_progress_bar: false
+model:
+  refresh_version: 3
+evaluation:
+  output_dir: evaluation/action_motion_initialization
+  samples_per_event: 2
+  stale_steps: [1, 2, 4, 8, 10]
+  scratch_dir: /tmp/fresh_action_motion_initialization_cache

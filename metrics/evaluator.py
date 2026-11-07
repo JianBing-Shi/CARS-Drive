@@ -14,7 +14,7 @@ import torch
 from lightning.fabric.utilities.apply_func import move_data_to_device
 
 from datasets.dataset_utils import FRAME_INTERVAL_US, local_actions
-from modules import ActionLoss
+from modules import TrajectoryL1Loss
 from metrics.action import sample_metrics
 from metrics.collision import EgoFootprint, collision_metrics
 from metrics.statistics import aggregate, paired_comparison
@@ -85,7 +85,7 @@ class ActionEvaluator(Evaluator):
             raise ValueError("Expected a uniformly sampled 10 Hz window")
         expert = batch["future_trajectory"].float()
         valid = batch["future_action_mask"].bool()
-        reconstructed = ActionLoss.trajectory(local_actions(torch.nan_to_num(expert)))
+        reconstructed = TrajectoryL1Loss.trajectory(local_actions(torch.nan_to_num(expert)))
         prefix = valid.long().cumprod(-1).bool()
         if not torch.allclose(reconstructed[..., :2][prefix], expert[..., :2][prefix], atol=1e-4, rtol=1e-4):
             raise ValueError("Local action labels fail SE(2) reconstruction")
@@ -126,8 +126,8 @@ class ActionEvaluator(Evaluator):
         target_times = batch["timestamps_us"][:, model.history_features + 1:]
         collision_steps = {}
         for name, candidate, candidate_prefix in (
-                ("model", ActionLoss.trajectory(actions), prefix),
-                ("constant_action", ActionLoss.trajectory(baseline), prefix & available[:, None]),
+                ("model", TrajectoryL1Loss.trajectory(actions), prefix),
+                ("constant_action", TrajectoryL1Loss.trajectory(baseline), prefix & available[:, None]),
                 ("expert", expert, prefix)):
             scores, step_collisions = collision_metrics(
                 candidate, candidate_prefix, future_annotations, anchor_poses, target_times,
@@ -154,7 +154,7 @@ class ActionEvaluator(Evaluator):
             rows.append(row)
         if options["save_predictions"]:
             predictions.append({"samples": [row["sample"] for row in rows[offset:]],
-                                "actions": actions, "trajectory": ActionLoss.trajectory(actions),
+                                "actions": actions, "trajectory": TrajectoryL1Loss.trajectory(actions),
                                 "expert_trajectory": expert, "action_mask": valid,
                                 "trajectory_mask": prefix, "collision_by_step": collision_steps})
 
@@ -262,7 +262,7 @@ class RefreshEvaluator(Evaluator):
     """Rolling refresh metrics, with the same reductions as model validation."""
 
     def validation_step(self, batch, batch_idx):
-        metrics = self.model.refresh_validation_metrics(batch)
+        metrics = self.model.cars_adapter_validation_metrics(batch)
         self.log_dict(metrics, on_step=False, on_epoch=True,
                       batch_size=batch["planning_mask"].shape[0])
 

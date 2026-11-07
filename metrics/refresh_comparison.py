@@ -16,21 +16,24 @@ REVISION_POLICIES = BINARY_POLICIES + ('all_fresh_base', 'no_refresh_base')
 
 def rollout(model, batch, policy):
     extra = {}
-    if model.refresh_version == 3 and policy.endswith('_base'):
+    if model.cars_adapter_version == 3 and policy.endswith('_base'):
         extra['adapter_enabled'] = False
         policy = policy[:-5]
-    if model.refresh_version >= 2:
+    if model.cars_adapter_version >= 2:
         extra.update(targets=batch.get('planning_targets'), target_mask=batch.get('planning_mask'), diagnostics=True)
         if policy.startswith('random_'):
             extra['random_seed'] = int(policy.split('_')[1])
             policy = 'random'
-    return model.planner(
+    return model.cars_planner(
         batch["bev_features"], batch["bev_valid_mask"].bool(),
         batch["timestamps_us"].double(), batch.get("reference_ego_to_global"), batch.get("bev_range"),
-        start=model.history_features + model.refresh_offset, steps=model.refresh_steps,
+        start=model.history_features + model.cars_adapter_offset, steps=model.cars_adapter_steps,
         tokenizer=model.tokenizer, memory=model.memory, decoder=model.decoder,
-        refresh=model.refresh, temporal=model.temporal, region_ids=model.region_ids,
-        budget=model.refresh_budget, cost_weight=model.cost_weight, refresh_policy=policy, **extra)
+        refresh=model.cars_adapter, temporal=model.temporal, region_ids=model.region_ids,
+        budget=model.cars_adapter_budget, cost_weight=model.cost_weight,
+        history_context=model.action_encoder(batch.get("history_actions", batch["bev_features"].new_zeros(
+            batch["bev_features"].shape[0], model.history_step, 3))[:, -model.history_step:]),
+        refresh_policy=policy, **extra)
 
 
 def window_errors(prediction, target, mask):
@@ -50,12 +53,12 @@ class RefreshComparisonEvaluator(Evaluator):
     def on_validation_epoch_start(self):
         super().on_validation_epoch_start()
         model = self.model
-        if model.mode != "refresh":
+        if model.mode != "plan":
             raise ValueError("Comparison requires a refresh checkpoint")
-        self.policies = (REVISION_POLICIES if model.refresh_version == 3 else
-                         BINARY_POLICIES if model.refresh_version == 2 else POLICIES)
+        self.policies = (REVISION_POLICIES if model.cars_adapter_version == 3 else
+                         BINARY_POLICIES if model.cars_adapter_version == 2 else POLICIES)
         # Cached labels currently encode precisely this event-centred schedule.
-        if (model.plan_horizon, model.refresh_offset, model.refresh_steps) != (5, -5, 10):
+        if (model.plan_horizon, model.cars_adapter_offset, model.cars_adapter_steps) != (5, -5, 10):
             raise ValueError("Cached planning labels require horizon=5, offset=-5, steps=10")
         self.rows = []
 
@@ -72,7 +75,7 @@ class RefreshComparisonEvaluator(Evaluator):
         for policy, output in outputs.items():
             scores = {}
             candidate_complete = complete
-            if self.model.refresh_version == 3:
+            if self.model.cars_adapter_version == 3:
                 candidate_complete = complete & output['candidate_valid'][..., None]
             for name, prediction, mask in (
                 ("fixed5", output["candidate_trajectory"], candidate_complete),
@@ -86,11 +89,11 @@ class RefreshComparisonEvaluator(Evaluator):
                 forced_replan_fraction=output["forced_replan"].float().mean(1),
                 fixed5_decisions=candidate_complete[..., 0].sum(1),
                 common_endpoints=common.sum((1, 2)))
-            if self.model.refresh_version >= 2:
+            if self.model.cars_adapter_version >= 2:
                 scores.update(event_refresh_fraction=output['event_refresh'].float().mean(1),
                               monitoring_reads=output['monitoring_reads'].sum(1).float(),
                               online_decode_calls=output['online_decode_calls'].sum(1).float())
-            if self.model.refresh_version == 3:
+            if self.model.cars_adapter_version == 3:
                 scores.update(candidate_generated=output['candidate_generated'].sum(1).float(),
                               candidate_accepted=output['candidate_accepted'].sum(1).float(),
                               candidate_rejected=output['candidate_rejected'].sum(1).float(),
@@ -152,9 +155,9 @@ class RefreshComparisonEvaluator(Evaluator):
                     "torch_version": str(torch.__version__), "unique_anchors": self.count,
                     "manifest": self.options.get('source_manifest', self.dataset.processed_file_names_path),
                     "model_hyperparameters": dict(self.model.hparams)}}
-        if self.model.refresh_version >= 2:
+        if self.model.cars_adapter_version >= 2:
             report['protocol'].update(
-                refresh_protocol=self.model.refresh_protocol(),
+                refresh_protocol=self.model.cars_adapter_protocol(),
                 policies={'learned':'binary softmax keep/replace',
                           'no_refresh':'deadline-only refresh using the shared full-BEV maintenance rule',
                           'replan_only':'stale-memory replan every decision, no new planning evidence',
@@ -166,7 +169,7 @@ class RefreshComparisonEvaluator(Evaluator):
                 cost_matching='Fixed interval/random probability require development calibration; not automatically cost matched.',
                 timing='Offline candidates are diagnostics only; online decode-call count excludes counterfactuals.',
                 inputs='Current full cached BEV is monitored by all policies; full evidence acquired under shared feasible deadline rule except stale-memory replan control.')
-        if self.model.refresh_version == 3:
+        if self.model.cars_adapter_version == 3:
             report['protocol'].update(
                 task='trajectory revision with shared frozen action predictor and shared trained revision adapter',
                 policies={**report['protocol']['policies'],

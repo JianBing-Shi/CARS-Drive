@@ -68,11 +68,11 @@ end-to-end latency. `evaluation.warmup_batches: 0` is useful for a functional sm
 Set `trainer.ckpt_path` in the appropriate YAML, then run:
 
 ```bash
-conda run -n FRESH-Drive python val.py --config config/val/action.yaml
-conda run -n FRESH-Drive python val.py --config config/val/refresh.yaml
+conda run -n FRESH-Drive python val.py --config config/val/pred.yaml
+conda run -n FRESH-Drive python val.py --config config/val/plan.yaml
 ```
 
-The CLI accepts only `--config` (default `config/val/action.yaml`). Configure
+The CLI accepts only `--config` (default `config/val/pred.yaml`). Configure
 checkpoint/device under `trainer`, data/loading under `datamodule`, and report
 options under `evaluation`. Paths are relative to the project root. Use
 `evaluation.max_samples` for smoke runs and `evaluation.output_dir` for output.
@@ -125,7 +125,7 @@ without rerunning inference. Add `--motion-groups` to read cached supervision
 and group by historical speed/turn rate. Default speed bins are 0–0.5, 0.5–2,
 2–5 and >=5 m/s; turning uses |yaw rate| >=0.1 rad/s. These are descriptive
 diagnostic bins, not benchmark categories or test-set selection criteria.
-Refresh validation reuses `FRESHDrive.refresh_validation_metrics` (also called
+Refresh validation reuses `CARSDirve.refresh_validation_metrics` (also called
 by the model's training validation hook) and exports Lightning's
 `val/loss`, `val/ade`, `val/refresh_rate` and `val/replan_rate` to `metrics.json`,
 with the configuration and evaluated sample count. Its ADE uses available rolling

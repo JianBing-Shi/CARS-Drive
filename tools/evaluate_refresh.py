@@ -11,7 +11,7 @@ import torch
 from datamodules import NuplanDataModule
 from evaluate_action_diagnostics import select_samples, stage_inputs
 from metrics.refresh_comparison import RefreshComparisonEvaluator
-from model.FRESHDrive import FRESHDrive
+from model.CARSDirve import CARSDirve
 from utils import load_config
 
 
@@ -19,11 +19,11 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision('medium')
     pl.seed_everything(1024, workers=True)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='config/val/refresh_comparison.yaml')
+    parser.add_argument('--config', default='config/val/plan_comparison.yaml')
     args = parser.parse_args()
     config = load_config(args.config)
     trainer_config = dict(config['trainer'])
-    model = FRESHDrive.load_from_checkpoint(trainer_config.pop('ckpt_path'), map_location='cpu', strict=True, action_loss='l1')
+    model = CARSDirve.load_from_checkpoint(trainer_config.pop('ckpt_path'), map_location='cpu', strict=True, action_loss='l1')
     data = NuplanDataModule(**config['datamodule'])
     data.setup('validate')
     dataset = data.val_dataset

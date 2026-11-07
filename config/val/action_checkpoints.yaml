@@ -1,9 +1,9 @@
 datamodule:
   root: ../datasets/nuplan/nuplan-v1.1
   dir: mini
-  mode: action
-  history_features: 20
-  future_action: 10
+  mode: pred
+  history_step: 20
+  future_step: 10
   val_batch_size: 2
   num_workers: 0
   pin_memory: false

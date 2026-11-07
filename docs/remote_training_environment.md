@@ -9,22 +9,22 @@ PyTorch 2.1.0 / CUDA 11.8。项目根目录的 `requirements.txt` 用于训练�
 
 ## 安装
 
-将项目代码和 `requirements.txt` 上传到服务器，在远端项目根目录执行。
-若远端尚无 `FRESH-Drive` 环境，先创建；已有该环境时跳过创建命令。
+远端训练直接使用服务器镜像提供的 Python/PyTorch 环境，不创建或激活 Conda 环境。
+将项目代码和 `requirements.txt` 上传到服务器，在远端项目根目录执行：
 
 ```bash
-conda create -n FRESH-Drive python=3.10 pip -y
-conda activate FRESH-Drive
+python --version
 python -m pip install --upgrade pip "setuptools==69.5.1" wheel
 python -m pip install -r requirements.txt
 ```
 
-这些命令在独立环境中安装镜像所用的 PyTorch 版本；不会自动继承镜像其他环境中的包。
-CUDA 运行库由 PyTorch wheel 及其依赖提供，缓存训练无需另外安装 CUDA Toolkit 或编译器。
+如果镜像已经提供匹配的 PyTorch 2.1.0/CUDA 11.8，可以先执行 `python -m pip check`；
+只有依赖缺失或版本不匹配时再执行完整安装。CUDA 运行库由镜像和 PyTorch 提供，
+缓存训练无需另外安装 CUDA Toolkit 或编译器。
 
 ## 验证
 
-仍在项目根目录和 `FRESH-Drive` 环境中执行：
+仍在项目根目录和服务器默认 Python 环境中执行：
 
 ```bash
 python -m pip check
@@ -35,7 +35,7 @@ import torchvision
 import lightning.pytorch as pl
 import torch_geometric
 from datamodules import NuplanDataModule
-from model import FRESHDrive
+from model import CARSDirve
 
 print("Python:", sys.executable)
 print("PyTorch:", torch.__version__, "CUDA:", torch.version.cuda)
@@ -72,7 +72,7 @@ python -m unittest discover -s tools -p test_nuplan_datamodule.py
 └── mini-val.pt
 ```
 
-将所用 `config/train/action.yaml` 或 `config/train/refresh.yaml` 中的数据根目录设为
+将所用 `config/train/pred.yaml` 或 `config/train/plan.yaml` 中的数据根目录设为
 nuPlan 版本目录，而不是它下面的 `preprocessed_dataset/`：
 
 ```yaml
@@ -81,10 +81,10 @@ datamodule:
 ```
 
 ```bash
-python train.py --config config/train/action.yaml
+python train.py --config config/train/pred.yaml
 ```
 
-刷新阶段使用 `config/train/refresh.yaml`，并将 `trainer.ckpt_path` 指向已经训练好的
+刷新阶段使用 `config/train/plan.yaml`，并将 `trainer.ckpt_path` 指向已经训练好的
 action checkpoint 或需要恢复的 refresh checkpoint。
 
 ## 依赖范围

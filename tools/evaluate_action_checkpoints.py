@@ -21,7 +21,7 @@ from datasets.dataset_utils import FRAME_INTERVAL_US, local_actions
 from metrics.action import sample_metrics
 from metrics.action_diagnostics import history_action
 from metrics.statistics import aggregate
-from model.FRESHDrive import FRESHDrive
+from model.CARSDirve import CARSDirve
 from evaluate_action_diagnostics import select_samples, stage_inputs
 from utils import load_config
 
@@ -38,8 +38,8 @@ def load_checkpoints(paths):
             digest.update(value.numpy().tobytes())
         fingerprint = digest.hexdigest()
         if fingerprint not in fingerprints:
-            model = FRESHDrive.load_from_checkpoint(name, map_location="cpu", strict=True, action_loss="l1")
-            if model.mode != "action" or model.future_action < 5 or model.plan_horizon != 5:
+            model = CARSDirve.load_from_checkpoint(name, map_location="cpu", strict=True, action_loss="l1")
+            if model.mode != "pred" or model.future_step < 5 or model.plan_horizon != 5:
                 raise ValueError("Comparison requires action checkpoints with a five-step candidate")
             fingerprints[fingerprint] = len(models)
             models.append(model)
@@ -48,7 +48,7 @@ def load_checkpoints(paths):
                          "model_index": fingerprints[fingerprint],
                          "hyperparameters": checkpoint["hyper_parameters"],
                          "source_loss": checkpoint.get("action_loss_config", checkpoint["hyper_parameters"])})
-    dimensions = {(m.history_features, m.future_action) for m in models}
+    dimensions = {(m.history_step, m.future_step) for m in models}
     weights = {(m.action_loss.xy_weight, m.action_loss.yaw_weight,
                 m.action_loss.trajectory_weight, m.action_loss.heading_weight) for m in models}
     if len(dimensions) != 1 or len(weights) != 1:
@@ -97,7 +97,7 @@ class CheckpointEvaluator(pl.LightningModule):
             self.rows.append(row)
 
     def validation_step(self, batch, batch_idx):
-        h, future = self.models[0].history_features, self.models[0].future_action
+        h, future = self.models[0].history_step, self.models[0].future_step
         if self.inputs["bev_features"].shape[1] != h + future + 1:
             raise ValueError("Cache horizon differs from checkpoint")
         if not (batch["anchor_index"] == h).all() or not (batch["timestamps_us"].diff(dim=1) == FRAME_INTERVAL_US).all():

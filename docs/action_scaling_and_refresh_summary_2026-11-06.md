@@ -72,7 +72,7 @@ L=0.50L_{xy}+0.10L_{dyaw}+0.35L_{position}+0.05L_{heading}.
 
 当前 `last.ckpt` 保存的 optimizer learning rate 为0，scheduler 的 `last_epoch=20`；当前调度函数在 `epoch >= T_max` 时返回0。同模式恢复采用 checkpoint 的模型属性，并恢复优化器与调度器状态。
 
-因此，仅把 `max_epochs` 改为32不能产生有效参数更新；只改 YAML 的 `learning_rate`、`T_max` 也不会自动覆盖加载模型的相应属性。现已按用户确认实现独立追加训练：从原 best 严格加载权重，以新 AdamW（不恢复旧动量）、`1e-5` 峰值、1轮 warmup 追加12轮；refresh 仍独立使用原 action best。启动与中断恢复见 [训练学习率表](training_schedules_2026-11-06.md)。该机制已通过本地验证，正式训练尚未启动。
+因此，仅把 `max_epochs` 改为32不能产生有效参数更新；只改 YAML 的 `learning_rate`、`T_max` 也不会自动覆盖加载模型的相应属性。现已统一为 `ckpt_path` 控制语义：空值初始化新训练，文件路径完整恢复模型、优化器和 scheduler。Action 配置改为从头 40 轮、`3e-4` 峰值和4轮 warmup；refresh 继续从 action checkpoint 初始化。启动与恢复见 [训练学习率表](training_schedules_2026-11-06.md)。该机制已通过本地验证，正式训练尚未启动。
 
 训练日志仅周期性记录部分训练 batch，不能直接拿其均值与验证集做严格泛化差距比较。判断容量不足，需要补充相同 `eval` 协议下的训练集与验证集评估。
 
@@ -113,7 +113,7 @@ L=0.50L_{xy}+0.10L_{dyaw}+0.35L_{position}+0.05L_{heading}.
 | v2 二分类门控 | 先判断刷新；在线路径在刷新或到期时生成候选 | 不刷新且未到期时不生成完整候选；离线标签和诊断会额外解码 |
 | **当前 v3 轨迹修订** | **每个可行决策先生成五步候选，再比较是否采用** | **拒绝候选仍已支付五次单步解码成本** |
 
-当前 `config/train/refresh.yaml` 为 `refresh_version: 3`、`decoder_layers: 2`。此前“不刷新时可以省去五步解码”的说明只适用于v2，不能沿用到当前v3。v3仍可控制是否替换实际旧计划，但这不等于减少候选生成成本。
+当前 `config/train/plan.yaml` 为 `refresh_version: 3`、`decoder_layers: 2`。此前“不刷新时可以省去五步解码”的说明只适用于v2，不能沿用到当前v3。v3仍可控制是否替换实际旧计划，但这不等于减少候选生成成本。
 
 v3动作网络参数冻结；适配后的表示经过 decoder 时仍需保留对输入的梯度，以训练潜变量适配器。因此，冻结减少了动作参数的训练开销，却不代表 decoder 前向和输入梯度计算可以忽略。推理时可以关闭梯度。
 
@@ -137,8 +137,8 @@ v3动作网络参数冻结；适配后的表示经过 decoder 时仍需保留对
 
 - [action v2评估报告](../evaluation/action_v2_gate2/README.md)、[机器可读指标](../evaluation/action_v2_gate2/metrics.json)。
 - [训练日志第一段](../lightning_logs/action_v2_gate2/version_0/metrics.csv)、[训练日志第二段](../lightning_logs/action_v2_gate2/version_1/metrics.csv)。
-- [当前action配置](../config/train/action.yaml)、[当前refresh配置](../config/train/refresh.yaml)。
+- [当前action配置](../config/train/pred.yaml)、[当前refresh配置](../config/train/plan.yaml)。
 - [ActionDecoder](../modules/action_decoder.py)、[共享五步decode](../modules/rolling_planner.py)、[v2规划器](../modules/binary_rolling_planner.py)、[v3规划器](../modules/trajectory_revision_planner.py)。
-- [训练恢复入口](../train.py)、[模型与优化器](../model/FRESHDrive.py)。
+- [训练恢复入口](../train.py)、[模型与优化器](../model/CARSDirve.py)。
 
 本文仅整理证据和后续建议，没有改变网络、训练配置或已有权重，也没有启动新的训练。三层质量、目标GPU时延与refresh真实收益仍待实验确认。

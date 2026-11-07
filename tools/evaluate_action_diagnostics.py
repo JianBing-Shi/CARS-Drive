@@ -14,7 +14,7 @@ import torch
 
 from datamodules import NuplanDataModule
 from metrics.action_diagnostics import ActionDiagnosticsEvaluator
-from model.FRESHDrive import FRESHDrive
+from model.CARSDirve import CARSDirve
 from utils import load_config
 
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     args=parser.parse_args()
     config=load_config(args.config)
     trainer_config=dict(config['trainer'])
-    model=FRESHDrive.load_from_checkpoint(trainer_config.pop('ckpt_path'),map_location='cpu',strict=True,action_loss='l1')
+    model=CARSDirve.load_from_checkpoint(trainer_config.pop('ckpt_path'),map_location='cpu',strict=True,action_loss='l1')
     data=NuplanDataModule(**config['datamodule']); data.setup('validate')
     dataset=data.val_dataset
     indices=select_samples(dataset,config['evaluation']['samples_per_event'])

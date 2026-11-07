@@ -25,14 +25,17 @@ class BinaryRefreshEvaluator(Evaluator):
         times = batch.get('timestamps_us')
         if times is None:
             times = torch.arange(features.shape[1], device=features.device)[None].expand(len(features),-1) * 100000
-        output = model.planner(features, valid, times.double(), batch.get('reference_ego_to_global'), batch.get('bev_range'),
-            start=model.history_features+model.refresh_offset, steps=model.refresh_steps,
+        history_actions = batch.get('history_actions', features.new_zeros(features.shape[0], model.history_step, 3))
+        history_context = model.action_encoder(history_actions[:, -model.history_step:])
+        output = model.cars_planner(features, valid, times.double(), batch.get('reference_ego_to_global'), batch.get('bev_range'),
+            start=model.history_features+model.cars_adapter_offset, steps=model.cars_adapter_steps,
             tokenizer=model.tokenizer, memory=model.memory, decoder=model.decoder,
-            refresh=model.refresh, temporal=model.temporal, region_ids=model.region_ids,
-            budget=model.refresh_budget, cost_weight=model.cost_weight,
-            targets=batch['planning_targets'], target_mask=batch['planning_mask'], diagnostics=True)
+            refresh=model.cars_adapter, temporal=model.temporal, region_ids=model.region_ids,
+            budget=model.cars_adapter_budget, cost_weight=model.cost_weight,
+            targets=batch['planning_targets'], target_mask=batch['planning_mask'], diagnostics=True,
+            history_context=history_context)
         target, mask = batch['planning_targets'], batch['planning_mask'].bool()
-        if model.refresh_version == 3:
+        if model.cars_adapter_version == 3:
             metrics = revision_metrics(
                 output, target, mask, model.hparams.refresh_probability_threshold,
                 trajectory_weight=model.hparams.refresh_trajectory_weight,
@@ -45,19 +48,19 @@ class BinaryRefreshEvaluator(Evaluator):
         self.log_dict({f'val/{key}':value for key,value in metrics.items() if torch.isfinite(value)},
                       batch_size=len(features))
         expert_actions = local_actions(torch.nan_to_num(target))
-        offset = len(self.rows) // model.refresh_steps
+        offset = len(self.rows) // model.cars_adapter_steps
         for i in range(len(features)):
-            for t in range(model.refresh_steps):
+            for t in range(model.cars_adapter_steps):
                 common = (mask[i,t] & output['plan_mask'][i,t]).long().cumprod(0).bool()
                 n = int(common.sum())
                 distance = (output['planned_trajectory'][i,t,:,:2]-target[i,t,:,:2]).norm(dim=-1)
-                candidate_valid = bool(output['candidate_valid'][i,t]) if model.refresh_version == 3 else True
+                candidate_valid = bool(output['candidate_valid'][i,t]) if model.cars_adapter_version == 3 else True
                 full = bool(mask[i,t].all()) and candidate_valid
                 candidate_error = (output['candidate_trajectory'][i,t,:,:2]-target[i,t,:,:2]).norm(dim=-1)
                 row = dict(sample=str(self.dataset.samples[offset+i].relative_to(self.dataset.event_dir)),
                            recording=batch['recording'][i], event_type=batch['event_type'][i],
                            anchor_timestamp_us=int(batch['anchor_timestamp_us'][i]), decision_index=t,
-                           relative_event_s=(model.refresh_offset+1+t)*.1,
+                           relative_event_s=(model.cars_adapter_offset+1+t)*.1,
                            remaining_steps=int(output['remaining_steps'][i,t]),
                            valid_decision=bool(output['decision_valid'][i,t]),
                            label=int(output['refresh_labels'][i,t]),
@@ -77,7 +80,7 @@ class BinaryRefreshEvaluator(Evaluator):
                            replacement_gain_m=float(output['replacement_gain'][i,t]) if output['decision_valid'][i,t] else None,
                            visual_gain_m=(float(output['visual_gain'][i,t])
                                           if 'visual_gain' in output and mask[i,t].any() else None))
-                if model.refresh_version == 3:
+                if model.cars_adapter_version == 3:
                     row['total_candidate_gain_m'] = row['visual_gain_m']
                     row['visual_gain_m'] = None
                     prefix = mask[i,t].long().cumprod(0).bool()
@@ -128,7 +131,7 @@ class BinaryRefreshEvaluator(Evaluator):
                        'fixed5_candidate_fde_m','replacement_gain_m','visual_gain_m',
                        'event_refresh','deadline_replan','replan','evidence_acquired',
                        'monitoring_reads','online_decode_calls','common_endpoints']
-        if self.model.refresh_version == 3:
+        if self.model.cars_adapter_version == 3:
             metric_keys += ['candidate_generated','candidate_accepted','candidate_rejected',
                             'trajectory_xy_l1','trajectory_heading_l1','trajectory_l1',
                             'replacement_ce','history_ce','history_valid_pairs',
@@ -153,7 +156,7 @@ class BinaryRefreshEvaluator(Evaluator):
                                                 self.model.hparams.refresh_probability_threshold)
             stats['classification'] = {k:float(v) if torch.isfinite(v) else None for k,v in classification.items()}
             stats['classification']['valid_decisions'] = int(valid.sum())
-            if self.model.refresh_version == 3:
+            if self.model.cars_adapter_version == 3:
                 components = stats['metrics']
                 weights = (('trajectory_l1', self.model.hparams.refresh_trajectory_weight),
                            ('replacement_ce', self.model.hparams.refresh_classification_weight),
@@ -166,7 +169,7 @@ class BinaryRefreshEvaluator(Evaluator):
                       by_recording={k:summarize([r for r in rows if r['recording']==k]) for k in sorted({r['recording'] for r in rows})},
                       by_remaining_steps={str(k):summarize([r for r in rows if r['remaining_steps']==k]) for k in sorted({r['remaining_steps'] for r in rows})},
                       by_motion={k:summarize([r for r in rows if r['motion_group']==k]) for k in sorted({r['motion_group'] for r in rows})},
-                      protocol=dict(self.model.refresh_protocol(), labels='on-policy keep-minus-new common-prefix ADE gain',
+                      protocol=dict(self.model.cars_adapter_protocol(), labels='on-policy keep-minus-new common-prefix ADE gain',
                                     monitoring='current full cached BEV every decision; encoder savings not claimed',
                                     cost='full valid-BEV memory updates; monitoring and deadline counts reported separately',
                                     timing='offline counterfactual scoring; not online latency',
@@ -175,7 +178,7 @@ class BinaryRefreshEvaluator(Evaluator):
                                     event_time='relative to scenario label, not verified event onset', closed_loop=False),
                       checkpoint=self.config['trainer']['ckpt_path'], config=self.config,
                       model_hyperparameters=dict(self.model.hparams))
-        if self.model.refresh_version == 3:
+        if self.model.cars_adapter_version == 3:
             unique_history = {}
             for row in self.history_rows:
                 identity = (row['recording'],row['anchor_timestamp_us'],row['decision_index'],row['history_lag_frames'])
@@ -217,6 +220,6 @@ class BinaryRefreshEvaluator(Evaluator):
         output = self.export(report)
         with (output/'per_decision.csv').open('w', newline='', encoding='utf-8') as stream:
             writer=csv.DictWriter(stream,fieldnames=list(self.rows[0]));writer.writeheader();writer.writerows(self.rows)
-        if self.model.refresh_version == 3 and self.history_rows:
+        if self.model.cars_adapter_version == 3 and self.history_rows:
             with (output/'history_preferences.csv').open('w',newline='',encoding='utf-8') as stream:
                 writer=csv.DictWriter(stream,fieldnames=list(self.history_rows[0]));writer.writeheader();writer.writerows(self.history_rows)

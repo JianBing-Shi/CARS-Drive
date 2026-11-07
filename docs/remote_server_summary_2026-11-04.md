@@ -102,7 +102,7 @@ python -m pip install -r requirements.txt
 
 `num_workers: 0` 成功说明单进程数据加载路径可运行；尚不能确认多进程失败的具体原因。主机 RAM、容器内存限制和 `/dev/shm` 是优先排查项，不应直接归因于显存不足。
 
-当前本地 `config/train/action.yaml` 和 `refresh.yaml` 仍保留 `num_workers: 10`。直接覆盖远端配置可能重新引入故障；远端已经修改的 batch size、pin memory 等值未获用户逐项确认。
+当前本地 `config/train/pred.yaml` 和 `refresh.yaml` 仍保留 `num_workers: 10`。直接覆盖远端配置可能重新引入故障；远端已经修改的 batch size、pin memory 等值未获用户逐项确认。
 
 可先使用以下保守配置（batch size 等属于建议，只有 `num_workers: 0` 已获用户确认成功）：
 

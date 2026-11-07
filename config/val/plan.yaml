@@ -1,0 +1,26 @@
+# Rolling trajectory revision v3 validation and report export.
+mode: plan
+
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: plan
+  history_step: 20
+  future_step: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: true
+  persistent_workers: false
+  ratio: 0.1
+
+trainer:
+  ckpt_path: null  # Set a trained trajectory revision v3 checkpoint.
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+
+evaluation:
+  output_dir: evaluation/trajectory_revision_v3
+  max_samples: null
