@@ -1,10 +1,10 @@
-# Rolling trajectory revision v3 validation and report export.
-mode: plan
+# CARS plan2 ten-by-ten rolling validation and report export.
+mode: plan2
 
 datamodule:
   root: ../datasets/nuplan/nuplan-v1.1
   dir: mini
-  mode: plan
+  mode: plan2
   history_step: 20
   future_step: 10
   val_batch_size: 2
@@ -14,7 +14,7 @@ datamodule:
   ratio: 0.1
 
 trainer:
-  ckpt_path: null  # Set a trained trajectory revision v3 checkpoint.
+  ckpt_path: lightning_logs/cars_plan2/version_0/checkpoints/best.ckpt
   accelerator: auto
   devices: 1
   logger: false
@@ -22,5 +22,5 @@ trainer:
   enable_model_summary: false
 
 evaluation:
-  output_dir: evaluation/trajectory_revision_v3
+  output_dir: evaluation/cars_plan2
   max_samples: null

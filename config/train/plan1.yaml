@@ -1,0 +1,84 @@
+# CARS plan1: initialize from the same frozen pred checkpoint; ten decisions, ten-step candidates.
+univeral_config: &univeral_config
+  mode: "plan1"
+  history_step: 20
+  future_step: 10
+
+datamodule:
+  <<: *univeral_config
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  train_batch_size: 8
+  val_batch_size: 2
+  shuffle: true
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  ratio: 0.1
+
+model:
+  <<: *univeral_config
+  feature_dim: 256
+  hidden_dim: 256
+  spatial_grid: [9, 9]
+  macro_grid: [3, 3]
+  heads: 8
+  layers: 4
+  dropout: 0.1
+  cache_anchor_step: 25  # Full 41-frame cache; pred network still uses 20 history steps.
+  plan_horizon: 10
+  refresh_steps: 10
+  refresh_offset: -5
+  refresh_budget: 1.0
+  max_refresh: 1
+  cost_weight: 0.0
+  utility_weight: 1.0
+  architecture_version: 2
+  refresh_version: 3
+  refresh_observation: current_full_bev
+  refresh_update: full_valid_bev
+  refresh_probability_threshold: 0.5
+  refresh_label_epsilon: 0.0
+  refresh_update_cost: 1.0
+  refresh_fixed_interval: 3
+  refresh_random_probability: 0.3
+  refresh_monitor_frames: 3
+  refresh_residual_scale: 0.1
+  refresh_trajectory_weight: 1.0
+  refresh_classification_weight: 1.0  # Keep/replace CE on common future endpoints.
+  refresh_history_weight: 0.25
+  refresh_heading_weight: 0.1
+  decoder_layers: 2
+  teacher_forcing_ratio: 0.0
+  action_loss: l1
+  xy_loss_weight: 0.50
+  yaw_weight: 0.10
+  trajectory_loss_weight: 0.35
+  heading_loss_weight: 0.05
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  warmup_epochs: 4
+  T_max: 20
+  lr_min_ratio: 0.05
+  anchor_dropout: 0.2
+
+trainer:
+  # pred checkpoint: initialize a new run. Same-mode last.ckpt: fully resume this run.
+  ckpt_path: lightning_logs/action_encoder/version_0/checkpoints/best.ckpt
+  strategy: auto
+  accelerator: gpu
+  devices: 1
+  max_epochs: 20
+  gradient_clip_val: 1.0
+  ckpt:
+    monitor: val/next_step_error
+    save_top_k: 3
+    filename: "epoch={epoch:02d}-next={val/next_step_error:.6f}"
+    auto_insert_metric_name: false
+    mode: min
+    save_last: true
+  lr_monitor:
+    logging_interval: epoch
+  csv_logger:
+    save_dir: lightning_logs
+    name: cars_plan1

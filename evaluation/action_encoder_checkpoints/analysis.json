@@ -1,0 +1,162 @@
+{
+  "unique_anchor_identities_match_archived_old_evaluation": true,
+  "constant_baseline_max_abs_difference_m": {
+    "ade_m": 7.450580596923828e-09,
+    "fde_m": 1.1175870895385742e-08
+  },
+  "paired_baseline": {
+    "model_0/fixed5": {
+      "ade_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.02839586398025947,
+        "baseline_mean": 0.03549945245999233,
+        "relative_reduction": 0.20010417027526162,
+        "model_win_fraction": 0.46817785527462946
+      },
+      "fde_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.053322200552757694,
+        "baseline_mean": 0.0698646037261774,
+        "relative_reduction": 0.2367780290897359,
+        "model_win_fraction": 0.46120313862249346
+      },
+      "action_dx_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.009397782356575304,
+        "baseline_mean": 0.014708731579393543,
+        "relative_reduction": 0.3610745898890906,
+        "model_win_fraction": 0.5823888404533566
+      },
+      "action_dy_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.0028904870396265605,
+        "baseline_mean": 0.001872173919785873,
+        "relative_reduction": -0.5439201503016104,
+        "model_win_fraction": 0.24934612031386225
+      },
+      "action_dyaw_mae_rad": {
+        "paired_samples": 1147,
+        "model_mean": 0.002518886875999306,
+        "baseline_mean": 0.0005952797062113863,
+        "relative_reduction": -3.23143414720212,
+        "model_win_fraction": 0.03312990409764603
+      }
+    },
+    "model_0/replay": {
+      "ade_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.07399966814307579,
+        "baseline_mean": 0.09731316399740017,
+        "relative_reduction": 0.23957186157206056,
+        "model_win_fraction": 0.46207497820401044
+      },
+      "fde_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.17426836330430628,
+        "baseline_mean": 0.23097791968138714,
+        "relative_reduction": 0.24551938321769673,
+        "model_win_fraction": 0.46207497820401044
+      },
+      "action_dx_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.01383464991221807,
+        "baseline_mean": 0.023491913357016798,
+        "relative_reduction": 0.41108884142526436,
+        "model_win_fraction": 0.5902353966870096
+      },
+      "action_dy_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.0030838600666627186,
+        "baseline_mean": 0.0023688816978914176,
+        "relative_reduction": -0.30182105311874197,
+        "model_win_fraction": 0.2990409764603313
+      },
+      "action_dyaw_mae_rad": {
+        "paired_samples": 1147,
+        "model_mean": 0.002456360012294892,
+        "baseline_mean": 0.0008818985681093068,
+        "relative_reduction": -1.785308992576161,
+        "model_win_fraction": 0.07149084568439407
+      }
+    },
+    "model_1/fixed5": {
+      "ade_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.04171729844579929,
+        "baseline_mean": 0.03549945245999233,
+        "relative_reduction": -0.17515329265470903,
+        "model_win_fraction": 0.35396687009590233
+      },
+      "fde_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.06380499484270824,
+        "baseline_mean": 0.0698646037261774,
+        "relative_reduction": 0.08673360414694076,
+        "model_win_fraction": 0.4559721011333915
+      },
+      "action_dx_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.013753638859576795,
+        "baseline_mean": 0.014708731579393543,
+        "relative_reduction": 0.06493372420738175,
+        "model_win_fraction": 0.42632955536181344
+      },
+      "action_dy_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.0033625285447305784,
+        "baseline_mean": 0.001872173919785873,
+        "relative_reduction": -0.7960556491007855,
+        "model_win_fraction": 0.22144725370531823
+      },
+      "action_dyaw_mae_rad": {
+        "paired_samples": 1147,
+        "model_mean": 0.0019601833397609246,
+        "baseline_mean": 0.0005952797062113863,
+        "relative_reduction": -2.29287781744882,
+        "model_win_fraction": 0.07846556233653008
+      }
+    },
+    "model_1/replay": {
+      "ade_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.0766066143008269,
+        "baseline_mean": 0.09731316399740017,
+        "relative_reduction": 0.21278261692453526,
+        "model_win_fraction": 0.5047951176983435
+      },
+      "fde_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.1533521519165564,
+        "baseline_mean": 0.23097791968138714,
+        "relative_reduction": 0.3360744086357188,
+        "model_win_fraction": 0.5614646904969486
+      },
+      "action_dx_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.01611953082578882,
+        "baseline_mean": 0.023491913357016798,
+        "relative_reduction": 0.3138263971600219,
+        "model_win_fraction": 0.5170008718395815
+      },
+      "action_dy_mae_m": {
+        "paired_samples": 1147,
+        "model_mean": 0.0031648916839893968,
+        "baseline_mean": 0.0023688816978914176,
+        "relative_reduction": -0.33602774963668347,
+        "model_win_fraction": 0.3077593722755013
+      },
+      "action_dyaw_mae_rad": {
+        "paired_samples": 1147,
+        "model_mean": 0.0021476206364521777,
+        "baseline_mean": 0.0008818985681093068,
+        "relative_reduction": -1.4352240882491047,
+        "model_win_fraction": 0.11159546643417612
+      }
+    }
+  },
+  "caveats": [
+    "validation-set only; descriptive statistics, no independent-log confidence interval",
+    "archived old results have identical anchor identities and baseline predictions; no rerun of old checkpoints with new architecture",
+    "new run has a different LR schedule and likely training batch size, so old/new comparison is not an isolated action-history training ablation"
+  ]
+}

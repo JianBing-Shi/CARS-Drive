@@ -31,11 +31,17 @@ from utils.camera import (
 class NuplanEventDataset(Dataset):
     """Cache shared BEVs and build event/control windows split by recording log."""
 
+    # The shared preprocessing cache is deliberately wider than either model
+    # input.  It covers [-2.5s, +1.5s] around each anchor at 10 Hz.
+    CACHE_HISTORY_STEP = 25
+    CACHE_FUTURE_STEP = 15
+    CACHE_SCHEMA_VERSION = 5
+
     def __init__(self, root: str, dir: str, split: str, bevformer_root: str | Path,
-                 history_step: int = 20, future_step: int = 10,
+                 history_step: int = 25, future_step: int = 15,
                  batch_size: int = 32, ratio: float = .1,
                  camera_embedding_indices=None, event_types=None, preprocess: bool = True,
-                 cache_only: bool = False):
+                 cache_only: bool = False, mode: str = "pred"):
         self._data_root = Path(root).expanduser().resolve()
         if dir in ['train', 'val', 'test', 'mini']:
             self.dir = dir
@@ -53,6 +59,9 @@ class NuplanEventDataset(Dataset):
         
         self.history_step, self.future_step = history_step, future_step
         self.window_samples = history_step + 1 + future_step
+        if mode not in {"pred", "plan1", "plan2"}:
+            raise ValueError(f"Unsupported dataset mode: {mode}")
+        self.mode = mode
         self.bevformer_root = Path(bevformer_root).resolve()
         self.checkpoint = self.bevformer_root / "projects/ckpts/bevformer_tiny_epoch_24.pth"
         self.source_indices = camera_embedding_indices
@@ -290,7 +299,7 @@ class NuplanEventDataset(Dataset):
         future_trajectory = trajectory["future_expert_trajectory"]
         future_actions = dataset_utils.local_actions(future_trajectory)
         payload = {
-            "schema_version": 4, "recording": database.stem, "event_type": kind,
+            "schema_version": self.CACHE_SCHEMA_VERSION, "recording": database.stem, "event_type": kind,
             **trajectory.get("window_metadata", {}),
             "anchor_timestamp_us": anchor, "sampling_interval_us": self.interval_us,
             "timestamps_us": timestamps, "relative_time_us": offsets * self.interval_us,
@@ -366,6 +375,49 @@ class NuplanEventDataset(Dataset):
 
     def get(self, idx):
         event = torch.load(self.samples[idx], map_location="cpu", weights_only=False)
+        count = len(event["bev_paths"])
+        cache_anchor = int(event["anchor_index"])
+        planning = self.mode in {"plan1", "plan2"}
+        if planning:
+            if count != 41 or cache_anchor != self.CACHE_HISTORY_STEP:
+                raise ValueError("plan1/plan2 require the expanded 41-frame cache [-2.5s, +1.5s]")
+            if self.history_step != 20 or self.future_step != 10:
+                raise ValueError("plan1/plan2 require history_step=20 and future_step=10")
+            begin, end = 0, count
+        elif count == 41 and cache_anchor == self.CACHE_HISTORY_STEP:
+            # The frozen predictor keeps its original [-2s, +1s] interface.
+            begin, end = 5, 36
+        elif count == self.history_step + 1 + self.future_step:
+            # Existing 31-frame pred caches and small preprocessing fixtures.
+            begin, end = 0, count
+        else:
+            raise ValueError("Unsupported event cache length; expected a 41-frame cache or configured pred window")
+
+        anchor = cache_anchor - begin
+        timestamps = event["timestamps_us"]
+        event["timestamps_us"] = timestamps[begin:end]
+        # Use the original anchor before slicing: original slot 20 is -0.5s in
+        # a 41-frame cache, whereas the event anchor is original slot 25.
+        event["relative_time_us"] = timestamps[begin:end] - timestamps[cache_anchor]
+        event["bev_paths"] = event["bev_paths"][begin:end]
+        event["anchor_index"] = anchor
+        trajectory = dict(event["trajectory"])
+        if "past_trajectory" in trajectory:
+            trajectory["past_trajectory"] = trajectory["past_trajectory"][begin:cache_anchor].float()
+            trajectory["anchor_trajectory"] = trajectory["anchor_trajectory"].float()
+        trajectory["future_expert_trajectory"] = trajectory["future_expert_trajectory"][:end - cache_anchor - 1].float()
+        for name in ("trajectory_mask", "trajectory_timestamps_us", "pose_timestamps_us"):
+            if name in trajectory:
+                trajectory[name] = trajectory[name][begin:end]
+        if "future_expert_mask" in trajectory:
+            trajectory["future_expert_mask"] = trajectory["future_expert_mask"][:end - cache_anchor - 1]
+        interval_us = int(event.get("sampling_interval_us", self.interval_us))
+        if "history_seconds" in trajectory:
+            trajectory["history_seconds"] = anchor * interval_us / 1e6
+        if "future_seconds" in trajectory:
+            trajectory["future_seconds"] = (end - cache_anchor - 1) * interval_us / 1e6
+        event["trajectory"] = trajectory
+
         frames = [torch.load(self._data_root / name, map_location="cpu", weights_only=False)
                   for name in event["bev_paths"]]
         event["bev_features"] = torch.stack([x["bev_features"] for x in frames])
@@ -376,42 +428,62 @@ class NuplanEventDataset(Dataset):
         event["tracked_objects"] = [x["tracked_objects"] for x in frames]
         event["bev_xy"], event["bev_range"] = frames[0]["bev_xy"], frames[0]["bev_range"]
         event["bev_range"] = torch.as_tensor(event["bev_range"], dtype=torch.float32)
-        event["future_actions"] = event["future_actions"].float()
-        event["future_action_mask"] = event["future_action_mask"].bool()
-        if "trajectory_mask" in event["trajectory"]:
-            pose_mask = event["trajectory"]["trajectory_mask"]
-            anchor = event["anchor_index"]
-            event["future_action_mask"] = pose_mask[anchor:-1] & pose_mask[anchor + 1:]
-        event["future_trajectory"] = event["future_trajectory"].float()
+        event["future_trajectory"] = trajectory["future_expert_trajectory"]
         event["future_actions"] = dataset_utils.local_actions(event["future_trajectory"])
-        trajectory = event["trajectory"]
-        past = torch.cat((trajectory["past_trajectory"], trajectory["anchor_trajectory"][None]), 0).float()
-        event["history_actions"] = dataset_utils.local_actions(past)
+        if "trajectory_mask" in trajectory:
+            pose_mask = trajectory["trajectory_mask"].bool()
+            event["future_action_mask"] = pose_mask[anchor:-1] & pose_mask[anchor + 1:]
+        else:
+            event["future_action_mask"] = event["future_action_mask"][:len(event["future_actions"])].bool()
+        if "past_trajectory" in trajectory:
+            past = torch.cat((trajectory["past_trajectory"], trajectory["anchor_trajectory"][None]), 0)
+            # Preserve pred's established output. The predictor consumes the
+            # final history_step genuine increments, discarding the first pad.
+            event["history_actions"] = dataset_utils.local_actions(past)
+        else:
+            event["history_actions"] = event["future_actions"].new_zeros(self.history_step, 3)
         slots = torch.arange(len(event["bev_paths"]))
-        event["replay_causal_mask"] = slots[None, :] <= event["anchor_index"] + torch.arange(self.future_step)[:, None]
+        event["anchor_input_mask"] = slots <= anchor
+        event["replay_causal_mask"] = slots[None, :] <= anchor + torch.arange(self.future_step)[:, None]
         event["causal_context_mask"] = event["replay_causal_mask"]
-        event["future_timestamps_us"] = event["timestamps_us"][event["anchor_index"] + 1:]
+        event["future_timestamps_us"] = event["timestamps_us"][anchor + 1:]
         event["anchor_timestamp_us"] = torch.as_tensor(event["anchor_timestamp_us"], dtype=torch.long)
         event["split"] = self.split
-        # Rolling refresh: initialize at -0.5s, decide at (-0.5s,+0.5s].
-        if "past_trajectory" in event["trajectory"]:
-            trajectory = event["trajectory"]
+
+        if planning:
+            if "past_trajectory" not in trajectory or "trajectory_mask" not in trajectory:
+                raise ValueError("Planning requires recorded past/future poses and their validity mask")
             poses = torch.cat((trajectory["past_trajectory"], trajectory["anchor_trajectory"][None],
                                trajectory["future_expert_trajectory"]))
-            start = event["anchor_index"] - 5
-            frames = torch.arange(start + 1, start + 11)
-            endpoints = frames[:, None] + torch.arange(1, 6)[None]
-            delta = poses[endpoints, :2] - poses[frames, None, :2]
-            yaw = poses[frames, 2, None]
+            # Initialize at -0.5s, then make ten causal decisions at -0.4s to
+            # +0.5s. Every new candidate has ten future endpoints, up to +1.5s.
+            start = anchor - 5
+            decisions = torch.arange(start + 1, start + 11)
+            endpoints = decisions[:, None] + torch.arange(1, self.future_step + 1)[None]
+            delta = poses[endpoints, :2] - poses[decisions, None, :2]
+            yaw = poses[decisions, 2, None]
             angles = poses[endpoints, 2] - yaw
             event["planning_targets"] = torch.stack((
                 yaw.cos() * delta[..., 0] + yaw.sin() * delta[..., 1],
                 -yaw.sin() * delta[..., 0] + yaw.cos() * delta[..., 1],
                 torch.atan2(angles.sin(), angles.cos())), -1)
-            mask = trajectory["trajectory_mask"]
-            # Each cumulative endpoint needs the entire intervening pose prefix.
-            valid = mask[frames, None] & mask[endpoints]
+            mask = trajectory["trajectory_mask"].bool()
+            # A valid cumulative endpoint requires every intervening pose.
+            valid = mask[decisions, None] & mask[endpoints]
             event["planning_mask"] = valid.long().cumprod(-1).bool()
+            # local_actions pads an initial origin; dropping it leaves exactly
+            # the observed adjacent-pose increments. No candidate action enters
+            # the real history supplied to later decisions.
+            actions = dataset_utils.local_actions(poses)[1:]
+            observed_at = torch.arange(start, start + 11)
+            event["action_history_sequence"] = torch.stack([
+                actions[time - self.history_step:time] for time in observed_at.tolist()])
+            event["history_actions"] = event["action_history_sequence"][0]
+            event["planning_start_index"] = start
+            event["planning_decision_indices"] = decisions
+            event["anchor_input_mask"] = slots <= start
+            event["replay_causal_mask"] = slots[None, :] <= decisions[:, None]
+            event["causal_context_mask"] = event["replay_causal_mask"]
         return event
 
 

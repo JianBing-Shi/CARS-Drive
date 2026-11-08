@@ -41,6 +41,8 @@ class NuplanDataModule(pl.LightningDataModule):
         super().__init__()
         self.root = root
         self.dir = dir
+        if mode not in {"pred", "plan1", "plan2"}:
+            raise ValueError(f"Unsupported dataset mode: {mode}")
         self.mode = mode
         self.history_step = history_step
         self.future_step = future_step
@@ -61,8 +63,9 @@ class NuplanDataModule(pl.LightningDataModule):
             dataset = NuplanEventDataset(
                 root=self.root, dir=self.dir, split=split, bevformer_root=self.bevformer_root,
                 history_step=self.history_step, future_step=self.future_step,
-                ratio=self.ratio, event_types=self.event_types, preprocess=False)
-            if self.mode == "plan":
+                ratio=self.ratio, event_types=self.event_types, preprocess=False,
+                mode=self.mode)
+            if self.mode in {"plan1", "plan2"}:
                 dataset.samples = [path for path in dataset.samples
                                    if path.parent.name == "background_control"
                                    or torch.load(path, map_location="cpu", weights_only=False).get("anchor_offset_us", 0) == 0]

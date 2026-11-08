@@ -8,6 +8,7 @@ import random
 import re
 import sqlite3
 import sys
+import argparse
 from collections import Counter
 from bisect import bisect_right
 from contextlib import closing
@@ -31,8 +32,12 @@ from utils.camera import (
 class NuplanEventDataset(Dataset):
     """Cache shared BEVs and build event/control windows split by recording log."""
 
+    CACHE_HISTORY_STEP = 25
+    CACHE_FUTURE_STEP = 15
+    CACHE_SCHEMA_VERSION = 5
+
     def __init__(self, root: str, dir: str, split: str, bevformer_root: str | Path,
-                 history_features: int = 20, future_action: int = 10,
+                 history_features: int = CACHE_HISTORY_STEP, future_action: int = CACHE_FUTURE_STEP,
                  batch_size: int = 32, ratio: float = .1,
                  camera_embedding_indices=None, event_types=None, preprocess: bool = True,
                  cache_only: bool = False):
@@ -52,6 +57,8 @@ class NuplanEventDataset(Dataset):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.history_features, self.future_action = history_features, future_action
+        if (history_features, future_action) != (self.CACHE_HISTORY_STEP, self.CACHE_FUTURE_STEP):
+            raise ValueError("Preprocessing must generate the fixed 41-frame [-2.5s,+1.5s] cache")
         self.window_samples = history_features + 1 + future_action
         self.bevformer_root = Path(bevformer_root).resolve()
         self.checkpoint = self.bevformer_root / "projects/ckpts/bevformer_tiny_epoch_24.pth"
@@ -103,7 +110,7 @@ class NuplanEventDataset(Dataset):
         return str(Path(self.processed_dir) / f"{self.dir}-{self.split}.pt")
 
     def _process(self):
-        if all(Path(path).is_file() for path in self.processed_paths):
+        if all(Path(path).is_file() for path in self.processed_paths) and not self._needs_rebuild():
             return
         if self.log and "pytest" not in sys.modules:
             print("Processing...", file=sys.stderr)
@@ -111,6 +118,36 @@ class NuplanEventDataset(Dataset):
         self.process()
         if self.log and "pytest" not in sys.modules:
             print("Done!", file=sys.stderr)
+
+    def _needs_rebuild(self) -> bool:
+        """Detect manifests/events from the previous 31-frame schema.
+
+        Rebuilding event metadata is cheap relative to BEV extraction.  The
+        encoder still reuses every existing BEV file in ``_frame`` and only
+        computes timestamps that are absent from the shared cache.
+        """
+        expected = self.CACHE_HISTORY_STEP + 1 + self.CACHE_FUTURE_STEP
+        for manifest in self.processed_paths:
+            path = Path(manifest)
+            if not path.is_file():
+                return True
+            try:
+                names = torch.load(path, map_location="cpu", weights_only=False)
+            except Exception:
+                return True
+            for name in names:
+                event_path = Path(self.event_dir) / name
+                if not event_path.is_file():
+                    return True
+                try:
+                    event = torch.load(event_path, map_location="cpu", weights_only=False)
+                except Exception:
+                    return True
+                if event.get("schema_version", 0) < self.CACHE_SCHEMA_VERSION:
+                    return True
+                if len(event.get("bev_paths", ())) != expected:
+                    return True
+        return False
 
     def _load_model(self):
         # Load once per preprocessing run, then reuse across all DBs/windows.
@@ -288,7 +325,7 @@ class NuplanEventDataset(Dataset):
         future_trajectory = trajectory["future_expert_trajectory"]
         future_actions = dataset_utils.local_actions(future_trajectory)
         payload = {
-            "schema_version": 4, "recording": database.stem, "event_type": kind,
+            "schema_version": self.CACHE_SCHEMA_VERSION, "recording": database.stem, "event_type": kind,
             **trajectory.get("window_metadata", {}),
             "anchor_timestamp_us": anchor, "sampling_interval_us": self.interval_us,
             "timestamps_us": timestamps, "relative_time_us": offsets * self.interval_us,
@@ -411,7 +448,18 @@ class NuplanEventDataset(Dataset):
 
 
 if __name__ == "__main__":
-    root = "../datasets/nuplan/nuplan-v1.1"
-    bevformer_root = "3rdparty/BEVFormer"
-    NuplanEventDataset(root=root, dir='mini', split='train', bevformer_root=bevformer_root)
-    NuplanEventDataset(root=root, dir='mini', split='val', bevformer_root=bevformer_root)
+    parser = argparse.ArgumentParser(description="Build the shared 41-frame BEV cache")
+    parser.add_argument("--root", default="../datasets/nuplan/nuplan-v1.1",
+                        help="nuPlan version root containing splits/ and sensor_blobs/")
+    parser.add_argument("--dir", default="mini", choices=("train", "val", "test", "mini"))
+    parser.add_argument("--bevformer-root", default="3rdparty/BEVFormer")
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--ratio", type=float, default=.1)
+    parser.add_argument("--cache-only", action="store_true",
+                        help="Only validate existing BEVs; never run the GPU encoder")
+    args = parser.parse_args()
+    for split in ("train", "val"):
+        NuplanEventDataset(root=args.root, dir=args.dir, split=split,
+                           bevformer_root=args.bevformer_root,
+                           batch_size=args.batch_size, ratio=args.ratio,
+                           cache_only=args.cache_only)

@@ -1,15 +1,15 @@
-# Trajectory Revision Module v3; reuse the trained action v2 checkpoint.
+# CARS plan2: initialize from the same frozen pred checkpoint; ten decisions, ten-step candidates.
 univeral_config: &univeral_config
-  mode: "plan"
+  mode: "plan2"
   history_step: 20
   future_step: 10
 
 datamodule:
   <<: *univeral_config
-  root: /root/rivermind-data/nuplan/nuplan-v1.1
+  root: ../datasets/nuplan/nuplan-v1.1
   dir: mini
-  train_batch_size: 512
-  val_batch_size: 512
+  train_batch_size: 8
+  val_batch_size: 2
   shuffle: true
   num_workers: 0
   pin_memory: false
@@ -25,7 +25,8 @@ model:
   heads: 8
   layers: 4
   dropout: 0.1
-  plan_horizon: 5
+  cache_anchor_step: 25  # Full 41-frame cache; pred network still uses 20 history steps.
+  plan_horizon: 10
   refresh_steps: 10
   refresh_offset: -5
   refresh_budget: 1.0
@@ -36,7 +37,7 @@ model:
   refresh_version: 3
   refresh_observation: current_full_bev
   refresh_update: full_valid_bev
-  refresh_probability_threshold: 0.5
+  refresh_probability_threshold: 0.5  # Unused by plan2; adoption uses predicted_gain > epsilon.
   refresh_label_epsilon: 0.0
   refresh_update_cost: 1.0
   refresh_fixed_interval: 3
@@ -44,7 +45,9 @@ model:
   refresh_monitor_frames: 3
   refresh_residual_scale: 0.1
   refresh_trajectory_weight: 1.0
-  refresh_classification_weight: 1.0
+  refresh_classification_weight: 0.0  # plan2 uses only L1 regression.
+  quality_loss_weight: 1.0
+  gain_loss_weight: 1.0
   refresh_history_weight: 0.25
   refresh_heading_weight: 0.1
   decoder_layers: 2
@@ -62,7 +65,7 @@ model:
   anchor_dropout: 0.2
 
 trainer:
-  # Use the checkpoint produced by the history-aware pred stage.
+  # pred checkpoint: initialize a new run. Same-mode last.ckpt: fully resume this run.
   ckpt_path: lightning_logs/action_encoder/version_0/checkpoints/best.ckpt
   strategy: auto
   accelerator: gpu
@@ -70,13 +73,14 @@ trainer:
   max_epochs: 20
   gradient_clip_val: 1.0
   ckpt:
-    monitor: val/ade
-    save_top_k: 1
-    filename: best
+    monitor: val/next_step_error
+    save_top_k: 3
+    filename: "epoch={epoch:02d}-next={val/next_step_error:.6f}"
+    auto_insert_metric_name: false
     mode: min
     save_last: true
   lr_monitor:
     logging_interval: epoch
   csv_logger:
     save_dir: lightning_logs
-    name: trajectory_revision_v3
+    name: cars_plan2

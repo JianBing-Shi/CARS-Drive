@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import torch
+from torch.nn import functional as F
 
 from modules.loss import TrajectoryL1Loss
 from modules.rolling_trajectory_planner import RollingTrajectoryPlanner
@@ -10,9 +11,14 @@ from modules.rolling_trajectory_planner import RollingTrajectoryPlanner
 class CARSRevisionPlanner(RollingTrajectoryPlanner):
     """Generate before accepting; rejected candidates still incur decoding cost."""
 
-    def __init__(self, horizon=5, probability_threshold=.5, label_epsilon=0.,
-                 update_cost=1., fixed_interval=3, random_probability=.3, monitor_frames=3):
+    def __init__(self, horizon=10, probability_threshold=.5, label_epsilon=0.,
+                 update_cost=1., fixed_interval=3, random_probability=.3, monitor_frames=3,
+                 mode='plan1', heading_weight=.1):
         super().__init__(horizon)
+        if mode not in {'plan1', 'plan2'}:
+            raise ValueError('CARS planning mode must be plan1 or plan2')
+        self.mode = mode
+        self.heading_weight = heading_weight
         self.probability_threshold = probability_threshold
         self.label_epsilon = label_epsilon
         self.update_cost = update_cost
@@ -34,7 +40,8 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                 tokenizer, memory, decoder, refresh, temporal, region_ids,
                 budget, cost_weight, targets=None, target_mask=None, refresh_policy='learned',
                 diagnostics=False, random_seed=1024, adapter_enabled=True,
-                history_context=None):
+                history_context=None, action_history_sequence=None, action_encoder=None,
+                history_step=None):
         if refresh_policy not in {'learned', 'no_refresh', 'replan_only', 'fixed', 'random', 'all_fresh', 'oracle'}:
             raise ValueError(f'Unknown revision policy: {refresh_policy}')
         if (targets is None) != (target_mask is None):
@@ -48,14 +55,25 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
         if poses is not None and bev_range is None:
             raise ValueError('BEV range is required for causal coordinate alignment')
         batch = features.shape[0]
+        if action_history_sequence is not None:
+            if action_encoder is None or history_step is None:
+                raise ValueError('Causal action histories require action_encoder and history_step')
+            if action_history_sequence.shape != (batch, steps + 1, history_step, 3):
+                raise ValueError('action_history_sequence must be [B, decisions+1, history_step, 3]')
+        first_frame = 0 if history_step is None else start - history_step
+        if first_frame < 0:
+            raise ValueError('Insufficient causal history before planning initialization')
         slots = torch.arange(self.horizon, device=features.device)[None]
         budgets = torch.as_tensor(budget, device=features.device, dtype=torch.float32).expand(batch)
         cost = budgets.new_full((batch,), self.update_cost)
         ages = ((times[:, start, None] - times) / 1e6).float()
         monitor = []
         with torch.no_grad():
-            state = temporal.encode_history(features[:, :1], valid[:, :1], ages[:, :1], tokenizer, memory)
-            for frame in range(1, start + 1):
+            if action_history_sequence is not None:
+                history_context = action_encoder(action_history_sequence[:, 0])
+            state = temporal.encode_history(features[:, first_frame:first_frame+1], valid[:, first_frame:first_frame+1],
+                                            ages[:, first_frame:first_frame+1], tokenizer, memory)
+            for frame in range(first_frame + 1, start + 1):
                 if poses is not None:
                     state = temporal.align_memory(state, poses[:, frame - 1], poses[:, frame], bev_range)
                 tokens, mask = tokenizer(features[:, frame], ages[:, frame], valid[:, frame])
@@ -70,6 +88,7 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
             plan = TrajectoryL1Loss.trajectory(actions)
             initial = plan.clone()
         remaining = torch.full((batch,), self.horizon, device=features.device, dtype=torch.long)
+        active_source = torch.full_like(remaining, start)
         # All entries are detached independent candidates, not alternate world states.
         history = [(start, plan.detach(), slots.expand(batch, -1) < remaining[:, None])]
         generator = torch.Generator(device=features.device).manual_seed(random_seed)
@@ -77,6 +96,9 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
         for index in range(steps):
             frame = start + 1 + index
             with torch.no_grad():
+                # Encode only actions completed by this decision, never a future row.
+                if action_history_sequence is not None:
+                    history_context = action_encoder(action_history_sequence[:, index + 1])
                 old_pose = None if poses is None else poses[:, frame - 1]
                 pose = None if poses is None else poses[:, frame]
                 if poses is not None:
@@ -133,10 +155,19 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                                          self.horizon, None if history_context is None else history_context[feasible])
                 candidate_actions[feasible] = decoded
             candidate = TrajectoryL1Loss.trajectory(candidate_actions)
-            # Classification cannot optimize its labels by moving the candidate geometry.
-            logits = refresh.compare(context, keep, candidate.detach(), keep_mask, dt=dt)
-            probability = logits.softmax(-1)[:, 1]
-            request = probability > self.probability_threshold
+            # Decision supervision must not move candidate geometry to fit its labels.
+            scores = refresh.compare(context, keep, candidate.detach(), keep_mask, dt=dt)
+            output = dict(candidate_trajectory=candidate, candidate_valid=feasible)
+            if self.mode == 'plan1':
+                probability = scores.softmax(-1)[:, 1]
+                request = probability > self.probability_threshold
+                output.update(refresh_logits=scores, refresh_probability=probability.detach())
+            elif self.mode == 'plan2':
+                quality = F.softplus(scores)
+                predicted_gain = quality[:, 0] - quality[:, 1]
+                request = predicted_gain > self.label_epsilon + cost_weight * cost
+                output.update(quality_errors=quality, predicted_gain=predicted_gain)
+            output['learned_replace_decision'] = request.detach() & feasible & ~deadline
             if refresh_policy in {'no_refresh', 'replan_only'}:
                 request = torch.zeros_like(request)
             elif refresh_policy == 'all_fresh':
@@ -145,16 +176,21 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                 request = torch.full_like(request, (index + 1) % self.fixed_interval == 0)
             elif refresh_policy == 'random':
                 request = torch.rand(batch, device=features.device, generator=generator) < self.random_probability
-            output = dict(candidate_trajectory=candidate, candidate_valid=feasible, refresh_logits=logits)
             if targets is not None:
                 labels, decision_valid, gain = refresh.replacement_labels(
                     keep, candidate.detach(), targets[:, index], keep_mask & target_mask[:, index].bool(),
-                    feasible, self.label_epsilon, cost_weight, cost)
+                    feasible, self.label_epsilon, cost_weight, cost, self.heading_weight)
+                # Score inputs use causal plan existence only. If expert support
+                # is shorter, skip this pair rather than supervise a different
+                # horizon or leak a future label mask into the deployed decision.
+                common_prefix = (keep_mask & target_mask[:, index].bool()).long().cumprod(-1).bool()
+                decision_valid &= (common_prefix == keep_mask).all(-1)
                 output.update(refresh_labels=labels, decision_valid=decision_valid, replacement_gain=gain,
                               common_mask=(keep_mask & target_mask[:, index].bool()).long().cumprod(-1).bool())
                 if refresh_policy == 'oracle':
                     request = labels.bool() & decision_valid
-                history_logits = [logits * 0 for _ in range(self.horizon - 1)]
+                history_scores = [scores * 0 for _ in range(self.horizon - 1)]
+                history_quality_targets = [scores.detach() * 0 for _ in range(self.horizon - 1)]
                 history_labels = [torch.zeros_like(remaining) for _ in range(self.horizon - 1)]
                 history_valid = [torch.zeros_like(feasible) for _ in range(self.horizon - 1)]
                 history_gain = [budgets * 0 for _ in range(self.horizon - 1)]
@@ -164,24 +200,37 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                     common = old_mask & target_mask[:, index].bool()
                     old_labels, old_valid, old_gain = refresh.replacement_labels(
                         old_plan, candidate.detach(), targets[:, index], common, feasible,
-                        self.label_epsilon, cost_weight, cost)
+                        self.label_epsilon, cost_weight, cost, self.heading_weight)
+                    old_valid &= (common.long().cumprod(-1).bool() == old_mask).all(-1)
                     # Input mask is based only on elapsed plan time, never on future GT availability.
-                    history_logits[lag_index] = refresh.compare(context, old_plan, candidate.detach(), old_mask, dt=dt)
+                    raw = refresh.compare(context, old_plan, candidate.detach(), old_mask, dt=dt)
+                    history_scores[lag_index] = raw if self.mode == 'plan1' else F.softplus(raw)
+                    history_quality_targets[lag_index] = refresh.comparison_targets(
+                        old_plan, candidate.detach(), targets[:, index], common, self.heading_weight)
                     history_labels[lag_index] = old_labels
-                    history_valid[lag_index] = old_valid
+                    # The active plan already contributes the primary comparison.
+                    history_valid[lag_index] = old_valid & (active_source != source_frame)
                     history_gain[lag_index] = old_gain
                     history_masks[lag_index] = common.long().cumprod(-1).bool()
                 if self.horizon > 1:
-                    output.update(history_logits=torch.stack(history_logits, 1),
-                                  history_labels=torch.stack(history_labels, 1),
+                    output.update(history_labels=torch.stack(history_labels, 1),
                                   history_valid=torch.stack(history_valid, 1),
                                   history_gain=torch.stack(history_gain, 1),
                                   history_common_mask=torch.stack(history_masks, 1))
                 else:
-                    output.update(history_logits=logits[:, None, :][:, :0],
-                                  history_labels=remaining[:, None][:, :0],
+                    output.update(history_labels=remaining[:, None][:, :0],
                                   history_valid=feasible[:, None][:, :0], history_gain=budgets[:, None][:, :0],
                                   history_common_mask=keep_mask[:, None][:, :0])
+                stacked_scores = torch.stack(history_scores, 1) if history_scores else scores[:, None, :][:, :0]
+                if self.mode == 'plan1':
+                    output['history_logits'] = stacked_scores
+                elif self.mode == 'plan2':
+                    output.update(quality_targets=refresh.comparison_targets(
+                        keep, candidate.detach(), targets[:, index],
+                        keep_mask & target_mask[:, index].bool(), self.heading_weight),
+                        history_quality_errors=stacked_scores,
+                        history_quality_targets=torch.stack(history_quality_targets, 1)
+                            if history_quality_targets else scores.detach()[:, None, :][:, :0])
             with torch.no_grad():
                 diagnostic_calls = torch.zeros_like(remaining)
                 if diagnostics:
@@ -210,6 +259,10 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                 plan = torch.where(replan[:, None, None], TrajectoryL1Loss.trajectory(adopted), keep)
                 actions = torch.where(replan[:, None, None], adopted, actions)
                 remaining = torch.where(replan, torch.full_like(remaining, self.horizon), remaining)
+                # Fallbacks are not the fresh candidates stored in the history bank.
+                source = torch.where(accept, torch.full_like(active_source, frame),
+                                     torch.full_like(active_source, -frame - 1))
+                active_source = torch.where(replan, source, active_source)
                 state = self.detach_state(chosen_state)
                 # Rejected candidates only enter the auxiliary training bank, not active state.
                 history.append((frame, candidate.detach(), slots < (feasible.long() * self.horizon)[:, None]))
@@ -218,7 +271,7 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                 output.update(planned_trajectory=plan.detach(), plan_mask=slots < remaining[:, None],
                               retained_trajectory=keep, retained_mask=keep_mask,
                               previous_action=previous, remaining_steps=keep_mask.sum(-1),
-                              refresh_probability=probability.detach(), refresh_request=request & ~deadline,
+                              refresh_request=request & ~deadline, replace_decision=event,
                               refresh_feasible=feasible, event_refresh=event, evidence_acquired=accept,
                               refresh_mask=regions & accept[:, None], replan_mask=replan,
                               forced_replan=deadline, deadline_replan=deadline,
@@ -229,6 +282,6 @@ class CARSRevisionPlanner(RollingTrajectoryPlanner):
                               diagnostic_decode_calls=diagnostic_calls)
             outputs.append(output)
         result = {key: torch.stack([out[key] for out in outputs], 1) for key in outputs[0]}
-        result.update(initial_trajectory=initial,
+        result.update(planning_mode=self.mode, initial_trajectory=initial,
                       initial_decode_calls=torch.full_like(remaining, self.horizon))
         return result

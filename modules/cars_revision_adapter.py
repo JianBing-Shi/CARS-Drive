@@ -11,7 +11,6 @@ import torch
 from torch import Tensor, nn
 
 from torch.nn import functional as F
-from modules.loss import TrajectoryL1Loss
 
 
 class CARSRevisionAdapter(nn.Module):
@@ -19,8 +18,9 @@ class CARSRevisionAdapter(nn.Module):
 
     ``context`` receives arrived observations only. ``adapt`` is differentiable
     with respect to these new parameters, including through a frozen decoder.
-    ``compare`` returns two logits ordered as ``[keep, replace]``; ground truth
-    never enters any of these three operations.
+    ``compare`` returns shared raw scores ordered as ``[keep, new]``. plan1
+    interprets them as logits; plan2 converts them to nonnegative errors.
+    Ground truth never enters any of these three operations.
     """
 
     def region_available(self, valid: Tensor, region_ids: Tensor, grid: tuple[int, int]) -> Tensor:
@@ -38,13 +38,28 @@ class CARSRevisionAdapter(nn.Module):
                 'age_s': torch.where(update_valid, anchor_age[:, None], state['age_s'])}
 
     @staticmethod
+    def trajectory_quality(plan, target, common_mask, heading_weight=.1):
+        """Coordinate position L1 plus wrapped heading L1 on a valid prefix."""
+        common = common_mask.bool().long().cumprod(-1).bool()
+        delta = torch.nan_to_num(plan - target).masked_fill(~common[..., None], 0)
+        error = delta[..., :2].abs().mean(-1)
+        error = error + heading_weight * torch.atan2(delta[..., 2].sin(), delta[..., 2].cos()).abs()
+        return error.sum(-1) / common.sum(-1).clamp_min(1)
+
+    @staticmethod
+    def comparison_targets(keep, candidate, target, common_mask, heading_weight=.1):
+        with torch.no_grad():
+            return torch.stack((
+                CARSRevisionAdapter.trajectory_quality(keep, target, common_mask, heading_weight),
+                CARSRevisionAdapter.trajectory_quality(candidate, target, common_mask, heading_weight)), -1)
+
+    @staticmethod
     def replacement_labels(keep, candidate, target, common_mask, feasible,
-                            epsilon, cost_weight, cost):
+                            epsilon, cost_weight, cost, heading_weight=.1):
         with torch.no_grad():
             common = common_mask.long().cumprod(-1).bool()
-            keep_error = TrajectoryL1Loss.trajectory_error(keep, target, common)
-            new_error = TrajectoryL1Loss.trajectory_error(candidate, target, common)
-            gain = keep_error - new_error
+            errors = CARSRevisionAdapter.comparison_targets(keep, candidate, target, common, heading_weight)
+            gain = errors[..., 0] - errors[..., 1]
             valid = common.any(-1) & feasible
             labels = (gain > epsilon + cost_weight * cost).long()
         return labels, valid, gain

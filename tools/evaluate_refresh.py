@@ -13,17 +13,21 @@ from evaluate_action_diagnostics import select_samples, stage_inputs
 from metrics.refresh_comparison import RefreshComparisonEvaluator
 from model.CARSDirve import CARSDirve
 from utils import load_config
+from val import validate_evaluation_mode
 
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('medium')
     pl.seed_everything(1024, workers=True)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='config/val/plan_comparison.yaml')
+    parser.add_argument('--config', default='config/val/plan1_comparison.yaml')
     args = parser.parse_args()
     config = load_config(args.config)
     trainer_config = dict(config['trainer'])
     model = CARSDirve.load_from_checkpoint(trainer_config.pop('ckpt_path'), map_location='cpu', strict=True, action_loss='l1')
+    validate_evaluation_mode(model, config)
+    if model.mode not in {'plan1', 'plan2'}:
+        raise ValueError('Planning comparison requires a plan1 or plan2 checkpoint')
     data = NuplanDataModule(**config['datamodule'])
     data.setup('validate')
     dataset = data.val_dataset

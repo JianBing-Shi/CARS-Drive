@@ -65,7 +65,7 @@ class CheckpointEvaluator(pl.LightningModule):
 
     def transfer_batch_to_device(self, batch, device, dataloader_idx):
         names = ("bev_features", "bev_valid_mask", "timestamps_us", "anchor_timestamp_us",
-                 "reference_ego_to_global", "bev_range")
+                 "reference_ego_to_global", "bev_range", "history_actions")
         self.inputs = move_data_to_device({key: batch[key] for key in names}, device)
         return batch
 
@@ -150,6 +150,7 @@ class CheckpointEvaluator(pl.LightningModule):
                                     replay="10 causal decisions, each sees newly arrived logged BEV; 1.0 s total",
                                     next="First action at the anchor; 0.1 s",
                                     fixed5="Anchor memory only, zero prefix, reset decoder hidden, five calls; 0.5 s",
+                                    history_actions="Causal local actions ending at the anchor, encoded once and shared by replay and fixed5 decoding; no future expert prefix",
                                     aggregation="Unique (recording,timestamp) anchors; all original event labels retained",
                                     manifest_window_weighted="Duplicated label windows counted as in training validation",
                                     historical_loss="Original beta=1 SmoothL1 action formula, separate from current L1",

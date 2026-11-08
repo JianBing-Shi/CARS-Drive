@@ -156,6 +156,9 @@ tools/*
 !tools/test_refresh_comparison.py
 !tools/test_trajectory_revision.py
 !tools/test_trajectory_revision_metrics.py
+!tools/test_planning_dataset.py
+!tools/test_plan_objectives.py
+!tools/test_shared_config.py
 
 # log file
 lightning_logs/

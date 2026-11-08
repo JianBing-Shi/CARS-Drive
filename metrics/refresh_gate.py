@@ -1,18 +1,28 @@
-"""Binary replacement supervision and masked trajectory/decision diagnostics."""
+"""Masked trajectory and replacement diagnostics for both CARS objectives."""
 import torch
 from torch.nn import functional as F
 
 
-def binary_statistics(probability, labels, valid, threshold=.5):
-    probability, labels = probability[valid], labels[valid].bool()
-    predicted = probability > threshold
+def selection_statistics(predicted, labels, valid):
+    """Confusion counts for an actual keep/replace decision, without probabilities."""
+    predicted, labels = predicted[valid].bool(), labels[valid].bool()
     tp = (predicted & labels).sum().float()
     fp = (predicted & ~labels).sum().float()
     fn = (~predicted & labels).sum().float()
     tn = (~predicted & ~labels).sum().float()
     precision = tp / (tp + fp).clamp_min(1)
     recall = tp / (tp + fn).clamp_min(1)
-    # Average precision with tied probabilities grouped, no optional sklearn dependency.
+    return dict(tp=tp, fp=fp, fn=fn, tn=tn, positive_labels=labels.sum().float(),
+                negative_labels=(~labels).sum().float(), precision=precision, recall=recall,
+                f1=2 * precision * recall / (precision + recall).clamp_min(1e-12),
+                unnecessary_refresh_rate=fp / (tp + fp).clamp_min(1),
+                missed_refresh_rate=fn / (tp + fn).clamp_min(1))
+
+
+def binary_statistics(probability, labels, valid, threshold=.5):
+    metrics = selection_statistics(probability > threshold, labels, valid)
+    probability, labels = probability[valid], labels[valid].bool()
+    # Average precision groups tied scores and requires no optional sklearn dependency.
     ap = probability.new_tensor(float('nan'))
     if labels.any():
         order = probability.argsort(descending=True)
@@ -23,20 +33,26 @@ def binary_statistics(probability, labels, valid, threshold=.5):
         count = torch.arange(1, len(labels) + 1, device=probability.device)[end]
         recall_points = cumulative_tp / labels.sum()
         ap = ((recall_points - F.pad(recall_points[:-1], (1, 0))) * cumulative_tp / count).sum()
-    return dict(tp=tp, fp=fp, fn=fn, tn=tn, positive_labels=labels.sum().float(),
-                negative_labels=(~labels).sum().float(), precision=precision, recall=recall,
-                f1=2 * precision * recall / (precision + recall).clamp_min(1e-12),
-                pr_auc_ap=ap, unnecessary_refresh_rate=fp / (tp + fp).clamp_min(1),
-                missed_refresh_rate=fn / (tp + fn).clamp_min(1))
+    metrics['pr_auc_ap'] = ap
+    return metrics
 
 
 def gate_metrics(output, target, valid, threshold=.5):
-    eligible = output['decision_valid']
-    logits, labels = output['refresh_logits'], output['refresh_labels']
-    loss = F.cross_entropy(logits[eligible], labels[eligible]) if eligible.any() else logits.sum() * 0
+    eligible = output['decision_valid'].bool()
+    labels = output['refresh_labels']
+    quality_mode = output.get('planning_mode') == 'plan2' or 'quality_errors' in output
+    if quality_mode:
+        # revision_metrics supplies the actual continuous quality/gain objective.
+        score = output['quality_errors'].masked_fill(~eligible[..., None], 0)
+        loss = score.sum() * 0
+    else:
+        logits = output['refresh_logits']
+        loss = (F.cross_entropy(logits[eligible], labels[eligible]) if eligible.any()
+                else logits.masked_fill(~eligible[..., None], 0).sum() * 0)
     mask = (valid.bool() & output['plan_mask']).long().cumprod(-1).bool()
-    difference = (output['planned_trajectory'][..., :2] - target[..., :2]).masked_fill(~mask[..., None], 0)
-    distance = difference.norm(dim=-1)
+    prediction = output['planned_trajectory'][..., :2].masked_fill(~mask[..., None], 0)
+    reference = target[..., :2].masked_fill(~mask[..., None], 0)
+    distance = (prediction - reference).norm(dim=-1)
     count = mask.sum().clamp_min(1)
     last = mask.sum(-1) - 1
     supported = last >= 0
@@ -52,5 +68,8 @@ def gate_metrics(output, target, valid, threshold=.5):
                    valid_decisions=eligible.sum().float(),
                    monitoring_reads=output['monitoring_reads'].float().sum(),
                    online_decode_calls=output['online_decode_calls'].float().sum())
-    metrics.update(binary_statistics(output['refresh_probability'], labels, eligible, threshold))
+    if quality_mode:
+        metrics.update(selection_statistics(output['replace_decision'], labels, eligible))
+    else:
+        metrics.update(binary_statistics(output['refresh_probability'], labels, eligible, threshold))
     return metrics

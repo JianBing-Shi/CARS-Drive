@@ -2,7 +2,7 @@
 datamodule:
   root: ../datasets/nuplan/nuplan-v1.1
   dir: mini
-  mode: plan
+  mode: plan1
   history_step: 20
   future_step: 10
   val_batch_size: 2
@@ -10,7 +10,7 @@ datamodule:
   pin_memory: false
   persistent_workers: false
 trainer:
-  ckpt_path: null  # Set the trained trajectory revision v3 checkpoint.
+  ckpt_path: lightning_logs/cars_plan1/version_0/checkpoints/best.ckpt
   accelerator: auto
   devices: 1
   logger: false
@@ -18,6 +18,6 @@ trainer:
   enable_model_summary: false
   enable_progress_bar: false
 evaluation:
-  output_dir: evaluation/trajectory_revision_v3_comparison
+  output_dir: evaluation/cars_plan1_comparison
   samples_per_event: null  # null evaluates all unique refresh validation anchors.
-  scratch_dir: /tmp/fresh_refresh_comparison_cache  # null reads source BEVs directly.
+  scratch_dir: /tmp/cars_plan1_comparison_cache  # null reads source BEVs directly.

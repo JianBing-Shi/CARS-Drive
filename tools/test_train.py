@@ -12,7 +12,7 @@ import yaml
 
 
 class TrainTests(unittest.TestCase):
-    def test_train_and_resume_both_stages(self):
+    def test_train_and_resume_pred_and_both_planning_modes(self):
         torch.set_num_threads(1)
         with tempfile.TemporaryDirectory(prefix="fresh-training-", dir="/tmp") as temporary:
             root = Path(temporary)
@@ -36,14 +36,14 @@ class TrainTests(unittest.TestCase):
                 "future_trajectory": torch.tensor([[.1, 0., 0.], [.2, 0., 0.]]),
                 "future_action_mask": torch.ones(2, dtype=torch.bool),
             }
-            poses = torch.zeros(31, 3)
-            poses[:, 0] = (torch.arange(31) - 20) * .1
-            event.update(anchor_index=20, anchor_timestamp_us=2_000_000,
-                         timestamps_us=torch.arange(31) * 100_000, bev_paths=[bev.as_posix()] * 31,
-                         future_trajectory=poses[21:], future_actions=torch.tensor([[.1, 0., 0.]] * 10),
-                         future_action_mask=torch.ones(10, dtype=torch.bool),
-                         trajectory={"past_trajectory": poses[:20], "anchor_trajectory": poses[20],
-                                     "future_expert_trajectory": poses[21:], "trajectory_mask": torch.ones(31, dtype=torch.bool)})
+            poses = torch.zeros(41, 3)
+            poses[:, 0] = (torch.arange(41) - 25) * .1
+            event.update(anchor_index=25, anchor_timestamp_us=2_500_000,
+                         timestamps_us=torch.arange(41) * 100_000, bev_paths=[bev.as_posix()] * 41,
+                         future_trajectory=poses[26:], future_actions=torch.tensor([[.1, 0., 0.]] * 15),
+                         future_action_mask=torch.ones(15, dtype=torch.bool),
+                         trajectory={"past_trajectory": poses[:25], "anchor_trajectory": poses[25],
+                                     "future_expert_trajectory": poses[26:], "trajectory_mask": torch.ones(41, dtype=torch.bool)})
             for split in ("train", "val"):
                 name = Path(split) / "changing_lane/sample.pt"
                 destination = cache / "events" / name
@@ -119,33 +119,47 @@ class TrainTests(unittest.TestCase):
                 run()
             config['model']['learning_rate'] = .0003
 
-            config["model"]["mode"] = config["datamodule"]["mode"] = "plan"
-            config["trainer"]["ckpt"]["monitor"] = "val/loss"
-            config["trainer"]["csv_logger"]["name"] = "refresh"
-            config["trainer"]["max_epochs"] = 1
-            config["trainer"]["ckpt_path"] = str(action_path)
-            refresh = run()
-            self.assertEqual(refresh.global_step, 1)
-            self.assertEqual(refresh.lightning_module.mode, "plan")
-            for name, value in refresh.lightning_module.state_dict().items():
-                if name.startswith(("tokenizer.", "memory.", "decoder.")):
-                    torch.testing.assert_close(value, action_state["state_dict"][name])
-            self.assertTrue(all(not p.requires_grad
-                                for p in refresh.lightning_module.decoder.parameters()))
-            refresh_path = Path(refresh.checkpoint_callback.last_model_path)
-            original_refresh_dir = refresh_path.parent
-            config["trainer"].update(ckpt_path=str(refresh_path), max_epochs=2)
-            resumed_refresh = run()
-            self.assertEqual(Path(resumed_refresh.checkpoint_callback.dirpath), original_refresh_dir)
-            self.assertEqual(len(resumed_refresh.checkpoint_callback.best_k_models), 1)
-            self.assertTrue(Path(resumed_refresh.checkpoint_callback.best_model_path).is_file())
-            refresh_path = Path(resumed_refresh.checkpoint_callback.last_model_path)
-            refresh_state = torch.load(refresh_path, map_location="cpu", weights_only=False)
-            self.assertEqual(resumed_refresh.global_step, 2)
-            self.assertEqual(refresh_state["epoch"], 1)
-            self.assertEqual(refresh_state["lr_schedulers"][0]["last_epoch"], 2)
-            self.assertTrue(all(int(state["step"]) == 2
-                                for state in refresh_state["optimizer_states"][0]["state"].values()))
+            # Each scheme starts independently from identical pred weights.
+            for mode in ("plan1", "plan2"):
+                config["model"].update(mode=mode, cache_anchor_step=25, plan_horizon=10,
+                                       refresh_classification_weight=1. if mode == "plan1" else 0.,
+                                       quality_loss_weight=1., gain_loss_weight=1.)
+                config["datamodule"]["mode"] = mode
+                config["trainer"]["ckpt"]["monitor"] = "val/ade"
+                config["trainer"]["csv_logger"]["name"] = mode
+                config["trainer"]["max_epochs"] = 1
+                config["trainer"]["ckpt_path"] = str(action_path)
+                planner = run()
+                self.assertEqual(planner.global_step, 1)
+                self.assertEqual(planner.lightning_module.mode, mode)
+                for name, value in planner.lightning_module.state_dict().items():
+                    if name.startswith(("tokenizer.", "memory.", "action_encoder.", "decoder.")):
+                        torch.testing.assert_close(value, action_state["state_dict"][name])
+                for name in ("tokenizer", "memory", "action_encoder", "decoder"):
+                    component = getattr(planner.lightning_module, name)
+                    self.assertFalse(component.training)
+                    self.assertTrue(all(not p.requires_grad for p in component.parameters()))
+                    self.assertTrue(all(p.grad is None for p in component.parameters()))
+                planner_path = Path(planner.checkpoint_callback.last_model_path)
+                original_planner_dir = planner_path.parent
+                config["trainer"].update(ckpt_path=str(planner_path), max_epochs=2)
+                resumed_planner = run()
+                self.assertEqual(Path(resumed_planner.checkpoint_callback.dirpath), original_planner_dir)
+                self.assertEqual(len(resumed_planner.checkpoint_callback.best_k_models), 1)
+                self.assertTrue(Path(resumed_planner.checkpoint_callback.best_model_path).is_file())
+                planner_path = Path(resumed_planner.checkpoint_callback.last_model_path)
+                planner_state = torch.load(planner_path, map_location="cpu", weights_only=False)
+                self.assertEqual(resumed_planner.global_step, 2)
+                self.assertEqual(planner_state["epoch"], 1)
+                self.assertEqual(planner_state["lr_schedulers"][0]["last_epoch"], 2)
+                self.assertTrue(all(int(state["step"]) == 2
+                                    for state in planner_state["optimizer_states"][0]["state"].values()))
+                # Cross-scheme checkpoints must never masquerade as a resume.
+                other = "plan2" if mode == "plan1" else "plan1"
+                config["model"]["mode"] = config["datamodule"]["mode"] = other
+                config["trainer"]["ckpt_path"] = str(planner_path)
+                with self.assertRaisesRegex(ValueError, 'Checkpoint mode is incompatible'):
+                    run()
 
     def test_rejects_non_l1_and_removed_options_before_checkpoint_loading(self):
         with tempfile.TemporaryDirectory(prefix='fresh-l1-config-', dir='/tmp') as temporary:
@@ -162,7 +176,7 @@ class TrainTests(unittest.TestCase):
                         runpy.run_path('train.py', run_name='__main__')
 
     def test_mode_configs_and_cli(self):
-        for mode in ("pred", "plan"):
+        for mode in ("pred", "plan1", "plan2"):
             config = yaml.safe_load(Path(f"config/train/{mode}.yaml").read_text())
             self.assertEqual(config["model"]["mode"], mode)
             self.assertEqual(config["datamodule"]["mode"], mode)

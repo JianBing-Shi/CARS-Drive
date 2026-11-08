@@ -1,0 +1,32 @@
+# Evaluation of the history-action-conditioned action predictor.
+mode: pred
+
+datamodule:
+  root: ../datasets/nuplan/nuplan-v1.1
+  dir: mini
+  mode: pred
+  history_step: 20
+  future_step: 10
+  val_batch_size: 2
+  num_workers: 0
+  pin_memory: true
+  persistent_workers: false
+  ratio: 0.1
+
+trainer:
+  ckpt_path: lightning_logs/action_encoder/version_0/checkpoints/best.ckpt
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_model_summary: false
+
+evaluation:
+  output_dir: evaluation/action_encoder_detailed
+  max_samples: null
+  save_predictions: false
+  warmup_batches: 1
+  ego_footprint: null
+  max_annotation_age_us: 100000
+  log_map: null
+  bootstrap_samples: 2000

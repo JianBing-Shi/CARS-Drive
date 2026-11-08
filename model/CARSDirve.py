@@ -20,7 +20,7 @@ from modules import TrajectoryL1Loss
 from modules import CARSRevisionAdapter, CARSRevisionPlanner
 
 class CARSDirve(pl.LightningModule):
-    """Causal BEV model with pred and plan training modes."""
+    """Shared pred base with plan1 classification or plan2 quality learning."""
 
     def __init__(self, history_step: int = 20, future_step: int = 10, feature_dim: int = 256, hidden_dim: int = 256,
                  spatial_grid: tuple[int, int] = (9, 9), macro_grid: tuple[int, int] = (3, 3), heads: int = 8, layers: int = 2,
@@ -39,21 +39,29 @@ class CARSDirve(pl.LightningModule):
                  refresh_random_probability: float = .3,
                  refresh_monitor_frames: int = 3, refresh_residual_scale: float = .1,
                  refresh_trajectory_weight: float = 1., refresh_classification_weight: float = 1.,
-                 refresh_history_weight: float = .25, refresh_heading_weight: float = .1) -> None:
+                 refresh_history_weight: float = .25, refresh_heading_weight: float = .1,
+                 cache_anchor_step: int | None = None,
+                 quality_loss_weight: float = 1., gain_loss_weight: float = 1.) -> None:
         super().__init__()
-        if mode not in {"pred", "plan"}:
-            raise ValueError("invalid mode")
+        if mode not in {"pred", "plan1", "plan2"}:
+            raise ValueError("mode must be pred, plan1 or plan2")
+        cache_anchor_step = (history_step if mode == 'pred' else 25) if cache_anchor_step is None else cache_anchor_step
+        if mode in {'plan1', 'plan2'} and (history_step, future_step, cache_anchor_step,
+                plan_horizon, refresh_steps, refresh_offset) != (20, 10, 25, 10, 10, -5):
+            raise ValueError('plan1/plan2 require history20, future10, cache_anchor25, horizon10, steps10, offset-5')
         if action_loss != "l1":
             raise ValueError("action_loss is fixed to l1")
         if refresh_version != 3:
             raise ValueError("CARS requires refresh_version=3")
         if refresh_version == 3:
             revision_weights = (refresh_trajectory_weight, refresh_classification_weight,
-                                refresh_history_weight, refresh_heading_weight)
+                                refresh_history_weight, refresh_heading_weight, quality_loss_weight, gain_loss_weight)
             if (not isinstance(refresh_monitor_frames, int) or refresh_monitor_frames < 1
                     or not math.isfinite(refresh_residual_scale) or refresh_residual_scale <= 0
                     or any(not math.isfinite(w) or w < 0 for w in revision_weights)
-                    or refresh_trajectory_weight <= 0 or refresh_classification_weight <= 0):
+                    or refresh_trajectory_weight <= 0
+                    or (mode == 'plan1' and refresh_classification_weight <= 0)
+                    or (mode == 'plan2' and (quality_loss_weight <= 0 or gain_loss_weight <= 0))):
                 raise ValueError("Invalid trajectory revision supervision or monitoring settings")
         if refresh_observation != "current_full_bev" or refresh_update != "full_valid_bev":
             raise ValueError("Binary gate requires current_full_bev monitoring and full_valid_bev updates")
@@ -79,6 +87,7 @@ class CARSDirve(pl.LightningModule):
         self.mode = mode
         self.history_step = history_step
         self.future_step = future_step
+        self.cache_anchor_step = cache_anchor_step
         # Keep the public window names used by evaluators and legacy
         # checkpoints.  The model constructor historically exposed these as
         # ``history_features``/``future_action``; diagnostics and evaluators
@@ -141,10 +150,11 @@ class CARSDirve(pl.LightningModule):
         self.cars_adapter_offset = refresh_offset
         self.cars_planner = RollingTrajectoryPlanner(plan_horizon)
         self.cars_adapter = nn.Identity()
-        if mode == 'plan':
+        if mode in {'plan1', 'plan2'}:
             self.cars_planner = CARSRevisionPlanner(plan_horizon, refresh_probability_threshold,
                 refresh_label_epsilon, refresh_update_cost, refresh_fixed_interval,
-                refresh_random_probability, refresh_monitor_frames)
+                refresh_random_probability, refresh_monitor_frames, mode=mode,
+                heading_weight=refresh_heading_weight)
             self.cars_adapter = CARSRevisionAdapter(hidden_dim, self.regions, plan_horizon,
                                                    heads=heads, dropout=0., residual_scale=refresh_residual_scale)
 
@@ -161,7 +171,7 @@ class CARSDirve(pl.LightningModule):
         if self.mode == "pred":
             for p in self.cars_adapter.parameters():
                 p.requires_grad = False
-        elif self.mode == "plan":
+        elif self.mode in {"plan1", "plan2"}:
             self.freeze_pred_model()
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
@@ -173,14 +183,16 @@ class CARSDirve(pl.LightningModule):
         checkpoint["refresh_protocol"] = self.cars_adapter_protocol()
 
     def cars_adapter_protocol(self) -> dict[str, Any]:
-        keys = ("refresh_version", "refresh_observation", "refresh_update", "plan_horizon",
+        keys = ("mode", "cache_anchor_step", "history_step", "future_step",
+                "refresh_version", "refresh_observation", "refresh_update", "plan_horizon",
                 "refresh_steps", "refresh_offset", "refresh_budget", "cost_weight",
                 "refresh_probability_threshold", "refresh_label_epsilon", "refresh_update_cost",
                 "refresh_fixed_interval", "refresh_random_probability")
         if self.cars_adapter_version == 3:
             keys += ("refresh_monitor_frames", "refresh_residual_scale", "refresh_trajectory_weight",
-                     "refresh_classification_weight", "refresh_history_weight", "refresh_heading_weight")
-        return {key: self.hparams[key] for key in keys}
+                     "refresh_classification_weight", "refresh_history_weight", "refresh_heading_weight",
+                     "quality_loss_weight", "gain_loss_weight")
+        return dict(protocol_version=4, **{key: self.hparams[key] for key in keys})
 
     def revision_metrics(self, result, target, mask):
         from metrics.trajectory_revision import revision_metrics
@@ -188,14 +200,15 @@ class CARSDirve(pl.LightningModule):
             trajectory_weight=self.hparams.refresh_trajectory_weight,
             classification_weight=self.hparams.refresh_classification_weight,
             history_weight=self.hparams.refresh_history_weight,
-            heading_weight=self.hparams.refresh_heading_weight)
+            heading_weight=self.hparams.refresh_heading_weight,
+            quality_weight=self.hparams.quality_loss_weight, gain_weight=self.hparams.gain_loss_weight)
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         self.checkpoint_refresh_protocol = checkpoint.get("refresh_protocol")
         source_version = checkpoint.get("refresh_protocol", checkpoint.get("hyper_parameters", {})).get("refresh_version", 1)
         if source_version != self.cars_adapter_version:
             raise ValueError("Refresh architecture differs from checkpoint; initialize binary gate from action weights")
-        if (self.cars_adapter_version == 3 and self.checkpoint_refresh_protocol is not None
+        if (self.mode in {'plan1', 'plan2'}
                 and self.checkpoint_refresh_protocol != self.cars_adapter_protocol()):
             raise ValueError('Trajectory revision protocol differs from checkpoint; preserve adapter and supervision settings')
         source = checkpoint.get("action_loss_config", checkpoint.get("hyper_parameters", {}))
@@ -210,31 +223,32 @@ class CARSDirve(pl.LightningModule):
 
     def forward(self, bev_features: Tensor, bev_valid_mask: Tensor | None = None, timestamps_us: Tensor | None = None,
                 anchor_timestamp_us: Tensor | None = None, future_actions: Tensor | None = None, bev_age_s: Tensor | None = None,
-                history_actions: Tensor | None = None,
+                history_actions: Tensor | None = None, action_history_sequence: Tensor | None = None,
                 *, budget: Tensor | float | None = None, region_costs: Tensor | None = None, return_details: bool = False,
                 teacher_forcing: bool | float = False, reference_ego_to_global: Tensor | None = None,
                 bev_range: Tensor | None = None, planning_targets: Tensor | None = None,
                 planning_mask: Tensor | None = None) -> Tensor | dict[str, Tensor]:
-        if self.mode not in {"pred", "plan"}:
+        if self.mode not in {"pred", "plan1", "plan2"}:
             raise RuntimeError(f"Unsupported mode: {self.mode}")
-        if self.mode == "plan":
+        if self.mode in {"plan1", "plan2"}:
             self.freeze_pred_model()
-            batch = bev_features.shape[0]
-            if history_actions is None:
-                history_actions = bev_features.new_zeros(batch, self.history_step, 3)
-            history_context = self.action_encoder(history_actions[:, -self.history_step:])
+            if bev_features.ndim != 5 or bev_features.shape[1] != 41:
+                raise ValueError('plan1/plan2 require the expanded 41-frame cache')
+            if action_history_sequence is None:
+                raise ValueError('plan1/plan2 require causal action_history_sequence for every decision')
             valid = torch.ones_like(bev_features[:, :, 0], dtype=torch.bool) if bev_valid_mask is None else bev_valid_mask.bool()
             times = timestamps_us.double() if timestamps_us is not None else torch.arange(bev_features.shape[1], device=bev_features.device)[None].expand(bev_features.shape[0], -1).double() * 100_000
             if times.ndim == 3:
                 times = times.amax(-1)
             result = self.cars_planner(
                 bev_features, valid, times, reference_ego_to_global, bev_range,
-                start=self.history_step + self.cars_adapter_offset, steps=self.cars_adapter_steps,
+                start=self.cache_anchor_step + self.cars_adapter_offset, steps=self.cars_adapter_steps,
                 tokenizer=self.tokenizer, memory=self.memory, decoder=self.decoder,
                 refresh=self.cars_adapter, temporal=self.temporal, region_ids=self.region_ids,
                 budget=self.cars_adapter_budget, cost_weight=self.cost_weight,
                 targets=planning_targets, target_mask=planning_mask,
-                history_context=history_context)
+                action_history_sequence=action_history_sequence, action_encoder=self.action_encoder,
+                history_step=self.history_step)
             return result if return_details else result["planned_trajectory"]
 
         if bev_features.ndim != 5 or bev_features.shape[1] < self.history_step + self.future_step:
@@ -320,10 +334,11 @@ class CARSDirve(pl.LightningModule):
                 self.log(f"train/{key}", losses[key], batch_size=target.shape[0])
             return loss
 
-        elif self.mode == "plan":
+        elif self.mode in {"plan1", "plan2"}:
             result = self(
                 batch["bev_features"], batch.get("bev_valid_mask"), batch.get("timestamps_us"),
                 history_actions=batch.get("history_actions"),
+                action_history_sequence=batch.get("action_history_sequence"),
                 reference_ego_to_global=batch.get("reference_ego_to_global"), bev_range=batch.get("bev_range"),
                 planning_targets=batch["planning_targets"], planning_mask=batch["planning_mask"], return_details=True)
             if self.cars_adapter_version == 3:
@@ -337,7 +352,7 @@ class CARSDirve(pl.LightningModule):
         """Prepare the fixed action predictor before refresh training starts."""
         if self.mode == "pred":
             return
-        elif self.mode == "plan":
+        elif self.mode in {"plan1", "plan2"}:
             self.freeze_pred_model()
 
     def validation_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
@@ -385,7 +400,7 @@ class CARSDirve(pl.LightningModule):
                     self.log("val/fixed5_fde", distance[complete, -1].mean(), batch_size=int(complete.sum()))
             return loss
 
-        elif self.mode == "plan":
+        elif self.mode in {"plan1", "plan2"}:
             metrics = self.cars_adapter_validation_metrics(batch)
             self.log_dict(metrics, on_step=False, on_epoch=True,
                           batch_size=batch["planning_mask"].shape[0])
@@ -396,6 +411,7 @@ class CARSDirve(pl.LightningModule):
         result = self(
             batch["bev_features"], batch.get("bev_valid_mask"), batch.get("timestamps_us"),
             history_actions=batch.get("history_actions"),
+            action_history_sequence=batch.get("action_history_sequence"),
             reference_ego_to_global=batch.get("reference_ego_to_global"), bev_range=batch.get("bev_range"),
             planning_targets=batch["planning_targets"], planning_mask=batch["planning_mask"], return_details=True)
         if self.cars_adapter_version == 3:
@@ -422,6 +438,12 @@ class CARSDirve(pl.LightningModule):
             p.requires_grad = False
         for p in self.decoder.parameters():
             p.requires_grad = False
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if self.mode in {'plan1', 'plan2'}:
+            self.freeze_pred_model()
+        return self
 
     def observe_step(self, feature: Tensor, valid: Tensor, state: dict[str, Tensor],
                      previous: Tensor, hidden: Tensor | None = None, step: int = 0,
@@ -454,8 +476,8 @@ class CARSDirve(pl.LightningModule):
                     "refresh_mask": torch.zeros(batch, self.regions, dtype=torch.bool, device=feature.device),
                     "refresh_utility": feature.new_zeros(batch, self.regions),
                     "state": updated, "hidden": query}
-        elif self.mode == "plan":
-            raise ValueError("Plan uses RollingTrajectoryPlanner to retain and update five-step plans")
+        elif self.mode in {"plan1", "plan2"}:
+            raise ValueError("plan1/plan2 use CARSRevisionPlanner for ten-step revision and adoption")
 
     def configure_optimizers(self):
         decay = set()
@@ -511,4 +533,5 @@ class CARSDirve(pl.LightningModule):
 
     def predict_step(self, batch: dict[str, Any], batch_idx: int, dataloader_idx: int = 0):
         return self(batch["bev_features"], batch.get("bev_valid_mask"), batch.get("timestamps_us"), batch.get("anchor_timestamp_us"), return_details=True,
+                    history_actions=batch.get("history_actions"), action_history_sequence=batch.get("action_history_sequence"),
                     reference_ego_to_global=batch.get("reference_ego_to_global"), bev_range=batch.get("bev_range"))

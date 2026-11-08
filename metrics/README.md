@@ -1,140 +1,113 @@
 # Offline validation
 
-Run Python commands in the `FRESH-Drive` Conda environment. `val.py` evaluates
-causal expert-log replay, not fixed-anchor forecasting or closed-loop driving.
+Validation measures causal expert-log replay with cached BEV features. Logged
+future observations are not changed by the model's actions, so these reports do
+not establish closed-loop driving performance.
 
-Like Plan-R1, validation runs through `Trainer.validate()`. `val.py` only parses
-arguments, loads the checkpoint/data and starts Lightning. `ActionEvaluator` in
-`metrics/evaluator.py` wraps the checkpoint: `validation_step` evaluates each
-batch and `on_validation_epoch_end` deduplicates anchors, aggregates and exports
-the results, then publishes means with `self.log`. `metrics/action.py` contains
-the per-window error calculations. Training hooks and checkpoint keys are
-unchanged. Action reports use a single device so exact quantiles and log bootstrap
-see the complete dataset. For action validation, labels/annotations stay on CPU;
-only model inputs transfer to the selected device.
+## Commands
 
-- `ade_m`: valid continuous-prefix ADE, retained for compatibility.
-- `ade_full_horizon_m`: ADE restricted to complete configured horizons; use this
-  with `fde_m` for fixed 1 s tables. Missing endpoints are not zero error.
-- Heading errors use wrapped angles in radians. Position errors are metres.
-- `quantiles` contains per-anchor P50/P90/P95. `event_macro_average` averages
-  supported event means equally; `event_macro_support` records the group count.
-- Global summaries and baseline comparisons count each `(recording, anchor)`
-  once. Each label counts the anchor once in its own event group. CSV retains
-  manifest rows, and prediction files retain batch order.
-- `paired_baseline_comparison` reports baseline-minus-model improvements and
-  win/tie fractions. Missing values are paired out. For paired log bootstrap CIs,
-  set `evaluation.log_map: mapping.json`, mapping full recording/DB names to original
-  log IDs obtained from authoritative metadata. No filename-based log inference
-  or log-level CI is performed without this map. At least two logs are required.
-
-## Collision proxy
-
-Enable with `evaluation.ego_footprint: [front, rear, left, right]`. All four values are positive
-metres from the **trajectory ego-pose origin**, not necessarily the vehicle
-centre: +x is front, +y is left. Use verified vehicle dimensions/reference offsets;
-no default dimensions are assumed. When this option is null, collision scores
-are null, while annotation coverage is still reported.
-
-The proxy uses a separating-axis test on oriented rectangles, including boundary
-contact. Predictions are transformed from the trajectory annotation anchor frame
-into each object's reference frame. It evaluates all annotated categories at
-discrete target times; it does not perform swept collision detection, distinguish
-fault, or simulate other vehicles' responses.
-
-`collision_proxy_any` is the fraction of complete annotated windows with at least
-one overlap. `collision_proxy_step_fraction` is the average overlap fraction in
-those same complete windows. `collision_proxy_step_N` evaluates the Nth endpoint
-on its own available support. Annotation and evaluated coverage are exported
-separately. Invalid, missing, out-of-tolerance, malformed or non-finite annotation
-frames are not treated as clear. Valid empty object lists are clear. The maximum
-absolute annotation/target timestamp difference is set by
-`evaluation.max_annotation_age_us` (default 100000). Offline labels may precede or follow
-the target within this tolerance; this does not permit future policy inputs.
-
-Model, constant-action baseline and expert collision proxies are exported; expert
-overlaps do not cause hidden sample filtering. This is a geometric log-replay
-proxy, not official nuScenes CR, NAVSIM NC, or a closed-loop collision rate.
-
-## Timing
-
-`evaluation.warmup_batches` controls extra unmeasured first-batch forwards (default 1).
-Exported batch latency measures whole-window cached-BEV forward only, excluding
-image encoding, transfers and loading. It is neither per-decision nor system
-end-to-end latency. `evaluation.warmup_batches: 0` is useful for a functional smoke run.
-
-## Example
-
-Set `trainer.ckpt_path` in the appropriate YAML, then run:
+Set the data root and checkpoint path in the matching YAML, then run from the
+project root:
 
 ```bash
 conda run -n FRESH-Drive python val.py --config config/val/pred.yaml
-conda run -n FRESH-Drive python val.py --config config/val/plan.yaml
+conda run -n FRESH-Drive python val.py --config config/val/plan1.yaml
+conda run -n FRESH-Drive python val.py --config config/val/plan2.yaml
+conda run -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/plan1_comparison.yaml
+conda run -n FRESH-Drive python tools/evaluate_refresh.py --config config/val/plan2_comparison.yaml
 ```
 
-The CLI accepts only `--config` (default `config/val/pred.yaml`). Configure
-checkpoint/device under `trainer`, data/loading under `datamodule`, and report
-options under `evaluation`. Paths are relative to the project root. Use
-`evaluation.max_samples` for smoke runs and `evaluation.output_dir` for output.
-Both checkpoint paths default to null to require an explicit checkpoint choice.
-The entry point fixes the random seed to 1024; bootstrap and exported metadata
-use that same seed. YAML does not override it.
+Checkpoint and dataset modes must agree. The planning configurations point to
+their respective `lightning_logs/cars_plan1` or `cars_plan2` checkpoints. Report
+export uses one device for complete aggregation and fixes the seed to 1024.
+`evaluation.max_samples` limits a regular validation run;
+`evaluation.samples_per_event` limits the paired comparison. Output paths are
+configured independently for each experiment.
 
-Action validation retains the detailed JSON/CSV and optional predictions.
-Both evaluators share the JSON export in `Evaluator`; `val.py` only selects
-`ActionEvaluator` or `RefreshEvaluator` and calls `trainer.validate()`.
+Planning training selects the top three checkpoints by minimum
+`val/next_step_error`. Filenames contain epoch and error; there is no automatic
+`best.ckpt` alias. Replace the validation YAML checkpoint path with the actual
+`Best checkpoint` path printed at training completion. This monitor evaluates
+the adopted plan's next 0.1 s endpoint; fixed10 and common-future reports remain
+necessary to assess longer-horizon revision and selection. Full settings are in
+the [experiment summary](../docs/CARS-Drive_实验设置汇总_2026-11-09.md).
 
-## Action checkpoint diagnostics
+## Predictor evaluation
 
-Run `conda run -n FRESH-Drive python tools/evaluate_action_diagnostics.py --config
-config/val/action_diagnostics.yaml` for paired visual/stale-input interventions
-and fixed-context five-step forecasts. This separate Lightning evaluator leaves
-the checkpoint, training code, `val.py` and `evaluation/action` unchanged.
+`ActionEvaluator` evaluates the existing `pred` checkpoint on 31 frames, with 20
+history steps and 10 sequential next-action outputs. Each output sees only
+arrived observations and the configured causal action context.
 
-The default selects up to two anchors per event label before global deduplication
-using seed 1024. Set `evaluation.samples_per_event: null` for all validation
-anchors. Results and exact selected sample identities are saved separately in
-`evaluation/action_diagnostics/metrics.json` and `per_sample.csv`. Optional
-`scratch_dir` copies only referenced BEVs/events to local storage to reduce
-repeated reads; it does not regenerate data. Use a new/empty scratch directory
-after changing source caches.
+- `ade_m` averages the valid continuous prefix. `ade_full_horizon_m` and `fde_m`
+  require a complete configured horizon and are appropriate for fixed 1 s tables.
+- Position errors are metres; heading errors are wrapped angles in radians.
+- JSON summaries deduplicate `(recording, anchor_timestamp_us)`. CSV retains
+  manifest rows; optional prediction files retain batch order.
+- Event summaries average supported event groups. Paired constant-action
+  comparisons use the last completed historical action as their baseline.
+- Log-level bootstrap confidence intervals require an authoritative
+  `evaluation.log_map`; filenames are not used to infer independent logs.
 
-Branches include fresh replay, no BEV evidence, historical evidence without new
-frames, real delayed inputs (100/200/400/800/1000 ms), three missing observations
-then recovery, historical-motion initialization, and teacher-forced diagnostics.
-Delayed tokens are aligned from their source pose to the causal decision pose;
-pre-window data is unavailable. Delay labels refer to cached BEV query times,
-not exact per-camera exposure ages. This measures robustness, not completed stale
-input fine-tuning. No-vision is an inference ablation, not a separately trained
-state-only model. Teacher-forced results use expert prefixes and must never be
-reported as deployable performance. Historical-motion initialization changes
-the information condition and is also diagnostic only.
+The optional collision proxy uses verified
+`evaluation.ego_footprint: [front, rear, left, right]` dimensions and discrete
+annotated object footprints. Missing annotations are excluded and coverage is
+reported. It is not an at-fault or closed-loop collision metric. Timing measures
+cached-BEV batch forwards after configured warmup, excluding image encoding,
+loading and transfers.
 
-The short-history fresh branch controls for the delayed branch losing the first
-history frames. A zero-age delayed branch deliberately supplies incorrect age
-metadata to diagnose age-embedding sensitivity; it is not a legitimate policy.
+## Planning evaluation
 
-Five-step forecasts freeze visual memory at the anchor, reset decoder hidden,
-previous action and step as `RollingPlanner.decode` does, and predict five
-0.1-second actions. Compare only against the five-step arrived-observation and
-kinematic branches, not the one-second aggregate. This is anchor candidate
-acceptance; it does not replace full rolling-refresh evaluation.
+`BinaryRefreshEvaluator` serves both planning modes and reports their distinct
+objectives. The full 41-frame cache has event anchor 25; this is separate from the
+predictor's 20-step history. Initialization is at slot 20, followed by ten
+decisions at slots 21..30. Each candidate has ten future endpoints, with targets
+`[B,10,10,3]`. Action histories contain only completed logged motion through the
+current decision; candidate actions never update the real history.
 
-`tools/analyze_action_results.py` analyzes existing JSON/CSV by event/recording
-without rerunning inference. Add `--motion-groups` to read cached supervision
-and group by historical speed/turn rate. Default speed bins are 0–0.5, 0.5–2,
-2–5 and >=5 m/s; turning uses |yaw rate| >=0.1 rad/s. These are descriptive
-diagnostic bins, not benchmark categories or test-set selection criteria.
-Refresh validation reuses `CARSDirve.refresh_validation_metrics` (also called
-by the model's training validation hook) and exports Lightning's
-`val/loss`, `val/ade`, `val/refresh_rate` and `val/replan_rate` to `metrics.json`,
-with the configuration and evaluated sample count. Its ADE uses available rolling
-plan endpoints (up to 0.5 s), not action's 1 s horizon. Refresh validation uses
-the same event-centre filtering as refresh training. It does not enable action
-collision/bootstrap options. DataModule validation loads only the val manifest.
+Candidate revision uses full-horizon coordinate position L1 plus weighted
+wrapped-heading L1. Adoption compares the current candidate with the actually
+retained plan on common absolute future endpoints. Deadline replanning is
+excluded from adoption supervision. Historical valid candidates supply auxiliary
+comparisons, with the retained source and self-pairs excluded.
 
-Add verified footprint values and an original-log map to enable collision and
-log-level statistical evaluation. Formal validation still requires inspecting
-annotation coverage and train/val log separation. Refresh utility U/W and oracle
-regret require a separate three-branch evaluation; this action evaluator does not
-infer those values from action predictions.
+- `plan1` reports keep/replace CE, replacement probabilities and selection
+  statistics, plus auxiliary historical CE.
+- `plan2` reports old/new predicted errors, true errors, quality L1, signed gain
+  L1 and historical equivalents. Its decision uses predicted old-minus-new
+  error above the configured epsilon; it has no probability, AUROC or CE report.
+- Both report fixed5 and fixed10 candidate ADE/FDE, actual retained-plan error,
+  next-step error, realized replacement gain, harmful replacements and decision
+  regret. Retained-plan FDE can have a shorter horizon and must not be presented
+  as fixed10 FDE.
+- Error/gain labels use coordinate L1 with weighted heading L1. ADE/FDE remain
+  Euclidean displacement metrics; their values are not interchangeable.
+- Candidate counts and all online decoder calls are reported, including
+  rejected candidates. Initial planning and diagnostic calls are separate.
+
+The regular audit exports `metrics.json`, `per_decision.csv` and, when supported,
+`history_preferences.csv`. Historical losses average pairs within each decision
+before averaging supported decisions, so later decisions do not receive extra
+weight solely because more old candidates remain available.
+
+The paired comparison shares one frozen predictor and one trained adapter across
+adoption policies. The essential controls are `all_fresh_base` (adapter disabled,
+always adopt), `all_fresh` (adapter enabled, always adopt) and `learned` (adapter
+enabled, learned adoption). These distinguish candidate revision from adoption
+quality. Oracle policies use ground truth as diagnostic decision references;
+they are neither deployable policies nor global optima. Each policy advances its
+own retained state and plan.
+
+Planning reports do not claim fewer candidate decoder calls. Event-relative
+timestamps refer to dataset scenario labels, not verified physical event onset.
+Formal conclusions still require reviewing event coverage, log separation and
+the paired evidence-response controls.
+
+## Additional predictor diagnostics
+
+`tools/evaluate_action_diagnostics.py` retains the separate predictor-only
+interventions configured by `config/val/action_diagnostics.yaml`: delayed or
+missing BEV, frozen-context five-step forecasts and diagnostic expert prefixes.
+Those five-step diagnostics do not replace the ten-step planning audit.
+`tools/analyze_action_results.py` summarizes existing action reports without
+rerunning inference. An optional scratch directory copies referenced cache files
+only; use a fresh directory after source caches change.

@@ -61,7 +61,7 @@ class ActionEvaluator(Evaluator):
     def transfer_batch_to_device(self, batch, device, dataloader_idx):
         # Labels and variable-size annotations stay on CPU; only inputs move.
         names = ("bev_features", "bev_valid_mask", "timestamps_us", "anchor_timestamp_us",
-                 "reference_ego_to_global", "bev_range")
+                 "reference_ego_to_global", "bev_range", "history_actions", "action_history_sequence")
         self.inputs = move_data_to_device({k: batch[k] for k in names if k in batch}, device)
         return batch
 
@@ -76,11 +76,11 @@ class ActionEvaluator(Evaluator):
         device, interval_s = self.device, FRAME_INTERVAL_US / 1e6
         footprint, log_map = self.footprint, self.log_map
         rows, predictions = self.rows, self.predictions
-        expected_frames = model.history_features + model.future_action + 1
+        expected_frames = model.history_step + model.future_step + 1
         if batch["bev_features"].shape[1] != expected_frames:
             raise ValueError(f"Expected {expected_frames} cached frames per window")
-        if not (batch["anchor_index"] == model.history_features).all():
-            raise ValueError("Cache anchor_index disagrees with checkpoint history_features")
+        if not (batch["anchor_index"] == model.history_step).all():
+            raise ValueError("Cache anchor_index disagrees with checkpoint history_step")
         if not (batch["timestamps_us"].diff(dim=1) == FRAME_INTERVAL_US).all():
             raise ValueError("Expected a uniformly sampled 10 Hz window")
         expert = batch["future_trajectory"].float()
@@ -110,20 +110,20 @@ class ActionEvaluator(Evaluator):
         history = batch["trajectory"]["past_trajectory"].float()
         anchor = batch["trajectory"]["anchor_trajectory"].float()
         last_action = local_actions(torch.cat((history, anchor[:, None]), dim=1))[:, -1:]
-        baseline = last_action.expand(-1, model.future_action, -1)
+        baseline = last_action.expand(-1, model.future_step, -1)
         pose_mask = batch["trajectory"]["trajectory_mask"].bool()
-        available = pose_mask[:, model.history_features - 1:model.history_features + 1].all(-1)
+        available = pose_mask[:, model.history_step - 1:model.history_step + 1].all(-1)
         baseline = torch.where(available[:, None, None], baseline, torch.zeros_like(baseline))
         metrics.update({"constant_action_" + key: value for key, value in sample_metrics(
             baseline, expert, valid & available[:, None], model.action_loss, interval_s).items()})
-        horizon = model.future_action
+        horizon = model.future_step
         annotations = batch.get("tracked_objects")
-        future_annotations = ([item[model.history_features + 1:model.history_features + 1 + horizon]
+        future_annotations = ([item[model.history_step + 1:model.history_step + 1 + horizon]
                                for item in annotations] if annotations is not None else None)
         # Targets are expressed in the trajectory annotation's anchor frame,
         # which need not exactly match the BEV query's reference pose.
         anchor_poses = batch["trajectory"].get("reference_ego_to_global")
-        target_times = batch["timestamps_us"][:, model.history_features + 1:]
+        target_times = batch["timestamps_us"][:, model.history_step + 1:]
         collision_steps = {}
         for name, candidate, candidate_prefix in (
                 ("model", TrajectoryL1Loss.trajectory(actions), prefix),
@@ -219,8 +219,8 @@ class ActionEvaluator(Evaluator):
             "task": "autoregressive_action_expert_log_replay",
             "observations": "History, then arrived BEV at each 0.1 s decision; no future action inputs",
             "teacher_forcing": False, "closed_loop": False, "fixed_anchor_forecast": False,
-            "history_frames": model.history_features, "future_actions": model.future_action,
-            "interval_s": interval_s, "horizon_s": model.future_action * interval_s,
+            "history_frames": model.history_step, "future_actions": model.future_step,
+            "interval_s": interval_s, "horizon_s": model.future_step * interval_s,
             "aggregation": "unique-anchor mean; ade_m uses valid prefix, ade_full_horizon_m/FDE require complete horizon; fixed-horizon main tables use ade_full_horizon_m",
             "displacement_metrics": "metrics.displacement; one ego, one mode; missing values excluded",
             "constant_action_baseline": "repeat the final pre-anchor local SE(2) action",

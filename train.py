@@ -40,6 +40,72 @@ def validate_action_components(source, target):
             raise ValueError(f'Action component setting {key} differs from checkpoint; preserve the trained action network')
 
 
+def validate_stage_config(config):
+    """Model and data must use the same, explicit research protocol."""
+    mode = config['model']['mode']
+    if mode not in {'pred', 'plan1', 'plan2'}:
+        raise ValueError('model.mode must be pred, plan1, or plan2; legacy plan checkpoints require their original code')
+    if config['datamodule'].get('mode', 'pred') != mode:
+        raise ValueError('Model and datamodule modes must agree')
+    for key in ('history_step', 'future_step'):
+        if config['model'].get(key, 20 if key == 'history_step' else 10) != config['datamodule'].get(
+                key, 20 if key == 'history_step' else 10):
+            raise ValueError(f'Model and datamodule {key} must agree')
+
+
+def initialize_model(model_config, path):
+    """Return a model and full-resume path, or start planning from frozen pred weights.
+
+    A pred checkpoint initializes each planning experiment independently.
+    Optimizer, epoch and schedule state are restored only for the same mode.
+    """
+    target_mode = model_config['mode']
+    if target_mode not in {'pred', 'plan1', 'plan2'}:
+        raise ValueError('model.mode must be pred, plan1, or plan2')
+    if path is None:
+        if target_mode != 'pred':
+            raise ValueError('plan1 and plan2 require a trained pred checkpoint')
+        print('No checkpoint path provided, initializing a new model.')
+        return CARSDirve(**model_config), None
+
+    print(f'Loading model from checkpoint: {path}')
+    source = CARSDirve.load_from_checkpoint(path, map_location='cpu', action_loss='l1')
+    configured_version = model_config.get('architecture_version', 1)
+    if source.hparams.get('architecture_version', 1) != configured_version:
+        raise ValueError('Checkpoint architecture differs from configuration; preserve the trained pred architecture')
+    if source.mode != target_mode and not (source.mode == 'pred' and target_mode in {'plan1', 'plan2'}):
+        raise ValueError('Checkpoint mode is incompatible: plan1 and plan2 must initialize independently '
+                         'from pred; full resume requires the same mode')
+    configured = CARSDirve(**model_config)
+    validate_action_components(source, configured)
+    if source.mode == 'pred' and target_mode in {'plan1', 'plan2'}:
+        for name in ('tokenizer', 'memory', 'action_encoder', 'decoder'):
+            getattr(configured, name).load_state_dict(getattr(source, name).state_dict(), strict=True)
+        configured.freeze_pred_model()
+        print(f'Initialized {target_mode} from frozen pred weights; starting a new optimizer and schedule.')
+        return configured, None
+
+    if source.cars_adapter_version != configured.cars_adapter_version:
+        raise ValueError('CARS architecture differs; initialize a new planning run from a pred checkpoint')
+    if source.mode in {'plan1', 'plan2'} and source.checkpoint_refresh_protocol != configured.cars_adapter_protocol():
+        raise ValueError('CARS protocol differs from checkpoint; initialize a new planning run from pred weights')
+    defaults = {'action_loss_version': 2, 'action_loss': 'l1', 'xy_loss_weight': 1.,
+                'yaw_weight': 1., 'trajectory_loss_weight': 0., 'heading_loss_weight': 0.}
+    expected_loss = {key: model_config.get(key, default) for key, default in defaults.items()}
+    if source.checkpoint_loss_config != expected_loss:
+        raise ValueError('Checkpoint loss settings differ from configuration; resume must preserve the training objective')
+    schedule_keys = ('learning_rate', 'weight_decay', 'warmup_epochs', 'T_max', 'lr_min_ratio')
+    if any(model_config.get(key, source.hparams[key]) != source.hparams[key] for key in schedule_keys):
+        raise ValueError('Optimizer or schedule settings differ from checkpoint; resume must preserve these settings')
+    for key, expected in model_config.items():
+        actual = source.hparams.get(key)
+        if key in {'spatial_grid', 'macro_grid'}:
+            actual, expected = tuple(actual), tuple(expected)
+        if actual != expected:
+            raise ValueError(f'Checkpoint setting {key} differs from configuration; full resume must preserve model settings')
+    return source, path
+
+
 def _multiple_devices(devices) -> bool:
     """Return whether a concrete YAML device setting requests >1 device."""
     if isinstance(devices, int):
@@ -79,6 +145,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', type=Path, default=Path('config/train/pred.yaml'))
     args = parser.parse_args()
     config = load_config(args.config)
+    validate_stage_config(config)
     ckpt_path = config['trainer'].get('ckpt_path')
     if 'reset_training_state' in config['trainer']:
         raise ValueError('reset_training_state has been removed; use ckpt_path only')
@@ -88,47 +155,7 @@ if __name__ == '__main__':
         raise ValueError('smooth_l1_beta has been removed; action supervision uses only L1')
     ckpt_path = checkpoint_path(ckpt_path)
 
-    if ckpt_path:
-        print(f"Loading model from checkpoint: {ckpt_path}")
-        source = CARSDirve.load_from_checkpoint(ckpt_path, map_location='cpu', action_loss='l1')
-        configured_version = config['model'].get('architecture_version', 1)
-        if source.hparams.get('architecture_version', 1) != configured_version:
-            raise ValueError('Checkpoint architecture differs from configuration; start a new action run with ckpt_path: null')
-        if source.mode == config['model']['mode']:
-            configured_refresh_version = config['model'].get('refresh_version', 1)
-            if source.refresh_version != configured_refresh_version:
-                raise ValueError('Refresh architecture differs; initialize the new binary gate from an action checkpoint')
-            if source.mode == 'plan' and source.refresh_version >= 2:
-                configured = CARSDirve(**config['model'])
-                if source.checkpoint_refresh_protocol != configured.cars_adapter_protocol():
-                    raise ValueError('Refresh protocol differs from checkpoint; start a new refresh run from action weights')
-            defaults = {'action_loss_version': 2, 'action_loss': 'l1', 'xy_loss_weight': 1.,
-                        'yaw_weight': 1., 'trajectory_loss_weight': 0., 'heading_loss_weight': 0.}
-            expected_loss = {key: config['model'].get(key, default) for key, default in defaults.items()}
-            if source.checkpoint_loss_config != expected_loss:
-                raise ValueError('Checkpoint loss settings differ from configuration; '
-                                 'start the fixed L1 action run with ckpt_path: null')
-            validate_action_components(source, CARSDirve(**config['model']))
-            schedule_keys = ('learning_rate', 'weight_decay', 'warmup_epochs', 'T_max', 'lr_min_ratio')
-            if any(config['model'].get(key, source.hparams[key]) != source.hparams[key]
-                   for key in schedule_keys):
-                raise ValueError('Optimizer or schedule settings differ from checkpoint; '
-                                 'resume must preserve these settings; use ckpt_path: null '
-                                 'to train a new model with a new schedule')
-            model = source
-        elif source.mode == 'pred' and config['model']['mode'] == 'plan':
-            model = CARSDirve(**config['model'])
-            validate_action_components(source, model)
-            for name in ('tokenizer', 'memory', 'action_encoder', 'decoder'):
-                getattr(model, name).load_state_dict(getattr(source, name).state_dict())
-            ckpt_path = None
-        else:
-            raise ValueError('Checkpoint mode is incompatible with the configured mode')
-    else:
-        print("No checkpoint path provided, initializing a new model.")
-        model = CARSDirve(**config['model'])
-        if model.mode == 'plan':
-            raise ValueError('Refresh requires a trained action checkpoint')
+    model, ckpt_path = initialize_model(config['model'], ckpt_path)
 
     datamodule = NuplanDataModule(**config['datamodule'])
 

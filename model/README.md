@@ -1,45 +1,45 @@
-# FRESH-Drive 模型
+# CARS-Drive 模型
 
-`CARSDirve` 使用缓存的融合 BEV 特征完成两个阶段的训练：
+`CARSDirve` 支持一个预测器训练模式和两个独立的轨迹修订实验。
 
-1. `mode: pred`：Tokenizer 保留 `9×9` 空间 token，先编码 20 帧历史，再逐时刻读取当前 BEV、更新记忆、结合前一步动作预测下一步 `[dx, dy, dyaw]`。训练使用前一步专家动作，验证使用前一步预测动作；两者均按时间接收记录中的观察。
-2. `mode: plan`：从新时序任务训练的 pred checkpoint 加载并冻结预测器。每个时刻先用旧记忆提出下一步动作，预测 9 个区域的有符号更新收益，在当前步预算内选择空集合或一个区域，读取选中区域后修正动作并保留状态。
+| 模式 | 可训练部分 | 目标 |
+| --- | --- | --- |
+| `pred` | BEVTokenizer、空间 BEVMemory、GRU ActionEncoder、共享 ActionDecoder | 连续单步动作 `[dx, dy, dyaw]` 的因果回放预测 |
+| `plan1` | CARS 适配器与共享轨迹评分器 | 专家轨迹 L1 修订 + 新旧计划 keep/replace CE |
+| `plan2` | 与 `plan1` 相同的 CARS 参数 | 专家轨迹 L1 修订 + 新旧计划误差及误差改善量的 L1 回归 |
 
-两份训练配置通过 `univeral_config` 共享 `mode`、`history_step` 和 `future_step`，由 YAML 的 `<<: *univeral_config` 分别合并到 DataModule 和模型参数。DataModule 将窗口参数和 `ratio` 传给 Dataset；训练始终读取已有清单，修改 `ratio` 不会重新划分数据，窗口参数也须与预处理结果一致。两个阶段复用同一套缓存，模型统一使用 `pred`/`plan` 命名。
+两个规划实验分别从同一个 `pred` checkpoint 初始化。四个预测器模块全部冻结并保持 `eval()`；冻结 decoder 仍保留对适配器输入的梯度。单步输出结构和预测器权重形状保持兼容。
 
-## 最小接口
+## 时间窗口与输入
 
-训练与 `predict_step()` 使用每帧 `reference_ego_to_global` 和 `bev_range` 补偿自车运动，将历史区域记忆对齐到当前帧后更新。详见[窗口补充与坐标对齐方案](../idea/FRESH-Drive/FRESH-Drive_缓存复用窗口补充与坐标对齐_2026-11-01.md)。在线 `observe_step()` 同样传入当前 `reference_pose`、网格范围和带 `reference_pose` 的旧状态；不传位姿的简化接口仅用于无运动测试。
+预处理缓存包含 41 帧，10 Hz，范围 `[-2.5, +1.5] s`，事件锚点为 slot 25。
 
-```python
-result = model(
-    batch["bev_features"],
-    batch["bev_valid_mask"],
-    batch["timestamps_us"],
-    batch["anchor_timestamp_us"],
-    future_actions=batch.get("future_actions"),
-    return_details=True,
-)
+- `pred` 读取缓存 `[5:36]`，得到 31 帧 `[-2.0, +1.0] s`。前20帧建立视觉历史；随后十次读取已到达的当前 BEV，逐步预测下一时刻动作，输出 `[B,10,3]`。当前配置 `teacher_forcing_ratio: 0.0`，不把未来专家动作作为解码输入。
+- `plan1`、`plan2` 保留完整41帧缓存，网络仍使用 `history_step: 20`、`future_step: 10`。slot 0..19 建立视觉历史，slot 20（−0.5 s）初始化十步旧计划，slot 21..30（−0.4..+0.5 s）进行十次滚动决策。
+- 每次规划调用同一个单步 decoder 十次；候选和监督均为 `[B,10,10,3]`。最后一次决策的监督终点是 slot 40（+1.5 s）。未来 BEV 和专家轨迹只用于后续时刻或监督。
+
+规划的 `action_history_sequence` 为 `[B,11,20,3]`，依次对应初始化与十次决策。每组只包含截止该时刻已经完成的20个真实动作增量；一次候选推演内部共享当前动作上下文。推演动作及被拒绝的候选不会写入下一时刻的真实动作历史。
+
+每帧 `reference_ego_to_global` 和 `bev_range` 用于自车运动补偿。旧记忆、当前及过去两帧 BEV、实际保留计划共同驱动有界潜变量残差，经冻结 decoder 生成新候选。新旧轨迹在当前自车坐标系、相同绝对未来端点上比较。
+
+## 修订与采用
+
+所有合法候选接受完整十步的位置 L1 与 `0.1 ×` 环绕航向 L1 监督，包括被拒绝的候选。采用判断只比较实际旧计划仍然有效的共同未来；计划到期重规划独立处理，不作为采用分类正例。
+
+`plan1` 使用共享评分器与 softmax，默认替换概率阈值为0.5。`plan2` 使用共享评分器预测非负轨迹误差，预测改善量为“旧计划误差−新候选误差”；只有其大于 `refresh_label_epsilon` 才采用。误差标签同样使用位置 L1 加权航向 L1，`plan2` 不计算 CE。
+
+历史多轨迹比较保留为权重0.25的辅助监督：最多九条仍有效的历史候选，排除实际旧计划的重复来源与当前候选自身。比较结果来自真实相对误差，不强制最新候选胜出。实际滚动状态由模型决策推进，专家标签不替模型作决策。
+
+## 训练与恢复
+
+设置各 YAML 的数据根目录和 `trainer.ckpt_path`，在项目根目录执行：
+
+```bash
+conda run -n FRESH-Drive python train.py --config config/train/pred.yaml
+conda run -n FRESH-Drive python train.py --config config/train/plan1.yaml
+conda run -n FRESH-Drive python train.py --config config/train/plan2.yaml
 ```
 
-输入形状为 `bev_features [B,31,C,H,W]`、`bev_valid_mask [B,31,H,W]`。`slot 0..19` 建立历史状态；第 k 步只读取 `slot 20+k`，预测它到下一时刻的动作，k 为 0..9。`slot 30` 是最后一个动作的监督终点，不作为视觉输入。任何较晚观察都不能改变较早输出。训练从 `future_trajectory [B,10,3]` 转换每步自车局部坐标动作，避免旧缓存的锚点坐标差分与 SE(2) 累计约定不一致；缓存无需重新提取。
+`pred` 的空 checkpoint 路径表示从头训练；规划模式必须提供已训练的 `pred` 或同模式 checkpoint。使用 `pred` 权重启动规划时重建优化器与学习率计划；使用同模式 checkpoint 时完整恢复权重、优化器、轮次与学习率状态。`plan1` 和 `plan2` 不能相互作为完整恢复来源。旧 `plan` checkpoint 需要原版本代码，不能直接转换为当前十步协议。
 
-`forward()` 回放整个窗口，返回动作 `[B,10,3]`；刷新决策为 `[B,10,9]`。在线接口 `observe_step()` 每次只接收当前帧，返回一个动作、视觉 `state` 和解码器 `hidden`；调用方执行动作后，再传入新观察、前一步动作和保留状态。首次历史编码使用相对首个决策时刻的年龄，第一次更新传 `elapsed_s=0`，以后传实际流逝秒数。解码步数从 0 递增。
-
-这属于专家轨迹上的因果回放训练。预测动作不会改变记录中的后续 BEV，验证结果不能称为闭环驾驶表现。现有窗口、数据加载格式与采样设置保持不变；旧固定视觉上下文任务的 checkpoint 不应作为本实验完成训练的预测器，建议从 `ckpt_path: null` 重新训练 action。
-
-刷新收益标签由冻结模型逐个替换 9 个区域测量：
-
-```python
-U[k, r] = action_error(old_action[k], expert_action[k]) - action_error(region_r_action[k], expert_action[k])
-```
-
-候选区域比较复用相同旧记忆、前一步动作、解码隐藏状态和当前步索引，不读取后续帧。标签无梯度，收益损失按动作有效掩码聚合。该标签衡量一步动作误差改善，尚不是长期轨迹收益；预算也是每步预算，不是整段累计预算。
-
-训练 plan 时必须从已经训练好的 pred checkpoint 开始。`config/train/plan.yaml` 的 `trainer.ckpt_path` 应填该 checkpoint；同一阶段恢复仍使用相同 mode 的 checkpoint。
-
-正式测试前仍需运行独立 log 划分、未来信息扰动、区域替换和冻结梯度检查。该模型只在离线 BEV 表示层证明更新价值，不等于已经证明相机计算节省或闭环安全。
-
-## 当前 plan 协议
-
-plan 已改为事件中心五步滚动规划：slot 0..14 初始化历史，slot 15 初始化规划，slot 16..25 为十次规划决策。详见[事件前后半秒五步滚动规划](../idea/FRESH-Drive/FRESH-Drive_事件前后半秒五步滚动规划_2026-11-02.md)。当前使用 `RollingPlanner` 和五步 ADE 收益标签。`observe_step()` 当前仅支持 pred 单步推理，plan 使用 `forward()` 调用滚动规划器。
+规划默认单卡、20轮，按实际采用计划的 `val/next_step_error` 保留前三个 checkpoint，另存 `last.ckpt`。文件名包含epoch和误差，不自动维护 `best.ckpt`；验证配置须填写训练结束打印的实际最佳路径。完整实验设置见 [实验汇总](../docs/CARS-Drive_实验设置汇总_2026-11-09.md)。每个可行时刻生成候选，被拒绝的候选也计入解码成本。实验属于专家日志上的因果回放，不等同于闭环驾驶，也不宣称节省候选解码。
